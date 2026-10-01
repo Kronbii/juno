@@ -4,6 +4,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -26,6 +27,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   Set<String> _categories = {};
   String? _accountId;
   DateTimeRange? _range;
+  String? _tag;
   int _limit = _page;
 
   @override
@@ -42,10 +44,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     from: _range == null ? null : Day.of(_range!.start),
     to: _range == null ? null : Day.of(_range!.end),
     search: _search.text,
+    tag: _tag,
     limit: _limit,
   );
 
-  bool get _filtered => _type != null || _categories.isNotEmpty || _accountId != null || _range != null;
+  bool get _filtered => _type != null || _categories.isNotEmpty || _accountId != null || _range != null || _tag != null;
 
   Future<void> _pickRange() async {
     final now = DateTime.now();
@@ -74,6 +77,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final async = ref.watch(txQueryProvider(_query));
     final txs = async.value;
     final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
+    final tags = ref.watch(tagsProvider).value ?? const <(String, int)>[];
 
     return JScreen(
       eyebrow: '02 — Activity',
@@ -138,6 +142,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   selected: _range != null,
                   onTap: _pickRange,
                 ),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(width: JSpace.sm),
+                  PopupMenuButton<String>(
+                    tooltip: 'Tag',
+                    onSelected: (t) => setState(() => _tag = t.isEmpty ? null : t),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: '', child: Text('Any tag')),
+                      for (final (t, n) in tags) PopupMenuItem(value: t, child: Text('#$t  ·  $n')),
+                    ],
+                    child: IgnorePointer(
+                      child: JChip(label: _tag == null ? 'Tag' : '#$_tag', selected: _tag != null, onTap: () {}),
+                    ),
+                  ),
+                ],
                 if (_filtered) ...[
                   const SizedBox(width: JSpace.sm),
                   JButton(
@@ -149,6 +167,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       _categories = {};
                       _accountId = null;
                       _range = null;
+                      _tag = null;
                     }),
                   ),
                 ],
@@ -213,8 +232,8 @@ class _Totals extends StatelessWidget {
     var inc = 0;
     var exp = 0;
     for (final t in txs) {
-      if (t.type == TxType.income) inc += t.amountCents;
-      if (t.type == TxType.expense) exp += t.amountCents;
+      if (t.type == TxType.income) inc += t.usd;
+      if (t.type == TxType.expense) exp += t.usd;
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: JSpace.sm),
@@ -264,7 +283,7 @@ class _DayGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final spent = txs.where((t) => t.type == TxType.expense).fold(0, (s, t) => s + t.amountCents);
+    final spent = txs.where((t) => t.type == TxType.expense).fold(0, (s, t) => s + t.usd);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

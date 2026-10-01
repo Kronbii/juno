@@ -1,4 +1,5 @@
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 /// Totals for one period. Transfers move money between your own accounts, so
@@ -21,12 +22,12 @@ class PeriodSummary {
     for (final t in txs) {
       switch (t.type) {
         case TxType.income:
-          income += t.amountCents;
+          income += t.usd;
           count++;
         case TxType.expense:
-          expense += t.amountCents;
-          byScope[t.scope] = byScope[t.scope]! + t.amountCents;
-          byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.amountCents;
+          expense += t.usd;
+          byScope[t.scope] = byScope[t.scope]! + t.usd;
+          byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.usd;
           count++;
         case TxType.transfer:
           break;
@@ -234,7 +235,7 @@ List<MerchantTotal> topMerchants(Iterable<Transaction> txs, {int n = 5}) {
     if (label.isEmpty) continue;
     final key = label.toLowerCase();
     final cur = totals[key];
-    totals[key] = (cur?.$1 ?? label, (cur?.$2 ?? 0) + t.amountCents, (cur?.$3 ?? 0) + 1);
+    totals[key] = (cur?.$1 ?? label, (cur?.$2 ?? 0) + t.usd, (cur?.$3 ?? 0) + 1);
   }
   final list = [for (final v in totals.values) MerchantTotal(v.$1, v.$2, v.$3)]
     ..sort((a, b) => b.total.compareTo(a.total));
@@ -264,7 +265,51 @@ List<BudgetStatus> budgetStatuses(List<Budget> budgets, Iterable<Transaction> mo
         expenses
             .where((t) => b.categoryId == null || t.categoryId == b.categoryId)
             .where((t) => b.scope == null || t.scope == b.scope)
-            .fold(0, (s, t) => s + t.amountCents),
+            .fold(0, (s, t) => s + t.usd),
       ),
   ]..sort((a, b) => b.ratio.compareTo(a.ratio));
+}
+
+/// Net worth at the end of each of the [months] months ending at [last],
+/// in USD. Balances are rebuilt from opening balances plus every entry up to
+/// that day; non-USD accounts convert at today's rate (history of rates is
+/// not kept, so this shows what your holdings would be worth now).
+List<(DateTime, int)> netWorthSeries({
+  required List<Account> accounts,
+  required List<Transaction> txs,
+  required Map<String, double> perUsd,
+  required DateTime last,
+  int months = 12,
+}) {
+  final byAccount = {for (final a in accounts) a.id: a};
+  final ends = [
+    for (var i = months - 1; i >= 0; i--) DateTime(last.year, last.month - i),
+  ];
+  final sorted = [...txs]..sort((a, b) => a.occurredOn.compareTo(b.occurredOn));
+  final bal = {for (final a in accounts) a.id: a.openingBalanceCents};
+  final out = <(DateTime, int)>[];
+  var i = 0;
+  for (final m in ends) {
+    final end = Day.lastOfMonth(m);
+    while (i < sorted.length && sorted[i].occurredOn.compareTo(end) <= 0) {
+      final t = sorted[i++];
+      switch (t.type) {
+        case TxType.income:
+          if (bal.containsKey(t.accountId)) bal[t.accountId] = bal[t.accountId]! + t.amountCents;
+        case TxType.expense:
+          if (bal.containsKey(t.accountId)) bal[t.accountId] = bal[t.accountId]! - t.amountCents;
+        case TxType.transfer:
+          if (bal.containsKey(t.accountId)) bal[t.accountId] = bal[t.accountId]! - t.amountCents;
+          final to = t.toAccountId;
+          if (to != null && bal.containsKey(to)) bal[to] = bal[to]! + (t.toAmountCents ?? t.amountCents);
+      }
+    }
+    var total = 0;
+    for (final e in bal.entries) {
+      final a = byAccount[e.key]!;
+      total += Fx.toUsd(e.value, a.currency, perUsd);
+    }
+    out.add((m, total));
+  }
+  return out;
 }

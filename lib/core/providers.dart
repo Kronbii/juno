@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
+import 'package:juno/core/notify/reminder_runner.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,8 +15,10 @@ final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedEr
 
 /// Called after every local write: asks the sync engine for a debounced push.
 final writeHookProvider = Provider<void Function()>(
-  (ref) =>
-      () => ref.read(syncEngineProvider.notifier).schedule(),
+  (ref) => () {
+    ref.read(syncEngineProvider.notifier).schedule();
+    ref.read(reminderRunnerProvider.notifier).schedule();
+  },
 );
 
 final ledgerProvider = Provider<Ledger>(
@@ -160,3 +163,28 @@ extension ScopeLabel on Scope {
     Scope.household => 'Household',
   };
 }
+
+// ------------------------------------------------------------------- v2
+
+final ratesListProvider = StreamProvider<List<CurrencyRate>>((ref) => ref.watch(ledgerProvider).watchRates());
+
+/// code → units per USD, always including USD = 1.
+final ratesProvider = Provider<Map<String, double>>((ref) {
+  final list = ref.watch(ratesListProvider).value ?? const <CurrencyRate>[];
+  return {'USD': 1, for (final r in list) r.code: r.perUsd};
+});
+
+final tagsProvider = StreamProvider<List<(String, int)>>((ref) => ref.watch(ledgerProvider).watchTags());
+
+final attachmentCountsProvider = StreamProvider<Map<String, int>>(
+  (ref) => ref.watch(ledgerProvider).watchAttachmentCounts(),
+);
+
+final attachmentsProvider = StreamProvider.family<List<Attachment>, String>(
+  (ref, txId) => ref.watch(ledgerProvider).watchAttachments(txId),
+);
+
+/// Every live transaction (for net worth history).
+final allTxProvider = StreamProvider<List<Transaction>>(
+  (ref) => ref.watch(ledgerProvider).watchTransactions(const TxQuery()),
+);

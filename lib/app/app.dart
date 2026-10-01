@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/app/router.dart';
 import 'package:juno/core/deeplink/deep_link_handler.dart';
+import 'package:juno/core/lock/app_lock.dart';
+import 'package:juno/core/notify/reminder_runner.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -38,6 +40,7 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
   Future<void> _onForeground() async {
     await materializeRecurring(ref.read(databaseProvider));
     await ref.read(syncEngineProvider.notifier).syncNow();
+    await ref.read(reminderRunnerProvider.notifier).run();
   }
 
   @override
@@ -55,7 +58,7 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
         final c = context.jc;
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: JTheme.overlay(c),
-          child: DeepLinkHandler(child: child!),
+          child: LockGate(child: DeepLinkHandler(child: child!)),
         );
       },
     );

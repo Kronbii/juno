@@ -6,8 +6,17 @@ import 'package:uuid/uuid.dart';
 /// launch converge on the same rows when they sync instead of duplicating.
 String seedId(String key) => const Uuid().v5(Namespace.url.value, 'juno:seed:$key');
 
+/// Rates for currencies Juno knows out of the box. Editable in Settings.
+Future<void> seedRates(AppDatabase db) => db.batch((b) {
+  b.insertAll(db.currencyRates, [
+    CurrencyRatesCompanion.insert(id: Value(seedId('fx:LBP')), code: 'LBP', perUsd: 89500),
+    CurrencyRatesCompanion.insert(id: Value(seedId('fx:EUR')), code: 'EUR', perUsd: 0.86),
+  ], mode: InsertMode.insertOrIgnore);
+});
+
 /// Starter accounts and categories so the app is useful on first open.
 Future<void> seedDefaults(AppDatabase db) async {
+  await seedRates(db);
   await db.batch((b) {
     b.insertAll(db.accounts, [
       AccountsCompanion.insert(

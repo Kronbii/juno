@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -37,9 +38,9 @@ class AccountsScreen extends ConsumerWidget {
                 JSettingRow(
                   icon: iconFor(a.kind),
                   title: a.archived ? '${a.name} (archived)' : a.name,
-                  subtitle: '${a.kind.name[0].toUpperCase()}${a.kind.name.substring(1)}',
+                  subtitle: '${a.kind.name[0].toUpperCase()}${a.kind.name.substring(1)} · ${a.currency}',
                   trailing: Text(
-                    Money.format(balances[a.id] ?? a.openingBalanceCents),
+                    Fx.format(balances[a.id] ?? a.openingBalanceCents, a.currency),
                     style: JType.rowMetric.copyWith(color: (balances[a.id] ?? 0) < 0 ? c.expense : c.ink),
                   ),
                   onTap: () => _edit(context, ref, account: a),
@@ -74,6 +75,7 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
   );
   late AccountKind _kind = widget.account?.kind ?? AccountKind.checking;
   late bool _archived = widget.account?.archived ?? false;
+  late String _currency = widget.account?.currency ?? baseCurrency;
 
   @override
   void dispose() {
@@ -109,6 +111,17 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
           ),
         ),
         JField(
+          label: 'Currency',
+          child: Wrap(
+            spacing: JSpace.sm,
+            runSpacing: JSpace.sm,
+            children: [
+              for (final code in ref.watch(ratesProvider).keys)
+                JChip(label: code, selected: code == _currency, onTap: () => setState(() => _currency = code)),
+            ],
+          ),
+        ),
+        JField(
           label: 'Opening balance',
           child: MoneyField(controller: _opening, hint: '0.00 — negative for card debt', allowNegative: true),
         ),
@@ -136,6 +149,7 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
                         kind: Value(_kind),
                         openingBalanceCents: Value(Money.parse(_opening.text) ?? 0),
                         archived: Value(_archived),
+                        currency: Value(_currency),
                       ),
                     );
                     if (context.mounted) Navigator.of(context).pop();

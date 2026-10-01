@@ -84,6 +84,22 @@ class Transactions extends Table with SyncColumns {
 
   /// For imported rows: hash of (day, amount, description) to flag repeats.
   TextColumn get dedupeHash => text().nullable()();
+
+  /// Currency of [amountCents] — the account's currency at entry time.
+  TextColumn get currency => text().withDefault(const Constant('USD'))();
+
+  /// The amount in USD (base currency) at the rate used when it was entered.
+  /// Null means the entry is already USD. Totals and insights read this via
+  /// `Transaction.usd` so mixed-currency months still add up.
+  IntColumn get baseCents => integer().nullable()();
+
+  /// For transfers between accounts in different currencies: what the
+  /// destination account received, in its own currency.
+  IntColumn get toAmountCents => integer().nullable()();
+
+  /// Tags as `,trip,gift,` — delimited at both ends so a LIKE '%,tag,%'
+  /// match never hits a prefix of another tag.
+  TextColumn get tags => text().withDefault(const Constant(''))();
 }
 
 /// A monthly limit. Null [categoryId] means an overall cap for the scope;
@@ -131,6 +147,26 @@ class RecurringRules extends Table with SyncColumns {
   TextColumn get nextDue => text()();
   TextColumn get endDate => text().nullable()();
   BoolColumn get active => boolean().withDefault(const Constant(true))();
+}
+
+/// Units of [code] per 1 USD (LBP ≈ 89,500). The row id is the code.
+class CurrencyRates extends Table with SyncColumns {
+  TextColumn get code => text()();
+  RealColumn get perUsd => real()();
+}
+
+/// A receipt or document attached to a transaction. The file lives at a
+/// path derived from the id (locally and in Supabase Storage), so nothing
+/// device-specific is synced.
+class Attachments extends Table with SyncColumns {
+  TextColumn get transactionId => text()();
+  TextColumn get fileName => text()();
+  TextColumn get mime => text()();
+  IntColumn get sizeBytes => integer()();
+
+  /// Whether the file has reached cloud storage. Another device seeing
+  /// `true` without a local copy downloads it.
+  BoolColumn get uploaded => boolean().withDefault(const Constant(false))();
 }
 
 class ImportBatches extends Table with SyncColumns {

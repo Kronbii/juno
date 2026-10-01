@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:drift/drift.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 /// Four months of plausible activity for screenshots and trying the app.
@@ -26,6 +27,20 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
   )..where((a) => a.id.equals(cash))).write(const AccountsCompanion(openingBalanceCents: Value(18000)));
 
   final rows = <TransactionsCompanion>[];
+  final lbp = seedId('acct:cash-lbp');
+  await db
+      .into(db.accounts)
+      .insertOnConflictUpdate(
+        AccountsCompanion.insert(
+          id: Value(lbp),
+          name: 'Cash LBP',
+          kind: AccountKind.cash,
+          currency: const Value('LBP'),
+          openingBalanceCents: const Value(450000000),
+          sort: const Value(3),
+        ),
+      );
+
   void add(
     DateTime d,
     String category,
@@ -34,6 +49,7 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
     String note, {
     TxType type = TxType.expense,
     String? account,
+    List<String> tags = const [],
   }) {
     if (d.isAfter(today)) return;
     rows.add(
@@ -45,6 +61,24 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
         categoryId: Value(cat(category)),
         occurredOn: Day.of(d),
         note: Value(note),
+        tags: Value(EntryTags.store(tags)),
+      ),
+    );
+  }
+
+  void addLbp(DateTime d, String category, int pounds, Scope scope, String note) {
+    if (d.isAfter(today)) return;
+    rows.add(
+      TransactionsCompanion.insert(
+        type: TxType.expense,
+        scope: scope,
+        amountCents: pounds * 100,
+        accountId: lbp,
+        categoryId: Value(cat(category)),
+        occurredOn: Day.of(d),
+        note: Value(note),
+        currency: const Value('LBP'),
+        baseCents: Value((pounds * 100 / 89500).round()),
       ),
     );
   }
@@ -75,6 +109,28 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
     add(DateTime(first.year, first.month, 12), 'Subscriptions', 1599, Scope.personal, 'Netflix');
     add(DateTime(first.year, first.month, 14), 'Subscriptions', 2000, Scope.personal, 'Claude Pro');
     add(DateTime(first.year, first.month, 21), 'Fitness', 6000, Scope.personal, 'Gym membership');
+    add(DateTime(first.year, first.month, 11), 'Dining', 7800, Scope.personal, 'Date night', tags: ['date-night']);
+    add(
+      DateTime(first.year, first.month, 24),
+      'Gifts',
+      4500 + rnd.nextInt(3000),
+      Scope.household,
+      'Gift for mom',
+      tags: ['family', 'gift'],
+    );
+    if (m == 1) {
+      final trip = DateTime(first.year, first.month, 5);
+      add(trip, 'Travel', 38000, Scope.personal, 'Flight to Istanbul', tags: ['trip-istanbul']);
+      add(trip.add(const Duration(days: 1)), 'Travel', 54000, Scope.personal, 'Hotel Galata', tags: ['trip-istanbul']);
+      add(
+        trip.add(const Duration(days: 2)),
+        'Dining',
+        6200,
+        Scope.personal,
+        'Karaköy Lokantası',
+        tags: ['trip-istanbul'],
+      );
+    }
     for (var d = 1; d <= days; d++) {
       final day = DateTime(first.year, first.month, d);
       if (rnd.nextDouble() < 0.55) {
@@ -119,6 +175,10 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
       if (rnd.nextDouble() < 0.05) {
         add(day, 'Household supplies', 1500 + rnd.nextInt(3500), Scope.household, 'Cleaning supplies');
       }
+      if (rnd.nextDouble() < 0.12) {
+        addLbp(day, 'Transport', 200000 + rnd.nextInt(6) * 50000, Scope.personal, 'Service taxi');
+      }
+      if (d == 15) addLbp(day, 'Household supplies', 1800000, Scope.household, 'Generator subscription');
       if (rnd.nextDouble() < 0.04) add(day, 'Health', 2000 + rnd.nextInt(6000), Scope.personal, 'Pharmacy');
     }
   }

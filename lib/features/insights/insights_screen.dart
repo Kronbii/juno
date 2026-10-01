@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -28,6 +29,8 @@ class InsightsScreen extends ConsumerWidget {
     final trail = ref.watch(trailingTxProvider((month, 6))).value ?? const <Transaction>[];
     final cats = ref.watch(categoryMapProvider);
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final accts = ref.watch(accountMapProvider);
+    final rates = ref.watch(ratesProvider);
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
 
     final s = PeriodSummary.of(txs);
@@ -65,7 +68,11 @@ class InsightsScreen extends ConsumerWidget {
 
     final subsMonthly = rules
         .where((r) => r.active && r.type == TxType.expense)
-        .fold<double>(0, (sum, r) => sum + _monthlyEquivalent(r))
+        .fold<double>(
+          0,
+          (sum, r) =>
+              sum + Fx.toUsd(_monthlyEquivalent(r).round(), accts[r.accountId]?.currency ?? baseCurrency, rates),
+        )
         .round();
 
     final kpis = Row(
@@ -165,8 +172,7 @@ class InsightsScreen extends ConsumerWidget {
     );
 
     final merchants = topMerchants(txs);
-    final biggest = [...txs.where((t) => t.type == TxType.expense)]
-      ..sort((a, b) => b.amountCents.compareTo(a.amountCents));
+    final biggest = [...txs.where((t) => t.type == TxType.expense)]..sort((a, b) => b.usd.compareTo(a.usd));
 
     final lists = JCard(
       title: 'Top places',
@@ -219,6 +225,45 @@ class InsightsScreen extends ConsumerWidget {
           : '${Money.whole(subsMonthly * 12)} a year across ${rules.where((r) => r.active && r.type == TxType.expense).length} rules',
     );
 
+    final worth = netWorthSeries(
+      accounts: ref.watch(allAccountsProvider).value ?? const <Account>[],
+      txs: ref.watch(allTxProvider).value ?? const <Transaction>[],
+      perUsd: rates,
+      last: month,
+    );
+    final worthNow = worth.isEmpty ? 0 : worth.last.$2;
+    final worthDelta = worth.length < 2 ? 0 : worthNow - worth[worth.length - 2].$2;
+    final netWorth = JCard(
+      title: 'Net worth · 12 months',
+      trailing: Text(
+        '${Money.whole(worthNow)}  ${worthDelta >= 0 ? '+' : '\u2212'}${Money.whole(worthDelta.abs())} vs last month',
+        style: JType.chipLabel.copyWith(color: worthDelta >= 0 ? c.income : c.expense),
+      ),
+      child: NetWorthLine(points: worth),
+    );
+
+    // An entry with two tags counts toward both, so tag totals can exceed
+    // the month's spend.
+    final byTag = <String, int>{};
+    for (final t in txs.where((t) => t.type == TxType.expense)) {
+      for (final tag in t.tagList) {
+        byTag[tag] = (byTag[tag] ?? 0) + t.usd;
+      }
+    }
+    final tagSlices = (byTag.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+        .take(8)
+        .map((e) => Slice(label: '#${e.key}', value: e.value, color: c.inkMuted))
+        .toList();
+    final tagsCard = JCard(
+      title: 'By tag',
+      child: tagSlices.isEmpty
+          ? Text(
+              'Tag entries (trip, gift, work…) to see spending that cuts across categories.',
+              style: JType.body.copyWith(color: c.inkMuted),
+            )
+          : RankedBars(slices: tagSlices),
+    );
+
     Widget gap() => const SizedBox(height: JSpace.gap);
 
     return JScreen(
@@ -260,6 +305,15 @@ class InsightsScreen extends ConsumerWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Expanded(flex: 3, child: netWorth),
+                        const SizedBox(width: JSpace.gap),
+                        Expanded(flex: 2, child: tagsCard),
+                      ],
+                    ),
+                    gap(),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Expanded(child: lists),
                         const SizedBox(width: JSpace.gap),
                         Expanded(child: big),
@@ -278,6 +332,10 @@ class InsightsScreen extends ConsumerWidget {
                     scopeTrend,
                     gap(),
                     subs,
+                    gap(),
+                    netWorth,
+                    gap(),
+                    tagsCard,
                     gap(),
                     lists,
                     gap(),

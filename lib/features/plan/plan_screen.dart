@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -356,7 +357,7 @@ class _RecurringTab extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    '${r.type == TxType.income ? '+' : '−'}${Money.format(r.amountCents)}',
+                    '${r.type == TxType.income ? '+' : '−'}${Fx.format(r.amountCents, ref.watch(accountMapProvider)[r.accountId]?.currency ?? baseCurrency)}',
                     style: JType.rowMetric.copyWith(color: r.type == TxType.income ? c.income : c.ink),
                   ),
                 ],

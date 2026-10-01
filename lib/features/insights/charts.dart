@@ -383,3 +383,119 @@ class ScopeStackBars extends StatelessWidget {
     );
   }
 }
+
+/// Net worth month by month — one series, so no legend; the card title names
+/// it. 2px line, a soft area to anchor it, crosshair tooltip on touch.
+class NetWorthLine extends StatelessWidget {
+  const NetWorthLine({required this.points, super.key});
+
+  final List<(DateTime, int)> points;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    if (points.isEmpty) return const SizedBox(height: 180);
+    final values = points.map((p) => p.$2).toList();
+    final hi = values.reduce(math.max);
+    final lo = values.reduce(math.min);
+    final pad = math.max((hi - lo) * 0.15, 1000);
+    final minY = (lo - pad).toDouble();
+    final maxY = (hi + pad).toDouble();
+    final line = seriesColor(c, 2);
+    return SizedBox(
+      height: 180,
+      child: LineChart(
+        LineChartData(
+          minY: minY,
+          maxY: maxY,
+          borderData: FlBorderData(show: false),
+          gridData: FlGridData(
+            drawVerticalLine: false,
+            horizontalInterval: (maxY - minY) / 2,
+            getDrawingHorizontalLine: (_) => FlLine(color: c.hairline, strokeWidth: 1),
+          ),
+          titlesData: FlTitlesData(
+            topTitles: const AxisTitles(),
+            rightTitles: const AxisTitles(),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 60,
+                interval: (maxY - minY) / 2,
+                // Only the bounds: an off-zero range makes interval ticks
+                // land beside the max label and collide.
+                getTitlesWidget: (v, meta) => v != meta.min && v != meta.max
+                    ? const SizedBox.shrink()
+                    : SideTitleWidget(
+                        meta: meta,
+                        child: Text(Money.compact(v.round()), style: JType.microLabel.copyWith(color: c.inkFaint)),
+                      ),
+              ),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 24,
+                interval: points.length > 8 ? 2 : 1,
+                getTitlesWidget: (v, meta) {
+                  final i = v.round();
+                  if (i < 0 || i >= points.length || v != i) return const SizedBox.shrink();
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: Text(
+                      Day.monthShort(points[i].$1).toUpperCase(),
+                      style: JType.microLabel.copyWith(color: c.inkFaint),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          lineTouchData: LineTouchData(
+            getTouchedSpotIndicator: (bar, idx) => [
+              for (final _ in idx)
+                TouchedSpotIndicatorData(
+                  FlLine(color: c.hairlineStrong, strokeWidth: 1),
+                  FlDotData(
+                    getDotPainter: (spot, _, _, _) =>
+                        FlDotCirclePainter(radius: 4, color: line, strokeWidth: 2, strokeColor: c.surface),
+                  ),
+                ),
+            ],
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => c.isDark ? c.raised : c.navBar,
+              tooltipBorderRadius: BorderRadius.circular(8),
+              fitInsideHorizontally: true,
+              getTooltipItems: (spots) => [
+                for (final s in spots)
+                  LineTooltipItem(
+                    '${Day.monthShort(points[s.x.round()].$1)} · ${Money.whole(s.y.round())}',
+                    JType.chipLabel.copyWith(color: c.isDark ? c.ink : const Color(0xFFFBF5EA)),
+                  ),
+              ],
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: [for (var i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i].$2.toDouble())],
+              color: line,
+              isCurved: true,
+              curveSmoothness: 0.2,
+              preventCurveOverShooting: true,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [line.withValues(alpha: 0.18), line.withValues(alpha: 0)],
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: JMotion.reduced(context) ? Duration.zero : JMotion.medium,
+      ),
+    );
+  }
+}

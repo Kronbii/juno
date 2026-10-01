@@ -2,8 +2,12 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:intl/intl.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/deeplink/quick_add.dart' show fuzzyMatch;
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 /// A parsed file: header row (or generated names) and data rows.
@@ -13,12 +17,39 @@ class CsvTable {
   final List<String> headers;
   final List<List<String>> rows;
 
-  // ignore: prefer_constructors_over_static_methods — reads better at call sites.
   static CsvTable parse(String raw) {
-    final text = raw.startsWith('﻿') ? raw.substring(1) : raw;
-    final decoded = Csv().decode(text);
+    final text = raw.startsWith('\uFEFF') ? raw.substring(1) : raw;
+    return fromRows([
+      for (final r in Csv().decode(text)) [for (final f in r) f.toString()],
+    ]);
+  }
+
+  /// Sheet names in an .xlsx workbook, in order.
+  static List<String> xlsxSheets(Uint8List bytes) => Excel.decodeBytes(bytes).tables.keys.toList();
+
+  /// Reads one sheet (default: the first with data). Real date cells become
+  /// `yyyy-MM-dd`, so the date-format detector sees them unambiguously.
+  static CsvTable fromXlsx(Uint8List bytes, {String? sheet}) {
+    final book = Excel.decodeBytes(bytes);
+    final sheets = book.tables;
+    final chosen = sheets[sheet] ?? sheets.values.where((s) => s.maxRows > 1).firstOrNull ?? sheets.values.firstOrNull;
+    if (chosen == null) return const CsvTable([], []);
+    String cell(Data? d) => switch (d?.value) {
+      null => '',
+      DateCellValue(:final year, :final month, :final day) => Day.of(DateTime(year, month, day)),
+      DateTimeCellValue(:final year, :final month, :final day) => Day.of(DateTime(year, month, day)),
+      FormulaCellValue() => '',
+      final v => v.toString(),
+    };
+    return fromRows([
+      for (final r in chosen.rows) [for (final d in r) cell(d)],
+    ]);
+  }
+
+  // ignore: prefer_constructors_over_static_methods, mirrors parse/fromXlsx.
+  static CsvTable fromRows(List<List<String>> raw) {
     final all = [
-      for (final r in decoded) [for (final f in r) f.toString().trim()],
+      for (final r in raw) [for (final f in r) f.trim()],
     ].where((r) => r.any((f) => f.isNotEmpty)).toList();
     if (all.isEmpty) return const CsvTable([], []);
 
@@ -56,6 +87,7 @@ class ColumnMapping {
     this.amount,
     this.debit,
     this.credit,
+    this.category,
     this.mode = AmountMode.signedNegativeOut,
     this.dateFormat,
   });
@@ -88,6 +120,7 @@ class ColumnMapping {
             ? null
             : _firstColumnWhere(t, (v) => Money.parse(v) != null && DateFormats.detect([v]) == null, not: {?date}));
 
+    final category = find(['category', 'categories', 'tag'], not: {?date, ?desc, ?debit, ?credit, ?amount});
     final useDebitCredit = debit != null && credit != null && amount == null;
     final mapping = ColumnMapping(
       date: date,
@@ -95,6 +128,7 @@ class ColumnMapping {
       amount: useDebitCredit ? null : amount,
       debit: useDebitCredit ? debit : null,
       credit: useDebitCredit ? credit : null,
+      category: category,
       mode: useDebitCredit ? AmountMode.debitCredit : AmountMode.signedNegativeOut,
     );
     return mapping.copyWith(dateFormat: date == null ? null : DateFormats.detect(t.rows.map((r) => r[date])));
@@ -105,6 +139,10 @@ class ColumnMapping {
   final int? amount;
   final int? debit;
   final int? credit;
+
+  /// A column naming the category (Notion/Excel trackers). Values are
+  /// fuzzy-matched to your categories and win over suggestions.
+  final int? category;
   final AmountMode mode;
   final String? dateFormat;
 
@@ -119,6 +157,7 @@ class ColumnMapping {
     int? amount,
     int? debit,
     int? credit,
+    int? category,
     AmountMode? mode,
     String? dateFormat,
   }) => ColumnMapping(
@@ -127,6 +166,7 @@ class ColumnMapping {
     amount: amount ?? this.amount,
     debit: debit ?? this.debit,
     credit: credit ?? this.credit,
+    category: category ?? this.category,
     mode: mode ?? this.mode,
     dateFormat: dateFormat ?? this.dateFormat,
   );
@@ -160,6 +200,9 @@ abstract final class DateFormats {
     'd MMM yyyy',
     'dd MMM yyyy',
     'MMM d, yyyy',
+    'MMMM d, yyyy',
+    'd MMMM yyyy',
+    'MMM d yyyy',
     'yyyyMMdd',
   ];
 
@@ -347,7 +390,13 @@ List<ImportRow> buildRows({
       duplicate: existingHashes.contains(hash),
       error: error,
     );
-    row.categoryId = suggestCategory(desc, row.type, memory, byName);
+    final named = mapping.category == null ? null : r[mapping.category!];
+    final kind = row.type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+    row.categoryId =
+        (named == null || named.isEmpty
+            ? null
+            : fuzzyMatch(named, categories.where((c) => c.kind == kind), (c) => c.name)?.id) ??
+        suggestCategory(desc, row.type, memory, byName);
     out.add(row);
   }
   return out;
@@ -393,18 +442,34 @@ String exportCsv(
   Map<String, Account> accounts,
 ) {
   final rows = <List<Object?>>[
-    ['date', 'type', 'amount', 'scope', 'category', 'account', 'to_account', 'note', 'merchant'],
+    [
+      'date',
+      'type',
+      'amount',
+      'currency',
+      'amount_usd',
+      'scope',
+      'category',
+      'account',
+      'to_account',
+      'note',
+      'merchant',
+      'tags',
+    ],
     for (final t in txs)
       [
         t.occurredOn,
         t.type.name,
         (t.type == TxType.expense ? -t.amountCents : t.amountCents) / 100,
+        t.currency,
+        (t.type == TxType.expense ? -t.usd : t.usd) / 100,
         t.scope.name,
         cats[t.categoryId]?.name ?? '',
         accounts[t.accountId]?.name ?? '',
         accounts[t.toAccountId]?.name ?? '',
         t.note,
         t.merchant,
+        EntryTags.parse(t.tags).join(' '),
       ],
   ];
   return Csv(lineDelimiter: '\n').encode(rows);

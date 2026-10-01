@@ -1642,6 +1642,50 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('USD'),
+  );
+  static const VerificationMeta _baseCentsMeta = const VerificationMeta(
+    'baseCents',
+  );
+  @override
+  late final GeneratedColumn<int> baseCents = GeneratedColumn<int>(
+    'base_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _toAmountCentsMeta = const VerificationMeta(
+    'toAmountCents',
+  );
+  @override
+  late final GeneratedColumn<int> toAmountCents = GeneratedColumn<int>(
+    'to_amount_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1662,6 +1706,10 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     recurringId,
     importBatchId,
     dedupeHash,
+    currency,
+    baseCents,
+    toAmountCents,
+    tags,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1786,6 +1834,33 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
         dedupeHash.isAcceptableOrUnknown(data['dedupe_hash']!, _dedupeHashMeta),
       );
     }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    }
+    if (data.containsKey('base_cents')) {
+      context.handle(
+        _baseCentsMeta,
+        baseCents.isAcceptableOrUnknown(data['base_cents']!, _baseCentsMeta),
+      );
+    }
+    if (data.containsKey('to_amount_cents')) {
+      context.handle(
+        _toAmountCentsMeta,
+        toAmountCents.isAcceptableOrUnknown(
+          data['to_amount_cents']!,
+          _toAmountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
+      );
+    }
     return context;
   }
 
@@ -1871,6 +1946,22 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
         DriftSqlType.string,
         data['${effectivePrefix}dedupe_hash'],
       ),
+      currency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency'],
+      )!,
+      baseCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}base_cents'],
+      ),
+      toAmountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}to_amount_cents'],
+      ),
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      )!,
     );
   }
 
@@ -1912,6 +2003,22 @@ class Transaction extends DataClass implements Insertable<Transaction> {
 
   /// For imported rows: hash of (day, amount, description) to flag repeats.
   final String? dedupeHash;
+
+  /// Currency of [amountCents] — the account's currency at entry time.
+  final String currency;
+
+  /// The amount in USD (base currency) at the rate used when it was entered.
+  /// Null means the entry is already USD. Totals and insights read this via
+  /// `Transaction.usd` so mixed-currency months still add up.
+  final int? baseCents;
+
+  /// For transfers between accounts in different currencies: what the
+  /// destination account received, in its own currency.
+  final int? toAmountCents;
+
+  /// Tags as `,trip,gift,` — delimited at both ends so a LIKE '%,tag,%'
+  /// match never hits a prefix of another tag.
+  final String tags;
   const Transaction({
     required this.id,
     this.userId,
@@ -1931,6 +2038,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.recurringId,
     this.importBatchId,
     this.dedupeHash,
+    required this.currency,
+    this.baseCents,
+    this.toAmountCents,
+    required this.tags,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1975,6 +2086,14 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || dedupeHash != null) {
       map['dedupe_hash'] = Variable<String>(dedupeHash);
     }
+    map['currency'] = Variable<String>(currency);
+    if (!nullToAbsent || baseCents != null) {
+      map['base_cents'] = Variable<int>(baseCents);
+    }
+    if (!nullToAbsent || toAmountCents != null) {
+      map['to_amount_cents'] = Variable<int>(toAmountCents);
+    }
+    map['tags'] = Variable<String>(tags);
     return map;
   }
 
@@ -1998,6 +2117,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringId: recurringId == null && nullToAbsent ? const Value.absent() : Value(recurringId),
       importBatchId: importBatchId == null && nullToAbsent ? const Value.absent() : Value(importBatchId),
       dedupeHash: dedupeHash == null && nullToAbsent ? const Value.absent() : Value(dedupeHash),
+      currency: Value(currency),
+      baseCents: baseCents == null && nullToAbsent ? const Value.absent() : Value(baseCents),
+      toAmountCents: toAmountCents == null && nullToAbsent ? const Value.absent() : Value(toAmountCents),
+      tags: Value(tags),
     );
   }
 
@@ -2029,6 +2152,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringId: serializer.fromJson<String?>(json['recurringId']),
       importBatchId: serializer.fromJson<String?>(json['importBatchId']),
       dedupeHash: serializer.fromJson<String?>(json['dedupeHash']),
+      currency: serializer.fromJson<String>(json['currency']),
+      baseCents: serializer.fromJson<int?>(json['baseCents']),
+      toAmountCents: serializer.fromJson<int?>(json['toAmountCents']),
+      tags: serializer.fromJson<String>(json['tags']),
     );
   }
   @override
@@ -2057,6 +2184,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'recurringId': serializer.toJson<String?>(recurringId),
       'importBatchId': serializer.toJson<String?>(importBatchId),
       'dedupeHash': serializer.toJson<String?>(dedupeHash),
+      'currency': serializer.toJson<String>(currency),
+      'baseCents': serializer.toJson<int?>(baseCents),
+      'toAmountCents': serializer.toJson<int?>(toAmountCents),
+      'tags': serializer.toJson<String>(tags),
     };
   }
 
@@ -2079,6 +2210,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> recurringId = const Value.absent(),
     Value<String?> importBatchId = const Value.absent(),
     Value<String?> dedupeHash = const Value.absent(),
+    String? currency,
+    Value<int?> baseCents = const Value.absent(),
+    Value<int?> toAmountCents = const Value.absent(),
+    String? tags,
   }) => Transaction(
     id: id ?? this.id,
     userId: userId.present ? userId.value : this.userId,
@@ -2098,6 +2233,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     recurringId: recurringId.present ? recurringId.value : this.recurringId,
     importBatchId: importBatchId.present ? importBatchId.value : this.importBatchId,
     dedupeHash: dedupeHash.present ? dedupeHash.value : this.dedupeHash,
+    currency: currency ?? this.currency,
+    baseCents: baseCents.present ? baseCents.value : this.baseCents,
+    toAmountCents: toAmountCents.present ? toAmountCents.value : this.toAmountCents,
+    tags: tags ?? this.tags,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -2119,6 +2258,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringId: data.recurringId.present ? data.recurringId.value : this.recurringId,
       importBatchId: data.importBatchId.present ? data.importBatchId.value : this.importBatchId,
       dedupeHash: data.dedupeHash.present ? data.dedupeHash.value : this.dedupeHash,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      baseCents: data.baseCents.present ? data.baseCents.value : this.baseCents,
+      toAmountCents: data.toAmountCents.present ? data.toAmountCents.value : this.toAmountCents,
+      tags: data.tags.present ? data.tags.value : this.tags,
     );
   }
 
@@ -2142,13 +2285,17 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('merchant: $merchant, ')
           ..write('recurringId: $recurringId, ')
           ..write('importBatchId: $importBatchId, ')
-          ..write('dedupeHash: $dedupeHash')
+          ..write('dedupeHash: $dedupeHash, ')
+          ..write('currency: $currency, ')
+          ..write('baseCents: $baseCents, ')
+          ..write('toAmountCents: $toAmountCents, ')
+          ..write('tags: $tags')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     userId,
     createdAt,
@@ -2167,7 +2314,11 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     recurringId,
     importBatchId,
     dedupeHash,
-  );
+    currency,
+    baseCents,
+    toAmountCents,
+    tags,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2189,7 +2340,11 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.merchant == this.merchant &&
           other.recurringId == this.recurringId &&
           other.importBatchId == this.importBatchId &&
-          other.dedupeHash == this.dedupeHash);
+          other.dedupeHash == this.dedupeHash &&
+          other.currency == this.currency &&
+          other.baseCents == this.baseCents &&
+          other.toAmountCents == this.toAmountCents &&
+          other.tags == this.tags);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -2211,6 +2366,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> recurringId;
   final Value<String?> importBatchId;
   final Value<String?> dedupeHash;
+  final Value<String> currency;
+  final Value<int?> baseCents;
+  final Value<int?> toAmountCents;
+  final Value<String> tags;
   final Value<int> rowid;
   const TransactionsCompanion({
     this.id = const Value.absent(),
@@ -2231,6 +2390,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.recurringId = const Value.absent(),
     this.importBatchId = const Value.absent(),
     this.dedupeHash = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.baseCents = const Value.absent(),
+    this.toAmountCents = const Value.absent(),
+    this.tags = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TransactionsCompanion.insert({
@@ -2252,6 +2415,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.recurringId = const Value.absent(),
     this.importBatchId = const Value.absent(),
     this.dedupeHash = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.baseCents = const Value.absent(),
+    this.toAmountCents = const Value.absent(),
+    this.tags = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : type = Value(type),
        scope = Value(scope),
@@ -2277,6 +2444,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? recurringId,
     Expression<String>? importBatchId,
     Expression<String>? dedupeHash,
+    Expression<String>? currency,
+    Expression<int>? baseCents,
+    Expression<int>? toAmountCents,
+    Expression<String>? tags,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2298,6 +2469,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (recurringId != null) 'recurring_id': recurringId,
       if (importBatchId != null) 'import_batch_id': importBatchId,
       if (dedupeHash != null) 'dedupe_hash': dedupeHash,
+      if (currency != null) 'currency': currency,
+      if (baseCents != null) 'base_cents': baseCents,
+      if (toAmountCents != null) 'to_amount_cents': toAmountCents,
+      if (tags != null) 'tags': tags,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2321,6 +2496,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? recurringId,
     Value<String?>? importBatchId,
     Value<String?>? dedupeHash,
+    Value<String>? currency,
+    Value<int?>? baseCents,
+    Value<int?>? toAmountCents,
+    Value<String>? tags,
     Value<int>? rowid,
   }) {
     return TransactionsCompanion(
@@ -2342,6 +2521,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       recurringId: recurringId ?? this.recurringId,
       importBatchId: importBatchId ?? this.importBatchId,
       dedupeHash: dedupeHash ?? this.dedupeHash,
+      currency: currency ?? this.currency,
+      baseCents: baseCents ?? this.baseCents,
+      toAmountCents: toAmountCents ?? this.toAmountCents,
+      tags: tags ?? this.tags,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2407,6 +2590,18 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (dedupeHash.present) {
       map['dedupe_hash'] = Variable<String>(dedupeHash.value);
     }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (baseCents.present) {
+      map['base_cents'] = Variable<int>(baseCents.value);
+    }
+    if (toAmountCents.present) {
+      map['to_amount_cents'] = Variable<int>(toAmountCents.value);
+    }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2434,6 +2629,10 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('recurringId: $recurringId, ')
           ..write('importBatchId: $importBatchId, ')
           ..write('dedupeHash: $dedupeHash, ')
+          ..write('currency: $currency, ')
+          ..write('baseCents: $baseCents, ')
+          ..write('toAmountCents: $toAmountCents, ')
+          ..write('tags: $tags, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5727,6 +5926,1155 @@ class ImportBatchesCompanion extends UpdateCompanion<ImportBatche> {
   }
 }
 
+class $CurrencyRatesTable extends CurrencyRates with TableInfo<$CurrencyRatesTable, CurrencyRate> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CurrencyRatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newId,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _codeMeta = const VerificationMeta('code');
+  @override
+  late final GeneratedColumn<String> code = GeneratedColumn<String>(
+    'code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _perUsdMeta = const VerificationMeta('perUsd');
+  @override
+  late final GeneratedColumn<double> perUsd = GeneratedColumn<double>(
+    'per_usd',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    dirty,
+    code,
+    perUsd,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'currency_rates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CurrencyRate> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    if (data.containsKey('code')) {
+      context.handle(
+        _codeMeta,
+        code.isAcceptableOrUnknown(data['code']!, _codeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_codeMeta);
+    }
+    if (data.containsKey('per_usd')) {
+      context.handle(
+        _perUsdMeta,
+        perUsd.isAcceptableOrUnknown(data['per_usd']!, _perUsdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_perUsdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CurrencyRate map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CurrencyRate(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+      code: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}code'],
+      )!,
+      perUsd: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}per_usd'],
+      )!,
+    );
+  }
+
+  @override
+  $CurrencyRatesTable createAlias(String alias) {
+    return $CurrencyRatesTable(attachedDatabase, alias);
+  }
+}
+
+class CurrencyRate extends DataClass implements Insertable<CurrencyRate> {
+  final String id;
+  final String? userId;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+
+  /// Local only: changed since the last successful push.
+  final bool dirty;
+  final String code;
+  final double perUsd;
+  const CurrencyRate({
+    required this.id,
+    this.userId,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.dirty,
+    required this.code,
+    required this.perUsd,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<String>(userId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['dirty'] = Variable<bool>(dirty);
+    map['code'] = Variable<String>(code);
+    map['per_usd'] = Variable<double>(perUsd);
+    return map;
+  }
+
+  CurrencyRatesCompanion toCompanion(bool nullToAbsent) {
+    return CurrencyRatesCompanion(
+      id: Value(id),
+      userId: userId == null && nullToAbsent ? const Value.absent() : Value(userId),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent ? const Value.absent() : Value(deletedAt),
+      dirty: Value(dirty),
+      code: Value(code),
+      perUsd: Value(perUsd),
+    );
+  }
+
+  factory CurrencyRate.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CurrencyRate(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String?>(json['userId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+      code: serializer.fromJson<String>(json['code']),
+      perUsd: serializer.fromJson<double>(json['perUsd']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String?>(userId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+      'code': serializer.toJson<String>(code),
+      'perUsd': serializer.toJson<double>(perUsd),
+    };
+  }
+
+  CurrencyRate copyWith({
+    String? id,
+    Value<String?> userId = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    bool? dirty,
+    String? code,
+    double? perUsd,
+  }) => CurrencyRate(
+    id: id ?? this.id,
+    userId: userId.present ? userId.value : this.userId,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    dirty: dirty ?? this.dirty,
+    code: code ?? this.code,
+    perUsd: perUsd ?? this.perUsd,
+  );
+  CurrencyRate copyWithCompanion(CurrencyRatesCompanion data) {
+    return CurrencyRate(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+      code: data.code.present ? data.code.value : this.code,
+      perUsd: data.perUsd.present ? data.perUsd.value : this.perUsd,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CurrencyRate(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('code: $code, ')
+          ..write('perUsd: $perUsd')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    dirty,
+    code,
+    perUsd,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CurrencyRate &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.dirty == this.dirty &&
+          other.code == this.code &&
+          other.perUsd == this.perUsd);
+}
+
+class CurrencyRatesCompanion extends UpdateCompanion<CurrencyRate> {
+  final Value<String> id;
+  final Value<String?> userId;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<bool> dirty;
+  final Value<String> code;
+  final Value<double> perUsd;
+  final Value<int> rowid;
+  const CurrencyRatesCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.code = const Value.absent(),
+    this.perUsd = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CurrencyRatesCompanion.insert({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    required String code,
+    required double perUsd,
+    this.rowid = const Value.absent(),
+  }) : code = Value(code),
+       perUsd = Value(perUsd);
+  static Insertable<CurrencyRate> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<bool>? dirty,
+    Expression<String>? code,
+    Expression<double>? perUsd,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (code != null) 'code': code,
+      if (perUsd != null) 'per_usd': perUsd,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CurrencyRatesCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? userId,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<bool>? dirty,
+    Value<String>? code,
+    Value<double>? perUsd,
+    Value<int>? rowid,
+  }) {
+    return CurrencyRatesCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      dirty: dirty ?? this.dirty,
+      code: code ?? this.code,
+      perUsd: perUsd ?? this.perUsd,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (code.present) {
+      map['code'] = Variable<String>(code.value);
+    }
+    if (perUsd.present) {
+      map['per_usd'] = Variable<double>(perUsd.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CurrencyRatesCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('code: $code, ')
+          ..write('perUsd: $perUsd, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AttachmentsTable extends Attachments with TableInfo<$AttachmentsTable, Attachment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AttachmentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: newId,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now().toUtc(),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _transactionIdMeta = const VerificationMeta(
+    'transactionId',
+  );
+  @override
+  late final GeneratedColumn<String> transactionId = GeneratedColumn<String>(
+    'transaction_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeMeta = const VerificationMeta('mime');
+  @override
+  late final GeneratedColumn<String> mime = GeneratedColumn<String>(
+    'mime',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _uploadedMeta = const VerificationMeta(
+    'uploaded',
+  );
+  @override
+  late final GeneratedColumn<bool> uploaded = GeneratedColumn<bool>(
+    'uploaded',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("uploaded" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    userId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    dirty,
+    transactionId,
+    fileName,
+    mime,
+    sizeBytes,
+    uploaded,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'attachments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Attachment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    if (data.containsKey('transaction_id')) {
+      context.handle(
+        _transactionIdMeta,
+        transactionId.isAcceptableOrUnknown(
+          data['transaction_id']!,
+          _transactionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_transactionIdMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('mime')) {
+      context.handle(
+        _mimeMeta,
+        mime.isAcceptableOrUnknown(data['mime']!, _mimeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mimeMeta);
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeBytesMeta);
+    }
+    if (data.containsKey('uploaded')) {
+      context.handle(
+        _uploadedMeta,
+        uploaded.isAcceptableOrUnknown(data['uploaded']!, _uploadedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Attachment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Attachment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+      transactionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transaction_id'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      mime: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime'],
+      )!,
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      uploaded: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}uploaded'],
+      )!,
+    );
+  }
+
+  @override
+  $AttachmentsTable createAlias(String alias) {
+    return $AttachmentsTable(attachedDatabase, alias);
+  }
+}
+
+class Attachment extends DataClass implements Insertable<Attachment> {
+  final String id;
+  final String? userId;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+
+  /// Local only: changed since the last successful push.
+  final bool dirty;
+  final String transactionId;
+  final String fileName;
+  final String mime;
+  final int sizeBytes;
+
+  /// Whether the file has reached cloud storage. Another device seeing
+  /// `true` without a local copy downloads it.
+  final bool uploaded;
+  const Attachment({
+    required this.id,
+    this.userId,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.dirty,
+    required this.transactionId,
+    required this.fileName,
+    required this.mime,
+    required this.sizeBytes,
+    required this.uploaded,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || userId != null) {
+      map['user_id'] = Variable<String>(userId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['dirty'] = Variable<bool>(dirty);
+    map['transaction_id'] = Variable<String>(transactionId);
+    map['file_name'] = Variable<String>(fileName);
+    map['mime'] = Variable<String>(mime);
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    map['uploaded'] = Variable<bool>(uploaded);
+    return map;
+  }
+
+  AttachmentsCompanion toCompanion(bool nullToAbsent) {
+    return AttachmentsCompanion(
+      id: Value(id),
+      userId: userId == null && nullToAbsent ? const Value.absent() : Value(userId),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent ? const Value.absent() : Value(deletedAt),
+      dirty: Value(dirty),
+      transactionId: Value(transactionId),
+      fileName: Value(fileName),
+      mime: Value(mime),
+      sizeBytes: Value(sizeBytes),
+      uploaded: Value(uploaded),
+    );
+  }
+
+  factory Attachment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Attachment(
+      id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String?>(json['userId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+      transactionId: serializer.fromJson<String>(json['transactionId']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      mime: serializer.fromJson<String>(json['mime']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      uploaded: serializer.fromJson<bool>(json['uploaded']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String?>(userId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+      'transactionId': serializer.toJson<String>(transactionId),
+      'fileName': serializer.toJson<String>(fileName),
+      'mime': serializer.toJson<String>(mime),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'uploaded': serializer.toJson<bool>(uploaded),
+    };
+  }
+
+  Attachment copyWith({
+    String? id,
+    Value<String?> userId = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    bool? dirty,
+    String? transactionId,
+    String? fileName,
+    String? mime,
+    int? sizeBytes,
+    bool? uploaded,
+  }) => Attachment(
+    id: id ?? this.id,
+    userId: userId.present ? userId.value : this.userId,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    dirty: dirty ?? this.dirty,
+    transactionId: transactionId ?? this.transactionId,
+    fileName: fileName ?? this.fileName,
+    mime: mime ?? this.mime,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    uploaded: uploaded ?? this.uploaded,
+  );
+  Attachment copyWithCompanion(AttachmentsCompanion data) {
+    return Attachment(
+      id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+      transactionId: data.transactionId.present ? data.transactionId.value : this.transactionId,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      mime: data.mime.present ? data.mime.value : this.mime,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      uploaded: data.uploaded.present ? data.uploaded.value : this.uploaded,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Attachment(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('fileName: $fileName, ')
+          ..write('mime: $mime, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('uploaded: $uploaded')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    dirty,
+    transactionId,
+    fileName,
+    mime,
+    sizeBytes,
+    uploaded,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Attachment &&
+          other.id == this.id &&
+          other.userId == this.userId &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.dirty == this.dirty &&
+          other.transactionId == this.transactionId &&
+          other.fileName == this.fileName &&
+          other.mime == this.mime &&
+          other.sizeBytes == this.sizeBytes &&
+          other.uploaded == this.uploaded);
+}
+
+class AttachmentsCompanion extends UpdateCompanion<Attachment> {
+  final Value<String> id;
+  final Value<String?> userId;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<bool> dirty;
+  final Value<String> transactionId;
+  final Value<String> fileName;
+  final Value<String> mime;
+  final Value<int> sizeBytes;
+  final Value<bool> uploaded;
+  final Value<int> rowid;
+  const AttachmentsCompanion({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.transactionId = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.mime = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.uploaded = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AttachmentsCompanion.insert({
+    this.id = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    required String transactionId,
+    required String fileName,
+    required String mime,
+    required int sizeBytes,
+    this.uploaded = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : transactionId = Value(transactionId),
+       fileName = Value(fileName),
+       mime = Value(mime),
+       sizeBytes = Value(sizeBytes);
+  static Insertable<Attachment> custom({
+    Expression<String>? id,
+    Expression<String>? userId,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<bool>? dirty,
+    Expression<String>? transactionId,
+    Expression<String>? fileName,
+    Expression<String>? mime,
+    Expression<int>? sizeBytes,
+    Expression<bool>? uploaded,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (transactionId != null) 'transaction_id': transactionId,
+      if (fileName != null) 'file_name': fileName,
+      if (mime != null) 'mime': mime,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (uploaded != null) 'uploaded': uploaded,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AttachmentsCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? userId,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<bool>? dirty,
+    Value<String>? transactionId,
+    Value<String>? fileName,
+    Value<String>? mime,
+    Value<int>? sizeBytes,
+    Value<bool>? uploaded,
+    Value<int>? rowid,
+  }) {
+    return AttachmentsCompanion(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      dirty: dirty ?? this.dirty,
+      transactionId: transactionId ?? this.transactionId,
+      fileName: fileName ?? this.fileName,
+      mime: mime ?? this.mime,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      uploaded: uploaded ?? this.uploaded,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (transactionId.present) {
+      map['transaction_id'] = Variable<String>(transactionId.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (mime.present) {
+      map['mime'] = Variable<String>(mime.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (uploaded.present) {
+      map['uploaded'] = Variable<bool>(uploaded.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AttachmentsCompanion(')
+          ..write('id: $id, ')
+          ..write('userId: $userId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('fileName: $fileName, ')
+          ..write('mime: $mime, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('uploaded: $uploaded, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalMetaTable extends LocalMeta with TableInfo<$LocalMetaTable, LocalMetaData> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -5942,6 +7290,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GoalContributionsTable goalContributions = $GoalContributionsTable(this);
   late final $RecurringRulesTable recurringRules = $RecurringRulesTable(this);
   late final $ImportBatchesTable importBatches = $ImportBatchesTable(this);
+  late final $CurrencyRatesTable currencyRates = $CurrencyRatesTable(this);
+  late final $AttachmentsTable attachments = $AttachmentsTable(this);
   late final $LocalMetaTable localMeta = $LocalMetaTable(this);
   late final Index txDay = Index(
     'tx_day',
@@ -5963,6 +7313,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     goalContributions,
     recurringRules,
     importBatches,
+    currencyRates,
+    attachments,
     localMeta,
     txDay,
     txRecurringDay,
@@ -6634,6 +7986,10 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> recurringId,
       Value<String?> importBatchId,
       Value<String?> dedupeHash,
+      Value<String> currency,
+      Value<int?> baseCents,
+      Value<int?> toAmountCents,
+      Value<String> tags,
       Value<int> rowid,
     });
 typedef $$TransactionsTableUpdateCompanionBuilder =
@@ -6656,6 +8012,10 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> recurringId,
       Value<String?> importBatchId,
       Value<String?> dedupeHash,
+      Value<String> currency,
+      Value<int?> baseCents,
+      Value<int?> toAmountCents,
+      Value<String> tags,
       Value<int> rowid,
     });
 
@@ -6754,6 +8114,26 @@ class $$TransactionsTableFilterComposer extends Composer<_$AppDatabase, $Transac
 
   ColumnFilters<String> get dedupeHash => $composableBuilder(
     column: $table.dedupeHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get baseCents => $composableBuilder(
+    column: $table.baseCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get toAmountCents => $composableBuilder(
+    column: $table.toAmountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6855,6 +8235,26 @@ class $$TransactionsTableOrderingComposer extends Composer<_$AppDatabase, $Trans
     column: $table.dedupeHash,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get baseCents => $composableBuilder(
+    column: $table.baseCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get toAmountCents => $composableBuilder(
+    column: $table.toAmountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TransactionsTableAnnotationComposer extends Composer<_$AppDatabase, $TransactionsTable> {
@@ -6923,6 +8323,17 @@ class $$TransactionsTableAnnotationComposer extends Composer<_$AppDatabase, $Tra
     column: $table.dedupeHash,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get currency => $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<int> get baseCents => $composableBuilder(column: $table.baseCents, builder: (column) => column);
+
+  GeneratedColumn<int> get toAmountCents => $composableBuilder(
+    column: $table.toAmountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tags => $composableBuilder(column: $table.tags, builder: (column) => column);
 }
 
 class $$TransactionsTableTableManager
@@ -6971,6 +8382,10 @@ class $$TransactionsTableTableManager
                 Value<String?> recurringId = const Value.absent(),
                 Value<String?> importBatchId = const Value.absent(),
                 Value<String?> dedupeHash = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<int?> baseCents = const Value.absent(),
+                Value<int?> toAmountCents = const Value.absent(),
+                Value<String> tags = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
@@ -6991,6 +8406,10 @@ class $$TransactionsTableTableManager
                 recurringId: recurringId,
                 importBatchId: importBatchId,
                 dedupeHash: dedupeHash,
+                currency: currency,
+                baseCents: baseCents,
+                toAmountCents: toAmountCents,
+                tags: tags,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7013,6 +8432,10 @@ class $$TransactionsTableTableManager
                 Value<String?> recurringId = const Value.absent(),
                 Value<String?> importBatchId = const Value.absent(),
                 Value<String?> dedupeHash = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<int?> baseCents = const Value.absent(),
+                Value<int?> toAmountCents = const Value.absent(),
+                Value<String> tags = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
@@ -7033,6 +8456,10 @@ class $$TransactionsTableTableManager
                 recurringId: recurringId,
                 importBatchId: importBatchId,
                 dedupeHash: dedupeHash,
+                currency: currency,
+                baseCents: baseCents,
+                toAmountCents: toAmountCents,
+                tags: tags,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
@@ -8580,6 +10007,545 @@ typedef $$ImportBatchesTableProcessedTableManager =
       ImportBatche,
       PrefetchHooks Function()
     >;
+typedef $$CurrencyRatesTableCreateCompanionBuilder =
+    CurrencyRatesCompanion Function({
+      Value<String> id,
+      Value<String?> userId,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
+      required String code,
+      required double perUsd,
+      Value<int> rowid,
+    });
+typedef $$CurrencyRatesTableUpdateCompanionBuilder =
+    CurrencyRatesCompanion Function({
+      Value<String> id,
+      Value<String?> userId,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
+      Value<String> code,
+      Value<double> perUsd,
+      Value<int> rowid,
+    });
+
+class $$CurrencyRatesTableFilterComposer extends Composer<_$AppDatabase, $CurrencyRatesTable> {
+  $$CurrencyRatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get code => $composableBuilder(
+    column: $table.code,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get perUsd => $composableBuilder(
+    column: $table.perUsd,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CurrencyRatesTableOrderingComposer extends Composer<_$AppDatabase, $CurrencyRatesTable> {
+  $$CurrencyRatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get code => $composableBuilder(
+    column: $table.code,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get perUsd => $composableBuilder(
+    column: $table.perUsd,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CurrencyRatesTableAnnotationComposer extends Composer<_$AppDatabase, $CurrencyRatesTable> {
+  $$CurrencyRatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId => $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt => $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty => $composableBuilder(column: $table.dirty, builder: (column) => column);
+
+  GeneratedColumn<String> get code => $composableBuilder(column: $table.code, builder: (column) => column);
+
+  GeneratedColumn<double> get perUsd => $composableBuilder(column: $table.perUsd, builder: (column) => column);
+}
+
+class $$CurrencyRatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CurrencyRatesTable,
+          CurrencyRate,
+          $$CurrencyRatesTableFilterComposer,
+          $$CurrencyRatesTableOrderingComposer,
+          $$CurrencyRatesTableAnnotationComposer,
+          $$CurrencyRatesTableCreateCompanionBuilder,
+          $$CurrencyRatesTableUpdateCompanionBuilder,
+          (
+            CurrencyRate,
+            BaseReferences<_$AppDatabase, $CurrencyRatesTable, CurrencyRate>,
+          ),
+          CurrencyRate,
+          PrefetchHooks Function()
+        > {
+  $$CurrencyRatesTableTableManager(_$AppDatabase db, $CurrencyRatesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$CurrencyRatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$CurrencyRatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$CurrencyRatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<String> code = const Value.absent(),
+                Value<double> perUsd = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CurrencyRatesCompanion(
+                id: id,
+                userId: userId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
+                code: code,
+                perUsd: perUsd,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                required String code,
+                required double perUsd,
+                Value<int> rowid = const Value.absent(),
+              }) => CurrencyRatesCompanion.insert(
+                id: id,
+                userId: userId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
+                code: code,
+                perUsd: perUsd,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CurrencyRatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CurrencyRatesTable,
+      CurrencyRate,
+      $$CurrencyRatesTableFilterComposer,
+      $$CurrencyRatesTableOrderingComposer,
+      $$CurrencyRatesTableAnnotationComposer,
+      $$CurrencyRatesTableCreateCompanionBuilder,
+      $$CurrencyRatesTableUpdateCompanionBuilder,
+      (
+        CurrencyRate,
+        BaseReferences<_$AppDatabase, $CurrencyRatesTable, CurrencyRate>,
+      ),
+      CurrencyRate,
+      PrefetchHooks Function()
+    >;
+typedef $$AttachmentsTableCreateCompanionBuilder =
+    AttachmentsCompanion Function({
+      Value<String> id,
+      Value<String?> userId,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
+      required String transactionId,
+      required String fileName,
+      required String mime,
+      required int sizeBytes,
+      Value<bool> uploaded,
+      Value<int> rowid,
+    });
+typedef $$AttachmentsTableUpdateCompanionBuilder =
+    AttachmentsCompanion Function({
+      Value<String> id,
+      Value<String?> userId,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<bool> dirty,
+      Value<String> transactionId,
+      Value<String> fileName,
+      Value<String> mime,
+      Value<int> sizeBytes,
+      Value<bool> uploaded,
+      Value<int> rowid,
+    });
+
+class $$AttachmentsTableFilterComposer extends Composer<_$AppDatabase, $AttachmentsTable> {
+  $$AttachmentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mime => $composableBuilder(
+    column: $table.mime,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get uploaded => $composableBuilder(
+    column: $table.uploaded,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AttachmentsTableOrderingComposer extends Composer<_$AppDatabase, $AttachmentsTable> {
+  $$AttachmentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mime => $composableBuilder(
+    column: $table.mime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get uploaded => $composableBuilder(
+    column: $table.uploaded,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AttachmentsTableAnnotationComposer extends Composer<_$AppDatabase, $AttachmentsTable> {
+  $$AttachmentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId => $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt => $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty => $composableBuilder(column: $table.dirty, builder: (column) => column);
+
+  GeneratedColumn<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fileName => $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<String> get mime => $composableBuilder(column: $table.mime, builder: (column) => column);
+
+  GeneratedColumn<int> get sizeBytes => $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<bool> get uploaded => $composableBuilder(column: $table.uploaded, builder: (column) => column);
+}
+
+class $$AttachmentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AttachmentsTable,
+          Attachment,
+          $$AttachmentsTableFilterComposer,
+          $$AttachmentsTableOrderingComposer,
+          $$AttachmentsTableAnnotationComposer,
+          $$AttachmentsTableCreateCompanionBuilder,
+          $$AttachmentsTableUpdateCompanionBuilder,
+          (
+            Attachment,
+            BaseReferences<_$AppDatabase, $AttachmentsTable, Attachment>,
+          ),
+          Attachment,
+          PrefetchHooks Function()
+        > {
+  $$AttachmentsTableTableManager(_$AppDatabase db, $AttachmentsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$AttachmentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$AttachmentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$AttachmentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<String> transactionId = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<String> mime = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<bool> uploaded = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AttachmentsCompanion(
+                id: id,
+                userId: userId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
+                transactionId: transactionId,
+                fileName: fileName,
+                mime: mime,
+                sizeBytes: sizeBytes,
+                uploaded: uploaded,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> userId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                required String transactionId,
+                required String fileName,
+                required String mime,
+                required int sizeBytes,
+                Value<bool> uploaded = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AttachmentsCompanion.insert(
+                id: id,
+                userId: userId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                dirty: dirty,
+                transactionId: transactionId,
+                fileName: fileName,
+                mime: mime,
+                sizeBytes: sizeBytes,
+                uploaded: uploaded,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AttachmentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AttachmentsTable,
+      Attachment,
+      $$AttachmentsTableFilterComposer,
+      $$AttachmentsTableOrderingComposer,
+      $$AttachmentsTableAnnotationComposer,
+      $$AttachmentsTableCreateCompanionBuilder,
+      $$AttachmentsTableUpdateCompanionBuilder,
+      (
+        Attachment,
+        BaseReferences<_$AppDatabase, $AttachmentsTable, Attachment>,
+      ),
+      Attachment,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalMetaTableCreateCompanionBuilder =
     LocalMetaCompanion Function({
       required String key,
@@ -8722,5 +10688,7 @@ class $AppDatabaseManager {
       $$GoalContributionsTableTableManager(_db, _db.goalContributions);
   $$RecurringRulesTableTableManager get recurringRules => $$RecurringRulesTableTableManager(_db, _db.recurringRules);
   $$ImportBatchesTableTableManager get importBatches => $$ImportBatchesTableTableManager(_db, _db.importBatches);
+  $$CurrencyRatesTableTableManager get currencyRates => $$CurrencyRatesTableTableManager(_db, _db.currencyRates);
+  $$AttachmentsTableTableManager get attachments => $$AttachmentsTableTableManager(_db, _db.attachments);
   $$LocalMetaTableTableManager get localMeta => $$LocalMetaTableTableManager(_db, _db.localMeta);
 }

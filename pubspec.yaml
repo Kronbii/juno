@@ -48,6 +48,15 @@ dependencies:
   uuid: ^4.6.0
   crypto: ^3.0.7
   shared_preferences: ^2.5.5
+  flutter_timezone: ^5.1.0
+  local_auth: ^3.0.2
+  image_picker: ^1.2.3
+  home_widget: ^0.10.0
+  excel: ^4.0.6
+  flutter_local_notifications: ^19.0.0
+  timezone: ^0.10.0
+  path_provider: ^2.1.6
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +70,7 @@ dev_dependencies:
   drift_dev: ^2.31.0
   build_runner: ^2.15.1
   very_good_analysis: ^10.1.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -68,6 +78,8 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/icon.png
   fonts:
     - family: Manrope
       fonts:
@@ -96,3 +108,9 @@ flutter:
         - asset: assets/fonts/InstrumentSerif-Regular.ttf
         - asset: assets/fonts/InstrumentSerif-Italic.ttf
           style: italic
+
+flutter_launcher_icons:
+  image_path: assets/icon/icon.png
+  ios: true
+  remove_alpha_ios: true
+  android: false

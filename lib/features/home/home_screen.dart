@@ -4,6 +4,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -365,7 +366,7 @@ class _UpcomingCard extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          '${r.type == TxType.income ? '+' : '−'}${Money.format(r.amountCents)}',
+                          '${r.type == TxType.income ? '+' : '−'}${Fx.format(r.amountCents, ref.watch(accountMapProvider)[r.accountId]?.currency ?? baseCurrency)}',
                           style: JType.rowMetric.copyWith(
                             fontSize: 13,
                             color: r.type == TxType.income ? c.income : c.inkMuted,
@@ -423,7 +424,8 @@ class _AccountsCard extends ConsumerWidget {
     final c = context.jc;
     final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
     final balances = ref.watch(balancesProvider).value ?? const <String, int>{};
-    final total = accounts.fold(0, (s, a) => s + (balances[a.id] ?? a.openingBalanceCents));
+    final rates = ref.watch(ratesProvider);
+    final total = accounts.fold(0, (s, a) => s + Fx.toUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates));
     return JCard(
       title: 'Accounts',
       onTap: () => context.go('/settings/accounts'),
@@ -438,7 +440,7 @@ class _AccountsCard extends ConsumerWidget {
                     child: Text(a.name, style: JType.bodyStrong.copyWith(color: c.ink, fontSize: 14)),
                   ),
                   Text(
-                    Money.format(balances[a.id] ?? a.openingBalanceCents),
+                    Fx.format(balances[a.id] ?? a.openingBalanceCents, a.currency),
                     style: JType.rowMetric.copyWith(
                       color: (balances[a.id] ?? 0) < 0 ? c.expense : c.inkMuted,
                     ),

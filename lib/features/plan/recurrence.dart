@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:uuid/uuid.dart';
 
@@ -71,22 +72,21 @@ Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
           db.transactions,
         )..where((t) => t.recurringId.equals(rule.id) & t.occurredOn.equals(day))).getSingleOrNull();
         if (exists != null) continue;
-        await db
-            .into(db.transactions)
-            .insert(
-              TransactionsCompanion.insert(
-                id: Value(occurrenceId(rule.id, day)),
-                type: rule.type,
-                scope: rule.scope,
-                amountCents: rule.amountCents,
-                accountId: rule.accountId,
-                categoryId: Value(rule.categoryId),
-                occurredOn: day,
-                note: Value(rule.note),
-                recurringId: Value(rule.id),
-              ),
-              mode: InsertMode.insertOrIgnore,
-            );
+        final row = await Ledger.price(
+          db,
+          TransactionsCompanion.insert(
+            id: Value(occurrenceId(rule.id, day)),
+            type: rule.type,
+            scope: rule.scope,
+            amountCents: rule.amountCents,
+            accountId: rule.accountId,
+            categoryId: Value(rule.categoryId),
+            occurredOn: day,
+            note: Value(rule.note),
+            recurringId: Value(rule.id),
+          ),
+        );
+        await db.into(db.transactions).insert(row, mode: InsertMode.insertOrIgnore);
         created++;
       }
       await (db.update(db.recurringRules)..where((r) => r.id.equals(rule.id))).write(

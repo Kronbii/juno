@@ -7,6 +7,14 @@ A personal and household finance tracker for the Linux desktop and iPhone. It's 
 - **Plan:** monthly budgets per category or per scope, savings goals with contributions, and recurring entries that log themselves on their due date.
 - **Import** a bank CSV. Juno guesses the columns, learns your categories, skips rows it has already seen, and lets you undo an import. **Export** writes everything to CSV.
 - **Back Tap quick add:** double-tap the back of your iPhone, enter an amount, and the expense is logged. See [docs/back-tap-shortcut.md](docs/back-tap-shortcut.md).
+- **Currencies:** accounts can hold LBP (or EUR and others) at rates you set. Totals stay in USD, and each entry keeps the USD value it was logged at.
+- **Tags** cut across categories, for things like `#trip-istanbul` or `#gift`. You can filter Activity by tag, and Insights totals spending per tag.
+- **Receipts:** attach a photo to any entry (camera or library on iPhone, a file on desktop). Receipts sync through Supabase Storage.
+- **Net worth over time:** a 12-month history rebuilt from your accounts and entries.
+- **Reminders:** a notification on the day a recurring bill is due, plus budget alerts at 80% and 100%.
+- **Face ID lock** (iPhone): Juno asks on open and after a minute in the background.
+- **Home-screen widget** (iPhone): shows this month's spending and opens a new entry on tap. Adding it needs a one-time step in Xcode, described in [docs/ios-widget.md](docs/ios-widget.md).
+- **Excel and Notion imports:** `.xlsx` workbooks (with a sheet picker) and Notion CSV exports. If the file has a Category column, its values are matched to your categories.
 
 ## Run
 
@@ -31,7 +39,7 @@ Debug builds have **Settings → Data → Load sample data**, which adds four mo
 Without configuration Juno runs local-only. To sync your desktop and phone:
 
 1. Create a Supabase project.
-2. In its SQL editor, run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). This creates the tables, row-level security and the cursor triggers.
+2. Run the migrations in [`supabase/migrations/`](supabase/migrations/) in order, either in the SQL editor or with `npx supabase db push`. They create the tables, row-level security, the cursor triggers and the private `receipts` storage bucket.
 3. Copy `supabase.example.json` to `supabase.json` (it's gitignored) and fill in the project URL and the anon/publishable key.
 4. Run with `flutter run --dart-define-from-file=supabase.json`, and pass the same flag to `flutter build`.
 5. Go to **Settings → Cloud sync**, create an account and sign in on each device.

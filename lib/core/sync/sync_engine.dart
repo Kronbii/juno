@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -79,6 +81,8 @@ class SyncCore {
     'goal_contributions',
     'recurring_rules',
     'import_batches',
+    'currency_rates',
+    'attachments',
   ];
 
   static const _batch = 500;
@@ -239,7 +243,13 @@ class SyncEngine extends Notifier<SyncStatus> {
     try {
       do {
         _again = false;
-        await SyncCore(ref.read(databaseProvider), SupabaseRemote()).run();
+        final db = ref.read(databaseProvider);
+        final core = SyncCore(db, SupabaseRemote());
+        await core.run();
+        // Receipt files follow their rows; marking uploads dirties rows, so
+        // push once more to tell other devices the files are there.
+        await AttachmentStore(Ledger(db)).sync(Supabase.instance.client);
+        await core.run();
       } while (_again);
       state = state.copyWith(phase: SyncPhase.idle, lastSynced: DateTime.now());
     } on Object catch (e) {

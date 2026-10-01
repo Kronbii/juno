@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 /// Filters for transaction queries. Null fields don't filter.
@@ -14,6 +16,7 @@ class TxQuery {
     this.categoryIds,
     this.accountId,
     this.search,
+    this.tag,
     this.limit,
   });
 
@@ -25,6 +28,9 @@ class TxQuery {
   final Set<String>? categoryIds;
   final String? accountId;
   final String? search;
+
+  /// A single normalised tag.
+  final String? tag;
   final int? limit;
 
   TxQuery copyWith({
@@ -35,8 +41,10 @@ class TxQuery {
     Set<String>? categoryIds,
     String? accountId,
     String? search,
+    String? tag,
     int? limit,
     bool clearScope = false,
+    bool clearTag = false,
     bool clearType = false,
     bool clearCategories = false,
     bool clearAccount = false,
@@ -49,6 +57,7 @@ class TxQuery {
     categoryIds: clearCategories ? null : categoryIds ?? this.categoryIds,
     accountId: clearAccount ? null : accountId ?? this.accountId,
     search: search ?? this.search,
+    tag: clearTag ? null : tag ?? this.tag,
     limit: limit ?? this.limit,
   );
 
@@ -62,6 +71,7 @@ class TxQuery {
       _setEq(other.categoryIds, categoryIds) &&
       other.accountId == accountId &&
       other.search == search &&
+      other.tag == tag &&
       other.limit == limit;
 
   @override
@@ -73,6 +83,7 @@ class TxQuery {
     categoryIds == null ? null : Object.hashAllUnordered(categoryIds!),
     accountId,
     search,
+    tag,
     limit,
   );
 
@@ -130,6 +141,7 @@ class Ledger {
       final like = '%${s.replaceAll('%', r'\%')}%';
       q.where((t) => t.note.like(like) | t.merchant.like(like));
     }
+    if (f.tag != null && f.tag!.isNotEmpty) q.where((t) => t.tags.like('%,${f.tag},%'));
     q.orderBy([
       (t) => OrderingTerm.desc(t.occurredOn),
       (t) => OrderingTerm.desc(t.createdAt),
@@ -155,7 +167,7 @@ class Ledger {
                                           ELSE -t.amount_cents END)
                     FROM transactions t
                     WHERE t.account_id = a.id AND t.deleted_at IS NULL), 0)
-        + COALESCE((SELECT SUM(t.amount_cents) FROM transactions t
+        + COALESCE((SELECT SUM(COALESCE(t.to_amount_cents, t.amount_cents)) FROM transactions t
                     WHERE t.to_account_id = a.id AND t.type = 'transfer'
                       AND t.deleted_at IS NULL), 0) AS balance
       FROM accounts a WHERE a.deleted_at IS NULL
@@ -214,16 +226,59 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   // --------------------------------------------------------------- writes
 
+  Future<Map<String, double>> rates() async => {
+    for (final r in await (db.select(db.currencyRates)..where((r) => r.deletedAt.isNull())).get()) r.code: r.perUsd,
+  };
+
+  /// Fills currency, USD base and (for cross-currency transfers) the
+  /// received amount from the accounts involved, unless the caller set them.
+  static Future<TransactionsCompanion> price(AppDatabase db, TransactionsCompanion tx) async {
+    if (!tx.accountId.present || !tx.amountCents.present) return tx;
+    final account = await (db.select(db.accounts)..where((a) => a.id.equals(tx.accountId.value))).getSingleOrNull();
+    final currency = tx.currency.present ? tx.currency.value : account?.currency ?? baseCurrency;
+    final perUsd = {
+      for (final r in await (db.select(db.currencyRates)..where((r) => r.deletedAt.isNull())).get()) r.code: r.perUsd,
+    };
+    var out = tx.copyWith(
+      currency: Value(currency),
+      baseCents: tx.baseCents.present ? tx.baseCents : Value(Fx.baseFor(tx.amountCents.value, currency, perUsd)),
+    );
+    final toId = tx.toAccountId.present ? tx.toAccountId.value : null;
+    if (toId != null && !tx.toAmountCents.present) {
+      final to = await (db.select(db.accounts)..where((a) => a.id.equals(toId))).getSingleOrNull();
+      final toCurrency = to?.currency ?? currency;
+      out = out.copyWith(
+        toAmountCents: Value(
+          toCurrency == currency ? null : Fx.convert(tx.amountCents.value, currency, toCurrency, perUsd),
+        ),
+      );
+    }
+    return out;
+  }
+
   Future<String> addTransaction(TransactionsCompanion tx) async {
     final id = tx.id.present ? tx.id.value : newId();
-    await db.into(db.transactions).insert(tx.copyWith(id: Value(id)));
+    await db.into(db.transactions).insert((await price(db, tx)).copyWith(id: Value(id)));
     _wrote();
     return id;
   }
 
   Future<void> updateTransaction(String id, TransactionsCompanion patch) async {
+    var p = patch;
+    // Re-price when the money or the account changed.
+    if (patch.amountCents.present || patch.accountId.present) {
+      final cur = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingle();
+      p = await price(
+        db,
+        patch.copyWith(
+          amountCents: patch.amountCents.present ? patch.amountCents : Value(cur.amountCents),
+          accountId: patch.accountId.present ? patch.accountId : Value(cur.accountId),
+          toAccountId: patch.toAccountId.present ? patch.toAccountId : Value(cur.toAccountId),
+        ),
+      );
+    }
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      patch.copyWith(updatedAt: Value(_now), dirty: const Value(true)),
+      p.copyWith(updatedAt: Value(_now), dirty: const Value(true)),
     );
     _wrote();
   }
@@ -244,6 +299,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
       occurredOn: onDay ?? Day.today(),
       note: Value(t.note),
       merchant: Value(t.merchant),
+      tags: Value(t.tags),
     ),
   );
 
@@ -395,6 +451,90 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     _wrote();
   }
 
+  // ------------------------------------------------------------ currency
+
+  Stream<List<CurrencyRate>> watchRates() =>
+      (db.select(db.currencyRates)
+            ..where((r) => r.deletedAt.isNull())
+            ..orderBy([(r) => OrderingTerm(expression: r.code)]))
+          .watch();
+
+  /// Sets the rate for [code]; the row id is the code so devices converge.
+  Future<void> setRate(String code, double perUsd) async {
+    await db
+        .into(db.currencyRates)
+        .insertOnConflictUpdate(
+          CurrencyRatesCompanion.insert(
+            id: Value(seedId('fx:$code')),
+            code: code,
+            perUsd: perUsd,
+            updatedAt: Value(_now),
+            dirty: const Value(true),
+            deletedAt: const Value(null),
+          ),
+        );
+    _wrote();
+  }
+
+  // ---------------------------------------------------------------- tags
+
+  /// Every tag in use, with how many live entries carry it, most used first.
+  Stream<List<(String, int)>> watchTags() => db
+      .customSelect(
+        "SELECT tags FROM transactions WHERE deleted_at IS NULL AND tags <> ''",
+        readsFrom: {db.transactions},
+      )
+      .watch()
+      .map((rows) {
+        final counts = <String, int>{};
+        for (final r in rows) {
+          for (final t in r.read<String>('tags').split(',')) {
+            if (t.isNotEmpty) counts[t] = (counts[t] ?? 0) + 1;
+          }
+        }
+        return counts.entries.map((e) => (e.key, e.value)).toList()..sort((a, b) => b.$2.compareTo(a.$2));
+      });
+
+  // ---------------------------------------------------------- attachments
+
+  Stream<List<Attachment>> watchAttachments(String transactionId) =>
+      (db.select(db.attachments)
+            ..where((a) => a.transactionId.equals(transactionId) & a.deletedAt.isNull())
+            ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
+          .watch();
+
+  /// transactionId → attachment count, for the paperclip on rows.
+  Stream<Map<String, int>> watchAttachmentCounts() => db
+      .customSelect(
+        'SELECT transaction_id, COUNT(*) AS n FROM attachments WHERE deleted_at IS NULL GROUP BY transaction_id',
+        readsFrom: {db.attachments},
+      )
+      .watch()
+      .map((rows) => {for (final r in rows) r.read<String>('transaction_id'): r.read<int>('n')});
+
+  Future<String> addAttachment(AttachmentsCompanion a) async {
+    final id = a.id.present ? a.id.value : newId();
+    await db.into(db.attachments).insert(a.copyWith(id: Value(id)));
+    _wrote();
+    return id;
+  }
+
+  Future<void> deleteAttachment(String id) async {
+    await (db.update(db.attachments)..where((a) => a.id.equals(id))).write(
+      AttachmentsCompanion(deletedAt: Value(_now), updatedAt: Value(_now), dirty: const Value(true)),
+    );
+    _wrote();
+  }
+
+  Future<List<Attachment>> attachmentsWhere({required bool uploaded}) =>
+      (db.select(db.attachments)..where((a) => a.deletedAt.isNull() & a.uploaded.equals(uploaded))).get();
+
+  Future<void> markUploaded(String id) async {
+    await (db.update(db.attachments)..where((a) => a.id.equals(id))).write(
+      AttachmentsCompanion(uploaded: const Value(true), updatedAt: Value(_now), dirty: const Value(true)),
+    );
+  }
+
   // ---------------------------------------------------------------- import
 
   Stream<List<ImportBatche>> watchImports() =>
@@ -411,11 +551,8 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
           .insert(
             ImportBatchesCompanion.insert(id: Value(batchId), filename: filename, rowCount: rows.length),
           );
-      await db.batch((b) {
-        b.insertAll(db.transactions, [
-          for (final r in rows) r.copyWith(importBatchId: Value(batchId)),
-        ]);
-      });
+      final priced = [for (final r in rows) await price(db, r.copyWith(importBatchId: Value(batchId)))];
+      await db.batch((b) => b.insertAll(db.transactions, priced));
     });
     _wrote();
     return batchId;

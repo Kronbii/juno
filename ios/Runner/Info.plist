@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Juno uses Face ID to keep your finances private.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo of a receipt to attach it to an entry.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach a receipt from your photos.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
@@ -38,6 +39,7 @@ class TxRow extends ConsumerWidget {
       if (isTransfer) '${account?.name ?? '?'} → ${accounts[tx.toAccountId]?.name ?? '?'}',
       if (!isTransfer && (tx.note.isNotEmpty || tx.merchant.isNotEmpty)) cat?.name ?? 'Uncategorised',
       if (!isTransfer) account?.name,
+      for (final t in tx.tagList) '#$t',
     ].whereType<String>().join(' · ');
 
     final iconColor = isTransfer
@@ -45,11 +47,14 @@ class TxRow extends ConsumerWidget {
         : cat == null
         ? c.inkFaint
         : seriesColor(c, cat.colorIndex);
+    final money = Fx.format(tx.amountCents, tx.currency);
     final amount = switch (tx.type) {
-      TxType.income => '+${Money.format(tx.amountCents)}',
-      TxType.expense => '−${Money.format(tx.amountCents)}',
-      TxType.transfer => Money.format(tx.amountCents),
+      TxType.income => '+$money',
+      TxType.expense => '\u2212$money',
+      TxType.transfer => money,
     };
+    final foreign = tx.currency != baseCurrency;
+    final clips = ref.watch(attachmentCountsProvider).value?[tx.id] ?? 0;
     final amountColor = switch (tx.type) {
       TxType.income => c.income,
       TxType.expense => c.ink,
@@ -149,7 +154,25 @@ class TxRow extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: JSpace.md),
-              Text(amount, style: JType.rowMetric.copyWith(color: amountColor)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (clips > 0) ...[
+                        Icon(Icons.attach_file_rounded, size: 13, color: c.inkFaint),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(amount, style: JType.rowMetric.copyWith(color: amountColor)),
+                    ],
+                  ),
+                  if (foreign) ...[
+                    const SizedBox(height: 3),
+                    Text('~${Money.format(tx.usd)}', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                  ],
+                ],
+              ),
             ],
           ),
         ),

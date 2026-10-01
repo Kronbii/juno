@@ -17,6 +17,8 @@ part 'database.g.dart';
     GoalContributions,
     RecurringRules,
     ImportBatches,
+    CurrencyRates,
+    Attachments,
     LocalMeta,
   ],
 )
@@ -31,13 +33,24 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await seedDefaults(this);
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(transactions, transactions.currency);
+        await m.addColumn(transactions, transactions.baseCents);
+        await m.addColumn(transactions, transactions.toAmountCents);
+        await m.addColumn(transactions, transactions.tags);
+        await m.createTable(currencyRates);
+        await m.createTable(attachments);
+        await seedRates(this);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

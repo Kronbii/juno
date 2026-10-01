@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 /// A `juno://add?...` request, as sent by the iOS Back Tap Shortcut.
@@ -16,6 +17,8 @@ class QuickAdd {
     this.amountCents,
     this.category,
     this.account,
+    this.currency,
+    this.tags = const [],
     this.scope,
     this.type,
     this.note,
@@ -26,6 +29,10 @@ class QuickAdd {
   final int? amountCents;
   final String? category;
   final String? account;
+
+  /// Picks the first account in this currency when no account is named.
+  final String? currency;
+  final List<String> tags;
   final Scope? scope;
   final TxType? type;
   final String? note;
@@ -77,6 +84,8 @@ class QuickAdd {
       amountCents: cents?.abs(),
       category: s('category') ?? s('cat') ?? s('c'),
       account: s('account'),
+      currency: s('currency')?.toUpperCase(),
+      tags: EntryTags.fromInput(s('tags') ?? s('tag') ?? ''),
       scope: scope,
       type: type,
       note: s('note') ?? s('n'),

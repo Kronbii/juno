@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/app/router.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/deeplink/quick_add.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
@@ -84,7 +85,10 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
     final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
     cat = fuzzyMatch(q.category, categories.where((c) => c.kind == kind), (c) => c.name);
   }
-  final account = fuzzyMatch(q.account, accounts, (a) => a.name) ?? accounts.firstOrNull;
+  final account =
+      fuzzyMatch(q.account, accounts, (a) => a.name) ??
+      (q.currency == null ? null : accounts.where((a) => a.currency == q.currency).firstOrNull) ??
+      accounts.firstOrNull;
   final scope = q.scope ?? cat?.defaultScope ?? Scope.personal;
 
   if (!q.saveDirectly || account == null) {
@@ -115,11 +119,12 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
       categoryId: Value(cat?.id),
       occurredOn: q.day ?? Day.today(),
       note: Value(q.note ?? ''),
+      tags: Value(EntryTags.store(q.tags)),
     ),
   );
   unawaited(HapticFeedback.mediumImpact());
   final parts = [
-    Money.format(q.amountCents!),
+    Fx.format(q.amountCents!, account.currency),
     cat?.name ?? (q.category == null ? 'Uncategorised' : '“${q.category}” (no match)'),
     scope.label,
   ];

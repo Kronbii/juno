@@ -31,6 +31,8 @@ Transaction _tx(
   occurredOn: day,
   note: note,
   merchant: '',
+  currency: 'USD',
+  tags: '',
 );
 
 void main() {

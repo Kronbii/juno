@@ -32,22 +32,36 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   String? _accountId;
   Scope _scope = Scope.personal;
   bool _busy = false;
+  Uint8List? _xlsx;
+  List<String> _sheets = const [];
+  String? _sheet;
 
   Future<void> _pick() async {
     final files = await FilePicker.pickFiles(
       dialogTitle: 'Choose a bank CSV',
       type: FileType.custom,
-      allowedExtensions: const ['csv', 'txt', 'tsv'],
+      allowedExtensions: const ['csv', 'txt', 'tsv', 'xlsx'],
     );
     if (files.isEmpty) return;
     final bytes = await files.first.readAsBytes();
-    String text;
-    try {
-      text = utf8.decode(bytes);
-    } on FormatException {
-      text = latin1.decode(bytes);
+    final name = files.first.name;
+    CsvTable table;
+    if (name.toLowerCase().endsWith('.xlsx')) {
+      _xlsx = bytes;
+      _sheets = CsvTable.xlsxSheets(bytes);
+      table = CsvTable.fromXlsx(bytes);
+      _sheet = null;
+    } else {
+      _xlsx = null;
+      _sheets = const [];
+      String text;
+      try {
+        text = utf8.decode(bytes);
+      } on FormatException {
+        text = latin1.decode(bytes);
+      }
+      table = CsvTable.parse(text);
     }
-    final table = CsvTable.parse(text);
     setState(() {
       _filename = files.first.name;
       _table = table;
@@ -142,7 +156,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       eyebrow: 'Settings · Import',
       title: 'Bring your *bank* in',
       subtitle:
-          'CSV from any bank or card. Juno guesses the columns, learns your categories, and skips rows it has seen.',
+          'CSV or Excel from any bank, card, Notion or your own sheet. Juno guesses the columns, learns your categories, and skips rows it has seen.',
       actions: [
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
       ],
@@ -154,7 +168,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               Row(
                 children: [
                   JButton(
-                    label: t == null ? 'Choose CSV file' : 'Choose another',
+                    label: t == null ? 'Choose CSV or Excel' : 'Choose another',
                     icon: Icons.upload_file_rounded,
                     kind: t == null ? JButtonKind.primary : JButtonKind.secondary,
                     onPressed: _pick,
@@ -170,6 +184,22 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               ),
               if (t != null) ...[
                 const SizedBox(height: JSpace.xl),
+                if (_sheets.length > 1) ...[
+                  JChipBar(
+                    labels: _sheets,
+                    selectedIndex: _sheet == null ? 0 : _sheets.indexOf(_sheet!),
+                    onSelected: (i) {
+                      final t2 = CsvTable.fromXlsx(_xlsx!, sheet: _sheets[i]);
+                      setState(() {
+                        _sheet = _sheets[i];
+                        _table = t2;
+                        _mapping = ColumnMapping.guess(t2);
+                      });
+                      _rebuild();
+                    },
+                  ),
+                  const SizedBox(height: JSpace.gap),
+                ],
                 _MappingCard(
                   filename: _filename ?? '',
                   table: t,
@@ -298,6 +328,7 @@ class _MappingCard extends StatelessWidget {
                 amount: mapping.amount,
                 debit: mapping.debit,
                 credit: mapping.credit,
+                category: mapping.category,
                 mode: mapping.mode,
                 dateFormat: f,
               ),
@@ -316,13 +347,30 @@ class _MappingCard extends StatelessWidget {
                 for (final f in DateFormats.candidates)
                   DropdownMenuItem(
                     value: f,
-                    child: Text(workingFormats.contains(f) ? '$f  ✓' : f),
+                    child: Text(workingFormats.contains(f) ? '$f  (fits)' : f),
                   ),
               ],
               onChanged: (f) => onChanged(mapping.copyWith(dateFormat: f)),
             ),
           ),
           column('Description', mapping.description, (v) => onChanged(mapping.copyWith(description: v))),
+          column(
+            'Category (optional)',
+            mapping.category,
+            (v) => onChanged(
+              ColumnMapping(
+                date: mapping.date,
+                description: mapping.description,
+                amount: mapping.amount,
+                debit: mapping.debit,
+                credit: mapping.credit,
+                category: v,
+                mode: mapping.mode,
+                dateFormat: mapping.dateFormat,
+              ),
+            ),
+            optional: true,
+          ),
           JField(
             label: 'Amounts',
             child: JSegmentBar<AmountMode>(

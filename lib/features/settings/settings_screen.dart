@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:juno/core/db/demo.dart';
+import 'package:juno/core/lock/app_lock.dart';
+import 'package:juno/core/notify/reminder_runner.dart';
+import 'package:juno/core/notify/reminders.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
@@ -51,6 +54,13 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () => context.go('/settings/categories'),
                 ),
                 JSettingRow(
+                  icon: Icons.currency_exchange_rounded,
+                  title: 'Currencies',
+                  subtitle: 'LBP and other rates against USD',
+                  value: '${ref.watch(ratesProvider).length}',
+                  onTap: () => context.go('/settings/currencies'),
+                ),
+                JSettingRow(
                   icon: Icons.upload_file_rounded,
                   title: 'Import & export',
                   subtitle: 'Bring in a bank CSV, or export everything',
@@ -66,6 +76,36 @@ class SettingsScreen extends ConsumerWidget {
                   title: 'Back Tap quick add',
                   subtitle: 'Double-tap the back of your phone to log an expense',
                   onTap: () => context.go('/settings/back-tap'),
+                ),
+              ],
+            ),
+            const JSectionLabel('Privacy & alerts'),
+            JGroup(
+              children: [
+                if (AppLock.available)
+                  JSettingRow(
+                    icon: Icons.face_retouching_natural_outlined,
+                    title: 'Face ID lock',
+                    subtitle: 'Ask on open and after a minute away',
+                    trailing: Switch(
+                      value: ref.watch(lockEnabledProvider),
+                      onChanged: (v) async {
+                        final ok = await ref.read(lockEnabledProvider.notifier).set(v);
+                        if (!ok) showToast('Face ID didn’t confirm — lock left off');
+                      },
+                    ),
+                  ),
+                const _NotifyRow(
+                  prefKey: Reminders.billsKey,
+                  icon: Icons.event_outlined,
+                  title: 'Bill reminders',
+                  subtitle: 'Recurring payments, on the day they’re due',
+                ),
+                const _NotifyRow(
+                  prefKey: Reminders.budgetsKey,
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Budget alerts',
+                  subtitle: 'At 80% of a limit, and when you go over',
                 ),
               ],
             ),
@@ -154,6 +194,43 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _NotifyRow extends ConsumerStatefulWidget {
+  const _NotifyRow({required this.prefKey, required this.icon, required this.title, required this.subtitle});
+
+  final String prefKey;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  ConsumerState<_NotifyRow> createState() => _NotifyRowState();
+}
+
+class _NotifyRowState extends ConsumerState<_NotifyRow> {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = ref.watch(prefsProvider);
+    final on = prefs.getBool(widget.prefKey) ?? true;
+    return JSettingRow(
+      icon: widget.icon,
+      title: widget.title,
+      subtitle: widget.subtitle,
+      trailing: Switch(
+        value: on,
+        onChanged: (v) async {
+          if (v && !await ref.read(remindersProvider).requestPermission()) {
+            showToast('Allow notifications for Juno in iOS Settings');
+            return;
+          }
+          await prefs.setBool(widget.prefKey, v);
+          setState(() {});
+          await ref.read(reminderRunnerProvider.notifier).run();
+        },
+      ),
     );
   }
 }

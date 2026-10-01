@@ -4,12 +4,15 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/add/entry_extras.dart';
 
 /// Values to start a new entry with (from a deep link, a duplicate, …).
 class EntryPrefill {
@@ -76,6 +79,14 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
   String? _accountId;
   String? _toAccountId;
   late final TextEditingController _note;
+  late final TextEditingController _tagInput = TextEditingController();
+  late List<String> _tags;
+
+  /// Receipts picked in this session, saved once the entry exists.
+  final List<PendingFile> _pending = [];
+
+  /// A new entry's id is fixed up front so receipts can point at it.
+  late final String _id = widget.edit?.id ?? newId();
 
   /// Once the user picks a scope themselves, choosing a category stops
   /// overriding it with the category's default.
@@ -101,6 +112,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     _accountId = e?.accountId ?? p?.accountId;
     _toAccountId = e?.toAccountId;
     _note = TextEditingController(text: e?.note ?? p?.note ?? '');
+    _tags = e == null ? [] : EntryTags.parse(e.tags);
     ref.read(ledgerProvider).recentCategoryIds().then((r) {
       if (mounted) setState(() => _recent = r);
     });
@@ -109,6 +121,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
   @override
   void dispose() {
     _note.dispose();
+    _tagInput.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -188,21 +201,32 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       categoryId: Value(isTransfer ? null : _categoryId),
       occurredOn: Value(_day),
       note: Value(_note.text.trim()),
+      tags: Value(EntryTags.store([..._tags, ...EntryTags.fromInput(_tagInput.text)])),
     );
     unawaited(HapticFeedback.mediumImpact());
     final cat = ref.read(categoryMapProvider)[_categoryId];
+    final currency = _currencyOf(accountId);
     final summary = [
-      Money.format(_cents),
+      Fx.format(_cents, currency),
       if (!isTransfer) cat?.name ?? 'Uncategorised',
       if (!isTransfer) _scope.label,
     ].join(' · ');
 
+    final store = AttachmentStore(ledger);
+    Future<void> saveReceipts() async {
+      for (final f in _pending) {
+        await store.save(_id, f);
+      }
+    }
+
     if (_editing) {
       await ledger.updateTransaction(widget.edit!.id, companion);
+      await saveReceipts();
       if (mounted) Navigator.of(context).pop();
       showToast('Updated $summary');
     } else {
-      final id = await ledger.addTransaction(companion);
+      final id = await ledger.addTransaction(companion.copyWith(id: Value(_id)));
+      await saveReceipts();
       if (mounted) Navigator.of(context).pop();
       showToast(
         '${_type == TxType.income
@@ -231,6 +255,56 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) setState(() => _day = Day.of(picked));
+  }
+
+  /// "≈ $12.40" under a foreign amount; "they receive LBP 1.1M" for a
+  /// transfer across currencies.
+  String? _conversionHint() {
+    final rates = ref.read(ratesProvider);
+    final from = _currencyOf(_accountId);
+    if (_cents <= 0) return from == baseCurrency ? null : '${currencyInfo(from).name} account';
+    if (_type == TxType.transfer && _toAccountId != null) {
+      final to = _currencyOf(_toAccountId);
+      if (to != from) return 'Arrives as ~${Fx.format(Fx.convert(_cents, from, to, rates), to)}';
+    }
+    if (from == baseCurrency) return null;
+    return '~${Money.format(Fx.toUsd(_cents, from, rates))} at ${Fx.format((rates[from] ?? 1) * 100 ~/ 1, from)} / \$1';
+  }
+
+  String _currencyOf(String? accountId) => ref.read(accountMapProvider)[accountId]?.currency ?? baseCurrency;
+
+  Future<void> _addReceipt() async {
+    final source = AttachmentStore.canUseCamera
+        ? await showModalBottomSheet<PickSource>(
+            context: context,
+            useRootNavigator: true,
+            builder: (ctx) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.photo_camera_outlined),
+                    title: const Text('Take photo'),
+                    onTap: () => Navigator.pop(ctx, PickSource.camera),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: const Text('Choose from library'),
+                    onTap: () => Navigator.pop(ctx, PickSource.library),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.folder_open_outlined),
+                    title: const Text('Files'),
+                    onTap: () => Navigator.pop(ctx, PickSource.files),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : PickSource.files;
+    if (source == null) return;
+    final f = await AttachmentStore.pick(source);
+    if (f != null && mounted) setState(() => _pending.add(f));
   }
 
   @override
@@ -297,7 +371,12 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         }),
                       ),
                       const SizedBox(height: JSpace.xl),
-                      _AmountDisplay(amount: _amount, accent: typeAccent.of(c)),
+                      _AmountDisplay(
+                        amount: _amount,
+                        accent: typeAccent.of(c),
+                        currency: _currencyOf(_accountId),
+                        hint: _conversionHint(),
+                      ),
                       const SizedBox(height: JSpace.lg),
                       if (_type != TxType.transfer)
                         Center(
@@ -356,6 +435,19 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         decoration: const InputDecoration(hintText: 'Note — where, what, who'),
                         onSubmitted: (_) => _save(),
                       ),
+                      const SizedBox(height: JSpace.md),
+                      TagEditor(
+                        tags: _tags,
+                        input: _tagInput,
+                        onChanged: (t) => setState(() => _tags = t),
+                      ),
+                      const SizedBox(height: JSpace.md),
+                      ReceiptsStrip(
+                        transactionId: _editing ? _id : null,
+                        pending: _pending,
+                        onAdd: _addReceipt,
+                        onRemovePending: (f) => setState(() => _pending.remove(f)),
+                      ),
                       const SizedBox(height: JSpace.lg),
                     ],
                   ),
@@ -385,10 +477,12 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
 }
 
 class _AmountDisplay extends StatelessWidget {
-  const _AmountDisplay({required this.amount, required this.accent});
+  const _AmountDisplay({required this.amount, required this.accent, this.currency = baseCurrency, this.hint});
 
   final String amount;
   final Color accent;
+  final String currency;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -400,33 +494,47 @@ class _AmountDisplay extends StatelessWidget {
     final frac = parts.length > 1 ? '.${parts[1]}' : '';
     return Semantics(
       liveRegion: true,
-      label: 'Amount ${empty ? 'zero' : amount} dollars',
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(r'$', style: JType.panelMetric.copyWith(color: c.inkFaint, fontSize: 30)),
-            const SizedBox(width: 4),
-            Text(
-              '$wholeText$frac',
-              style: JType.heroMetric.copyWith(
-                fontSize: 64,
-                letterSpacing: -3.5,
-                color: empty ? c.inkFaint : c.ink,
-              ),
+      label: 'Amount ${empty ? 'zero' : amount} ${currencyInfo(currency).name}',
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  currencyInfo(currency).symbol ?? currency,
+                  style: JType.panelMetric.copyWith(
+                    color: c.inkFaint,
+                    fontSize: currencyInfo(currency).symbol == null ? 20 : 30,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$wholeText$frac',
+                  style: JType.heroMetric.copyWith(
+                    fontSize: 64,
+                    letterSpacing: -3.5,
+                    color: empty ? c.inkFaint : c.ink,
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: JMotion.fast,
+                  margin: const EdgeInsets.only(left: 4),
+                  width: 2,
+                  height: 46,
+                  color: accent,
+                ),
+              ],
             ),
-            AnimatedContainer(
-              duration: JMotion.fast,
-              margin: const EdgeInsets.only(left: 4),
-              width: 2,
-              height: 46,
-              color: accent,
-            ),
+          ),
+          if (hint != null) ...[
+            const SizedBox(height: 6),
+            Text(hint!, style: JType.chipLabel.copyWith(color: c.inkMuted)),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -756,7 +864,10 @@ class _CellLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = JType.body.copyWith(fontSize: 11, height: 1.15, fontWeight: FontWeight.w600, color: color);
     if (!text.trim().contains(' ')) {
-      return FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1, style: style));
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(text, maxLines: 1, style: style),
+      );
     }
     return Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: style);
   }
