@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/attachments/attachment_store.dart';
+import 'package:juno/core/attachments/receipt_scanner.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
@@ -118,6 +119,36 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       if (mounted) setState(() => _recent = r);
     });
     ref.read(ledgerProvider).merchantCategoryMemory().then((m) => _memory = m);
+  }
+
+  /// True while the category was picked by a suggestion, not by you — a
+  /// later suggestion may replace it; your own choice is never overridden.
+  bool _categoryAuto = false;
+
+  /// As you type a note, use the category you last used for it.
+  void _suggestFromNote(String note) {
+    if (_categoryId != null && !_categoryAuto) return;
+    final key = note.trim().toLowerCase();
+    if (key.length < 3) return;
+    final wantKind = _type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+    final cats = ref.read(categoryMapProvider);
+    var hit = _memory[key];
+    if (hit == null) {
+      var bestLen = 0;
+      for (final e in _memory.entries) {
+        if (e.key.length >= 3 && e.key.length > bestLen && (key.contains(e.key) || e.key.startsWith(key))) {
+          hit = e.value;
+          bestLen = e.key.length;
+        }
+      }
+    }
+    final cat = cats[hit];
+    if (cat == null || cat.kind != wantKind || cat.id == _categoryId) return;
+    setState(() {
+      _categoryId = cat.id;
+      _categoryAuto = true;
+      if (!_scopeTouched) _scope = cat.defaultScope;
+    });
   }
 
   // ---- quick text ----------------------------------------------------------
@@ -365,7 +396,30 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
         : PickSource.files;
     if (source == null) return;
     final f = await AttachmentStore.pick(source);
-    if (f != null && mounted) setState(() => _pending.add(f));
+    if (f == null || !mounted) return;
+    setState(() => _pending.add(f));
+    // Read the receipt on-device and fill what's still empty.
+    final read = await ReceiptScanner.read(f.bytes);
+    if (read == null || !mounted) return;
+    setState(() {
+      if (_cents == 0 && read.totalCents != null) {
+        _amount = _centsToBuffer(read.totalCents!);
+        final accounts = ref.read(accountsProvider).value ?? const <Account>[];
+        if (read.currency != null && _currencyOf(_accountId) != read.currency) {
+          final match = accounts.where((a) => a.currency == read.currency).firstOrNull;
+          if (match != null) _accountId = match.id;
+        }
+      }
+      if (read.day != null && read.day!.compareTo(Day.today()) <= 0) _day = read.day!;
+      if (_note.text.isEmpty && read.merchant != null) _note.text = read.merchant!;
+    });
+    if (read.totalCents != null) {
+      showToast(
+        read.confident
+            ? 'Read ${Fx.format(read.totalCents!, read.currency ?? _currencyOf(_accountId))} from the receipt'
+            : 'Best guess from the receipt: ${Fx.format(read.totalCents!, read.currency ?? _currencyOf(_accountId))} — check it',
+      );
+    }
   }
 
   @override
@@ -485,6 +539,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                           onExpand: () => setState(() => _showAllCategories = true),
                           onSelected: (k) => setState(() {
                             _categoryId = k.id;
+                            _categoryAuto = false;
                             if (!_scopeTouched) _scope = k.defaultScope;
                           }),
                         ),
@@ -508,6 +563,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         textCapitalization: TextCapitalization.sentences,
                         style: JType.body.copyWith(fontSize: 15, color: c.ink),
                         decoration: const InputDecoration(hintText: 'Note — where, what, who'),
+                        onChanged: _suggestFromNote,
                         onSubmitted: (_) => _save(),
                       ),
                       const SizedBox(height: JSpace.md),
