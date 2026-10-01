@@ -53,3 +53,7 @@ imports/
 *.xlsx
 *.xls
 supabase/.env.local
+
+# Local secrets — never commit
+.env
+.env.*

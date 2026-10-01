@@ -8,6 +8,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -15,12 +16,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:juno/app/app.dart';
 import 'package:juno/app/router.dart';
+import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/features/add/entry_sheet.dart';
+import 'package:juno/features/settings/ai_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _loadFonts() async {
@@ -44,6 +49,42 @@ Future<void> _loadFonts() async {
   if (icons.existsSync()) await family('MaterialIcons', [icons.path]);
 }
 
+/// Plays one tool call, then a canned answer.
+MockClient _scripted() {
+  var n = 0;
+  return MockClient((_) async {
+    final message = (n++).isEven
+        ? {
+            'role': 'assistant',
+            'content': null,
+            'tool_calls': [
+              {
+                'id': 'c$n',
+                'type': 'function',
+                'function': {'name': 'safe_to_spend', 'arguments': '{}'},
+              },
+            ],
+          }
+        : {
+            'role': 'assistant',
+            'content':
+                r'You have about $1,480 left for the rest of September — roughly $114 a day over 13 days, once '
+                r'the $320 of bills still due are paid. At your current pace you would finish the month around '
+                r'$2,900, a little under what came in.',
+          };
+    return http.Response.bytes(
+      utf8.encode(
+        jsonEncode({
+          'choices': [
+            {'message': message},
+          ],
+        }),
+      ),
+      200,
+    );
+  });
+}
+
 void main() {
   setUpAll(_loadFonts);
 
@@ -57,7 +98,7 @@ void main() {
         tester.view.devicePixelRatio = 2;
         addTearDown(tester.view.reset);
 
-        SharedPreferences.setMockInitialValues({'themeMode': mode.name, 'onboarded': true});
+        SharedPreferences.setMockInitialValues({'themeMode': mode.name, 'onboarded': true, 'ai.key': 'sk-demo'});
         final prefs = await SharedPreferences.getInstance();
         final db = AppDatabase.memory(NativeDatabase.memory());
         await tester.runAsync(() async {
@@ -67,7 +108,11 @@ void main() {
 
         await tester.pumpWidget(
           ProviderScope(
-            overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
+            overrides: [
+              databaseProvider.overrideWithValue(db),
+              prefsProvider.overrideWithValue(prefs),
+              aiAssistProvider.overrideWithValue(AiAssist(prefs, client: _scripted())),
+            ],
             child: const JunoApp(),
           ),
         );
@@ -87,6 +132,12 @@ void main() {
             matchesGoldenFile('goldens/${s.key}-${mode.name}${r.replaceAll('/', '-')}.png'),
           );
         }
+
+        router.go('/assistant');
+        await settle();
+        await tester.tap(find.text('What can I still spend this month?'));
+        await settle();
+        await expectLater(find.byType(JunoApp), matchesGoldenFile('goldens/${s.key}-${mode.name}-assistant.png'));
 
         router.go('/home');
         await settle();

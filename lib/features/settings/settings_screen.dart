@@ -117,7 +117,7 @@ class SettingsScreen extends ConsumerWidget {
                 JSettingRow(
                   icon: Icons.auto_awesome_outlined,
                   title: 'AI assist',
-                  subtitle: 'Optional, with your OpenAI API key — off by default',
+                  subtitle: 'Assistant, receipts and monthly reads — with your own API key',
                   value: ref.watch(aiAssistProvider).enabled ? 'On' : 'Off',
                   onTap: () => context.go('/settings/ai'),
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:juno/app/shell.dart';
 import 'package:juno/features/activity/activity_screen.dart';
+import 'package:juno/features/assistant/assistant_screen.dart';
 import 'package:juno/features/home/home_screen.dart';
 import 'package:juno/features/import/import_screen.dart';
 import 'package:juno/features/insights/category_screen.dart';
@@ -28,6 +29,7 @@ final router = GoRouter(
   // OS hands one to the router anyway, land on Home.
   redirect: (context, state) => state.uri.scheme == 'juno' || state.uri.path == '/add' ? '/home' : null,
   routes: [
+    GoRoute(path: '/assistant', builder: (_, _) => const AssistantScreen()),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(shell: shell),
       branches: [

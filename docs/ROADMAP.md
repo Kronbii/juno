@@ -46,15 +46,16 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Automatic local backups (daily snapshot, 14 kept, export) and a merge-restore that never overwrites newer data.
 - [x] Edit history per entry, with restore.
 
-## Optional: AI assist (OpenAI API, off by default)
-- [x] Your own API key, stored on the device. It needs API billing, which ChatGPT Plus doesn't include.
-- [x] Used only when the on-device result is uncertain: messy receipts, ambiguous text, and a monthly summary.
-- [x] Hard caps:
-  - a monthly call limit (default 100)
-  - short prompts
-  - a cheap model
-  - a cost counter in Settings
-  - an on-device fallback when a cap is hit
+## Optional: AI assist (your own API key, off by default)
+- [x] Any of six providers (OpenAI, Gemini, Anthropic, DeepSeek, Qwen, Kimi) through one OpenAI-style client. The default is OpenAI gpt-5-mini; the model can be changed. The key stays on the device.
+- [x] Assistant: a chat about your money. It answers by calling read-only tools that query the local database (totals, categories, entries, merchants, budgets, accounts, goals, recurring, safe to spend). Only the tool results are sent, never the database. It cannot change anything.
+- [x] Receipt fallback and a monthly read, as before.
+- [x] Cost controls:
+  - a monthly dollar cap (default $2), measured from the token counts each reply reports
+  - finished turns folded to question and answer, and only the last 6 turns sent
+  - stable instructions first, so providers can reuse the cached prefix
+  - an on-device fallback when the cap is hit or anything fails
+- [x] Measured live: about $0.0006 per assistant question and $0.0001 per receipt on gpt-5-mini.
 
 ## Not doing
 - Apple Pay auto-logging (decided against).

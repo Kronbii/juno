@@ -1,6 +1,7 @@
 // UI regression flows: each audit finding re-run as a real interaction on
 // the full app (in-memory database + demo data). Any exception — overflow,
 // assertion, disposed controller — fails the test via takeException.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -9,8 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:juno/app/app.dart';
 import 'package:juno/app/router.dart';
+import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/db/ledger.dart';
@@ -19,6 +23,7 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/features/add/entry_sheet.dart';
 import 'package:juno/features/plan/editors.dart';
+import 'package:juno/features/settings/ai_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _fonts() async {
@@ -71,12 +76,14 @@ Future<Harness> boot(
   bool demo = true,
   bool onboarded = true,
   Future<void> Function(AppDatabase db)? setup,
+  Map<String, Object> prefs = const {},
+  AiAssist Function(SharedPreferences prefs)? ai,
 }) async {
   tester.view.physicalSize = size * 2;
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
-  SharedPreferences.setMockInitialValues({'onboarded': onboarded});
-  final prefs = await SharedPreferences.getInstance();
+  SharedPreferences.setMockInitialValues({'onboarded': onboarded, ...prefs});
+  final sp = await SharedPreferences.getInstance();
   final db = AppDatabase.memory(NativeDatabase.memory());
   await tester.runAsync(() async {
     await db.customSelect('SELECT 1').get();
@@ -88,7 +95,11 @@ Future<Harness> boot(
   });
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db), prefsProvider.overrideWithValue(prefs)],
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        prefsProvider.overrideWithValue(sp),
+        if (ai != null) aiAssistProvider.overrideWithValue(ai(sp)),
+      ],
       child: const JunoApp(),
     ),
   );
@@ -123,6 +134,7 @@ void main() {
         '/settings/backups',
         '/settings/ai',
         '/insights/review',
+        '/assistant',
       ]) {
         await h.go(r);
         expect(tester.takeException(), isNull, reason: '$r at $size');
@@ -143,6 +155,7 @@ void main() {
       '/settings',
       '/insights/review',
       '/settings/backups',
+      '/assistant',
     ]) {
       await h.go(r);
       final e = tester.takeException();
@@ -311,6 +324,63 @@ void main() {
     final lbp = accounts.firstWhere((a) => a.currency == 'LBP');
     expect(lbp.openingBalanceCents, 200000000);
     await h.dispose();
+  });
+
+  testWidgets('assistant: a starter question looks up, answers, and fits on every size', (tester) async {
+    for (final (size, scale) in const [(Size(320, 640), 1.0), (Size(393, 852), 1.6), (Size(1440, 920), 1.0)]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      var call = 0;
+      final h = await boot(
+        tester,
+        size: size,
+        prefs: {'ai.key': 'sk-test'},
+        ai: (sp) => AiAssist(
+          sp,
+          client: MockClient((req) async {
+            final body = jsonEncode(
+              call++ == 0
+                  ? {
+                      'choices': [
+                        {
+                          'message': {
+                            'role': 'assistant',
+                            'content': null,
+                            'tool_calls': [
+                              {
+                                'id': 'c1',
+                                'type': 'function',
+                                'function': {'name': 'safe_to_spend', 'arguments': '{}'},
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    }
+                  : {
+                      'choices': [
+                        {
+                          'message': {
+                            'role': 'assistant',
+                            'content': r'You can spend about $40 a day for the rest of the month. ' * 4,
+                          },
+                        },
+                      ],
+                    },
+            );
+            return http.Response(body, 200);
+          }),
+        ),
+      );
+      await h.go('/assistant');
+      await tester.tap(find.text('What can I still spend this month?'));
+      await h.settle(10);
+      expect(find.textContaining('You can spend about'), findsOneWidget, reason: '$size');
+      expect(find.textContaining('MONTH PLAN'), findsOneWidget);
+      expect(call, 2);
+      expect(tester.takeException(), isNull, reason: '$size at ${scale}x');
+      await h.dispose();
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
 }
 

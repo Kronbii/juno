@@ -39,6 +39,13 @@ class HomeScreen extends ConsumerWidget {
     return JScreen(
       eyebrow: '01 — Overview · ${Day.monthYear(month)}',
       title: _greeting(now),
+      actions: [
+        JIconButton(
+          icon: Icons.auto_awesome_outlined,
+          tooltip: 'Ask Juno',
+          onPressed: () => context.push('/assistant'),
+        ),
+      ],
       header: const ScopeLens(),
       slivers: [
         if (wide)

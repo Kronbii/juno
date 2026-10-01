@@ -3,79 +3,293 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Optional AI help through *your* OpenAI API key — off unless you add one.
+/// The model services Juno can talk to. All of them accept the same
+/// OpenAI-style `chat/completions` request, so one client covers every one.
+enum AiProvider {
+  openai(
+    label: 'OpenAI',
+    url: 'https://api.openai.com/v1/chat/completions',
+    defaultModel: 'gpt-5-mini',
+    keyHint: 'sk-…',
+    keysAt: 'platform.openai.com',
+    inPerM: 0.25,
+    outPerM: 2,
+  ),
+  gemini(
+    label: 'Gemini',
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    defaultModel: 'gemini-3.7-flash',
+    keyHint: 'AIza…',
+    keysAt: 'aistudio.google.com',
+    inPerM: 1.5,
+    outPerM: 7.5,
+  ),
+  anthropic(
+    label: 'Anthropic',
+    url: 'https://api.anthropic.com/v1/chat/completions',
+    defaultModel: 'claude-haiku-4-5',
+    keyHint: 'sk-ant-…',
+    keysAt: 'console.anthropic.com',
+    inPerM: 1,
+    outPerM: 5,
+  ),
+  deepseek(
+    label: 'DeepSeek',
+    url: 'https://api.deepseek.com/chat/completions',
+    defaultModel: 'deepseek-flash',
+    keyHint: 'sk-…',
+    keysAt: 'platform.deepseek.com',
+    inPerM: 0.3,
+    outPerM: 1.2,
+    chinaBased: true,
+  ),
+  qwen(
+    label: 'Qwen',
+    url: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+    defaultModel: 'qwen-plus',
+    keyHint: 'sk-…',
+    keysAt: 'Alibaba Cloud Model Studio',
+    inPerM: 0.4,
+    outPerM: 1.6,
+    chinaBased: true,
+  ),
+  kimi(
+    label: 'Kimi',
+    url: 'https://api.moonshot.ai/v1/chat/completions',
+    defaultModel: 'kimi-k2.6',
+    keyHint: 'sk-…',
+    keysAt: 'platform.moonshot.ai',
+    inPerM: 0.95,
+    outPerM: 4,
+    chinaBased: true,
+  )
+  ;
+
+  const AiProvider({
+    required this.label,
+    required this.url,
+    required this.defaultModel,
+    required this.keyHint,
+    required this.keysAt,
+    required this.inPerM,
+    required this.outPerM,
+    this.chinaBased = false,
+  });
+
+  final String label;
+  final String url;
+  final String defaultModel;
+  final String keyHint;
+  final String keysAt;
+
+  /// USD per million tokens for [defaultModel] — the higher (peak or
+  /// post-promotion) rate where there are two, so the spending cap errs safe.
+  final double inPerM;
+  final double outPerM;
+  final bool chinaBased;
+}
+
+/// A tool the model asked to run. [args] is null when it sent invalid JSON.
+class AiToolCall {
+  const AiToolCall(this.id, this.name, this.args);
+
+  final String id;
+  final String name;
+  final Map<String, dynamic>? args;
+}
+
+class AiReply {
+  const AiReply(this.message, this.text, this.toolCalls);
+
+  /// The assistant message exactly as returned, for the conversation history.
+  final Map<String, dynamic> message;
+  final String? text;
+  final List<AiToolCall> toolCalls;
+}
+
+/// Optional AI help through *your* API key — off unless you add one.
 ///
 /// Guard rails, all enforced here:
-/// * a monthly call cap (default 100) — at the cap it simply returns null and
-///   the on-device result is used;
-/// * short prompts and `max_tokens` 300, a small model by default;
-/// * only what's needed is sent: receipt *text* (never the photo) or a
-///   month's aggregated figures (never individual entries or notes);
+/// * a monthly spending cap in dollars (default $2), measured from the token
+///   counts each reply reports — at the cap every call returns null and the
+///   on-device result is used;
+/// * short prompts, capped output, a small model by default;
+/// * callers send only what's needed (see each feature);
 /// * every failure (offline, bad key, quota) returns null — the app never
 ///   depends on it.
 ///
-/// Note: ChatGPT Plus does not include API access; the key needs API billing
-/// at platform.openai.com.
+/// Note: ChatGPT Plus does not include API access; the key needs API billing.
 class AiAssist {
-  AiAssist(this.prefs, {http.Client? client}) : _client = client ?? http.Client();
+  AiAssist(this.prefs, {http.Client? client, DateTime Function()? clock})
+    : _client = client ?? http.Client(),
+      _clock = clock ?? DateTime.now;
 
   final SharedPreferences prefs;
   final http.Client _client;
+  final DateTime Function() _clock;
 
-  static const keyPref = 'ai.key';
-  static const modelPref = 'ai.model';
-  static const capPref = 'ai.cap';
-  static const defaultModel = 'gpt-4o-mini';
-  static const defaultCap = 100;
+  static const providerPref = 'ai.provider';
+  static const budgetPref = 'ai.budget.cents';
+  static const defaultBudgetCents = 200;
+
+  /// The OpenAI key keeps its original name so existing setups carry over.
+  static String keyPrefFor(AiProvider p) => p == AiProvider.openai ? 'ai.key' : 'ai.key.${p.name}';
+  static String modelPrefFor(AiProvider p) => 'ai.model.${p.name}';
+
+  AiProvider get provider =>
+      AiProvider.values.where((p) => p.name == prefs.getString(providerPref)).firstOrNull ?? AiProvider.openai;
 
   String? get apiKey {
-    final k = prefs.getString(keyPref)?.trim();
+    final k = prefs.getString(keyPrefFor(provider))?.trim();
     return k == null || k.isEmpty ? null : k;
   }
 
   bool get enabled => apiKey != null;
-  String get model => prefs.getString(modelPref) ?? defaultModel;
-  int get cap => prefs.getInt(capPref) ?? defaultCap;
 
-  String get _usedKey {
-    final n = DateTime.now();
-    return 'ai.used.${n.year}-${n.month.toString().padLeft(2, '0')}';
+  String get model {
+    final m = prefs.getString(modelPrefFor(provider))?.trim();
+    return m == null || m.isEmpty ? provider.defaultModel : m;
   }
 
-  int get usedThisMonth => prefs.getInt(_usedKey) ?? 0;
-  bool get capped => usedThisMonth >= cap;
+  int get budgetCents => prefs.getInt(budgetPref) ?? defaultBudgetCents;
 
-  Future<String?> _ask(String system, String user) async {
+  String get _month {
+    final n = _clock();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}';
+  }
+
+  String get _spentKey => 'ai.spent.$_month';
+  String get _callsKey => 'ai.used.$_month';
+
+  /// Spent this month, in millionths of a dollar.
+  int get spentMicros => prefs.getInt(_spentKey) ?? 0;
+  int get callsThisMonth => prefs.getInt(_callsKey) ?? 0;
+  bool get capped => spentMicros >= budgetCents * 10000;
+
+  /// Cost in micro-dollars of a call with these token counts. OpenAI bills
+  /// cached input at a tenth; other providers' discounts aren't assumed.
+  int costMicros(int input, int output, {int cached = 0}) {
+    final p = provider;
+    final cachedIn = p == AiProvider.openai ? cached.clamp(0, input) : 0;
+    final usd = ((input - cachedIn) * p.inPerM + cachedIn * p.inPerM * 0.1 + output * p.outPerM) / 1e6;
+    return (usd * 1e6).ceil();
+  }
+
+  Future<void> _charge(int micros) async {
+    await prefs.setInt(_spentKey, spentMicros + micros);
+    await prefs.setInt(_callsKey, callsThisMonth + 1);
+  }
+
+  /// OpenAI's reasoning models take different parameters from the rest.
+  bool get _reasoning => provider == AiProvider.openai && RegExp(r'^(gpt-5|o\d)').hasMatch(model);
+
+  Map<String, dynamic> _body(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>>? tools,
+    int maxOutput, {
+    required bool effort,
+  }) => {
+    'model': model,
+    'messages': messages,
+    if (tools != null && tools.isNotEmpty) 'tools': tools,
+    if (_reasoning) ...{
+      // Reasoning tokens count toward the limit, so leave room for them.
+      'max_completion_tokens': maxOutput + 1500,
+      if (effort) 'reasoning_effort': model.startsWith('gpt-5-') || model == 'gpt-5' ? 'minimal' : 'low',
+    } else ...{
+      'max_tokens': maxOutput,
+      'temperature': 0.2,
+    },
+  };
+
+  /// One chat request. Null when off, capped, or anything goes wrong.
+  Future<AiReply?> chat(
+    List<Map<String, dynamic>> messages, {
+    List<Map<String, dynamic>>? tools,
+    int maxOutput = 300,
+  }) async {
     final key = apiKey;
     if (key == null || capped) return null;
-    // Count before calling: a timeout that still bills must count too.
-    await prefs.setInt(_usedKey, usedThisMonth + 1);
+    Future<http.Response> send({required bool effort}) => _client
+        .post(
+          Uri.parse(provider.url),
+          headers: {'Authorization': 'Bearer $key', 'Content-Type': 'application/json'},
+          body: jsonEncode(_body(messages, tools, maxOutput, effort: effort)),
+        )
+        .timeout(const Duration(seconds: 30));
     try {
-      final res = await _client
-          .post(
-            Uri.parse('https://api.openai.com/v1/chat/completions'),
-            headers: {'Authorization': 'Bearer $key', 'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'model': model,
-              'max_tokens': 300,
-              'temperature': 0.2,
-              'messages': [
-                {'role': 'system', 'content': system},
-                {'role': 'user', 'content': user},
-              ],
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
+      var res = await send(effort: true);
+      // A model that doesn't know the effort setting: once more without it.
+      if (res.statusCode == 400 &&
+          _reasoning &&
+          utf8.decode(res.bodyBytes, allowMalformed: true).contains('reasoning_effort')) {
+        res = await send(effort: false);
+      }
       if (res.statusCode != 200) return null;
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      // Always UTF-8: without a charset header `body` would fall back to
+      // Latin-1 and garble Arabic, em dashes and the like.
+      final body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final usage = body['usage'] as Map<String, dynamic>?;
+      final details = usage?['prompt_tokens_details'] as Map<String, dynamic>?;
+      await _charge(
+        costMicros(
+          (usage?['prompt_tokens'] as num?)?.toInt() ?? _estimateTokens(messages, tools),
+          (usage?['completion_tokens'] as num?)?.toInt() ?? maxOutput,
+          cached: (details?['cached_tokens'] as num?)?.toInt() ?? 0,
+        ),
+      );
       final choices = body['choices'] as List<dynamic>?;
       final first = choices?.firstOrNull as Map<String, dynamic>?;
       final message = first?['message'] as Map<String, dynamic>?;
-      final content = message?['content'];
-      return content is String ? content.trim() : null;
+      if (message == null) return null;
+      final calls = <AiToolCall>[
+        for (final c in (message['tool_calls'] as List<dynamic>?) ?? const [])
+          if (c is Map<String, dynamic> && c['function'] is Map<String, dynamic>)
+            AiToolCall(
+              c['id'] as String? ?? '',
+              (c['function'] as Map<String, dynamic>)['name'] as String? ?? '',
+              _args((c['function'] as Map<String, dynamic>)['arguments']),
+            ),
+      ];
+      final content = message['content'];
+      return AiReply(
+        {
+          'role': 'assistant',
+          'content': content is String ? content : null,
+          if (message['tool_calls'] != null) 'tool_calls': message['tool_calls'],
+        },
+        content is String ? content.trim() : null,
+        calls,
+      );
     } on Object {
+      // A timeout may still be billed: count the input and the most output.
+      await _charge(costMicros(_estimateTokens(messages, tools), maxOutput));
       return null;
     }
+  }
+
+  static Map<String, dynamic>? _args(Object? raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is! String) return null;
+    if (raw.trim().isEmpty) return {};
+    try {
+      final v = jsonDecode(raw);
+      return v is Map<String, dynamic> ? v : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Roughly four characters a token.
+  static int _estimateTokens(List<Map<String, dynamic>> messages, List<Map<String, dynamic>>? tools) =>
+      (jsonEncode(messages).length + (tools == null ? 0 : jsonEncode(tools).length)) ~/ 4;
+
+  Future<String?> _ask(String system, String user) async {
+    final r = await chat([
+      {'role': 'system', 'content': system},
+      {'role': 'user', 'content': user},
+    ]);
+    return r?.text;
   }
 
   /// Reads a receipt's total/date/merchant from its OCR text, for when the

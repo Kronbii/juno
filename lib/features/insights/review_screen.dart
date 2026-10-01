@@ -243,7 +243,10 @@ class _AiReadState extends ConsumerState<_AiRead> {
     return JCard(
       title: 'AI read',
       accent: JAccent.household,
-      trailing: Text('${ai.usedThisMonth}/${ai.cap}', style: JType.microLabel.copyWith(color: c.inkFaint)),
+      trailing: Text(
+        '\$${(ai.spentMicros / 1e6).toStringAsFixed(2)}',
+        style: JType.microLabel.copyWith(color: c.inkFaint),
+      ),
       child: _text != null
           ? Text(_text!, style: JType.body.copyWith(fontSize: 14, color: c.ink))
           : Align(
