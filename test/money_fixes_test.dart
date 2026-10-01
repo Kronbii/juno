@@ -111,4 +111,12 @@ void main() {
   test('Fx refuses to convert without a rate instead of treating it as USD', () {
     expect(() => Fx.toUsd(1500000000, 'LBP', const {}), throwsStateError);
   });
+
+  test('choosing "—" for a column clears it', () {
+    const m = ColumnMapping(date: 0, debit: 2, credit: 3, mode: AmountMode.debitCredit, dateFormat: 'yyyy-MM-dd');
+    final cleared = m.withColumn('debit', null);
+    expect(cleared.debit, isNull);
+    expect(cleared.credit, 3);
+    expect(cleared.mode, AmountMode.debitCredit);
+  });
 }

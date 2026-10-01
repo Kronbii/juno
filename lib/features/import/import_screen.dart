@@ -47,9 +47,14 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     final name = files.first.name;
     CsvTable table;
     if (name.toLowerCase().endsWith('.xlsx')) {
+      try {
+        _sheets = CsvTable.xlsxSheets(bytes);
+        table = CsvTable.fromXlsx(bytes);
+      } on Object {
+        showToast('Couldn’t read that Excel file — try exporting it as CSV');
+        return;
+      }
       _xlsx = bytes;
-      _sheets = CsvTable.xlsxSheets(bytes);
-      table = CsvTable.fromXlsx(bytes);
       _sheet = null;
     } else {
       _xlsx = null;
@@ -97,38 +102,47 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     final ledger = ref.read(ledgerProvider);
     final accounts = ref.read(accountsProvider).value ?? const <Account>[];
     final account = _accountId ?? accounts.firstOrNull?.id;
-    if (account == null) return;
+    if (account == null) {
+      showToast('Add an account first (Settings → Accounts)');
+      return;
+    }
     final chosen = _rows.where((r) => r.include && r.error == null).toList();
     if (chosen.isEmpty) return;
     setState(() => _busy = true);
-    final cats = ref.read(categoryMapProvider);
-    final batch = await ledger.commitImport(_filename ?? 'import.csv', [
-      for (final r in chosen)
-        TransactionsCompanion.insert(
-          type: r.type,
-          // A category with a household default pulls its rows into the
-          // household scope; everything else takes the chosen default.
-          scope: cats[r.categoryId]?.defaultScope == Scope.household ? Scope.household : _scope,
-          amountCents: r.cents!.abs(),
-          accountId: account,
-          categoryId: Value(r.categoryId),
-          occurredOn: r.day!,
-          merchant: Value(r.description),
-          dedupeHash: Value(r.hash),
-        ),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      _table = null;
-      _rows = const [];
-      _filename = null;
-    });
-    showToast(
-      'Imported ${chosen.length} entries',
-      onUndo: () => ledger.undoImport(batch),
-      duration: const Duration(seconds: 8),
-    );
+    try {
+      final cats = ref.read(categoryMapProvider);
+      final batch = await ledger.commitImport(_filename ?? 'import.csv', [
+        for (final r in chosen)
+          TransactionsCompanion.insert(
+            type: r.type,
+            // A category with a household default pulls its rows into the
+            // household scope; everything else takes the chosen default.
+            scope: cats[r.categoryId]?.defaultScope == Scope.household ? Scope.household : _scope,
+            amountCents: r.cents!.abs(),
+            accountId: account,
+            categoryId: Value(r.categoryId),
+            occurredOn: r.day!,
+            merchant: Value(r.description),
+            dedupeHash: Value(r.hash),
+          ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _table = null;
+        _rows = const [];
+        _filename = null;
+      });
+      showToast(
+        'Imported ${chosen.length} entries',
+        onUndo: () => ledger.undoImport(batch),
+        duration: const Duration(seconds: 8),
+      );
+    } on Object catch (e) {
+      showToast('Import failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _export() async {
@@ -166,7 +180,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
+              Wrap(
+                spacing: JSpace.sm,
+                runSpacing: JSpace.sm,
                 children: [
                   JButton(
                     label: t == null ? 'Choose CSV or Excel' : 'Choose another',
@@ -174,7 +190,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     kind: t == null ? JButtonKind.primary : JButtonKind.secondary,
                     onPressed: _pick,
                   ),
-                  const SizedBox(width: JSpace.sm),
                   JButton(
                     label: 'Export all',
                     icon: Icons.download_rounded,
@@ -378,22 +393,11 @@ class _MappingCard extends StatelessWidget {
                 ],
               ),
             ),
-          column('Description', mapping.description, (v) => onChanged(mapping.copyWith(description: v))),
+          column('Description', mapping.description, (v) => onChanged(mapping.withColumn('description', v))),
           column(
             'Category (optional)',
             mapping.category,
-            (v) => onChanged(
-              ColumnMapping(
-                date: mapping.date,
-                description: mapping.description,
-                amount: mapping.amount,
-                debit: mapping.debit,
-                credit: mapping.credit,
-                category: v,
-                mode: mapping.mode,
-                dateFormat: mapping.dateFormat,
-              ),
-            ),
+            (v) => onChanged(mapping.withColumn('category', v)),
             optional: true,
           ),
           JField(
@@ -409,10 +413,10 @@ class _MappingCard extends StatelessWidget {
             ),
           ),
           if (mapping.mode == AmountMode.debitCredit) ...[
-            column('Debit (out)', mapping.debit, (v) => onChanged(mapping.copyWith(debit: v)), optional: true),
-            column('Credit (in)', mapping.credit, (v) => onChanged(mapping.copyWith(credit: v)), optional: true),
+            column('Debit (out)', mapping.debit, (v) => onChanged(mapping.withColumn('debit', v)), optional: true),
+            column('Credit (in)', mapping.credit, (v) => onChanged(mapping.withColumn('credit', v)), optional: true),
           ] else
-            column('Amount', mapping.amount, (v) => onChanged(mapping.copyWith(amount: v))),
+            column('Amount', mapping.amount, (v) => onChanged(mapping.withColumn('amount', v))),
         ],
       ),
     );
@@ -438,18 +442,21 @@ class _PreviewList extends ConsumerWidget {
       final picked = await showJSheet<String>(
         context,
         title: 'Category for *this*',
-        child: Wrap(
-          spacing: JSpace.sm,
-          runSpacing: JSpace.sm,
-          children: [
-            for (final k in allCats.where((k) => k.kind == kind))
-              JChip(
-                label: k.name,
-                selected: k.id == r.categoryId,
-                leading: Icon(categoryIcon(k.icon), size: 14, color: seriesColor(c, k.colorIndex)),
-                onTap: () => Navigator.of(context).pop(k.id),
-              ),
-          ],
+        child: Builder(
+          // The sheet lives on the root navigator; pop with its own context.
+          builder: (sheet) => Wrap(
+            spacing: JSpace.sm,
+            runSpacing: JSpace.sm,
+            children: [
+              for (final k in allCats.where((k) => k.kind == kind))
+                JChip(
+                  label: k.name,
+                  selected: k.id == r.categoryId,
+                  leading: Icon(categoryIcon(k.icon), size: 14, color: seriesColor(c, k.colorIndex)),
+                  onTap: () => Navigator.of(sheet).pop(k.id),
+                ),
+            ],
+          ),
         ),
       );
       if (picked != null) {

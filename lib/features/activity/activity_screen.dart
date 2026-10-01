@@ -129,7 +129,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   ],
                   child: IgnorePointer(
                     child: JChip(
-                      label: accounts.where((a) => a.id == _accountId).firstOrNull?.name ?? 'Account',
+                      label: ref.watch(accountMapProvider)[_accountId]?.name ?? 'Account',
                       selected: _accountId != null,
                       onTap: () {},
                     ),
@@ -169,6 +169,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       _accountId = null;
                       _range = null;
                       _tag = null;
+                      _search.clear();
                     }),
                   ),
                 ],
@@ -204,7 +205,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: _Totals(totals: totals, shown: txs.length),
           ),
           SliverSlidableGroup(txs: txs, dayTotals: totals.expenseByDay),
-          if (txs.length >= _limit)
+          if (txs.length >= _limit && totals.count > txs.length)
             SliverToBoxAdapter(
               child: Center(
                 child: Padding(

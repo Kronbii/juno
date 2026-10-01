@@ -77,7 +77,8 @@ class InsightsScreen extends ConsumerWidget {
         .fold<double>(
           0,
           (sum, r) =>
-              sum + Fx.toUsd(_monthlyEquivalent(r).round(), accts[r.accountId]?.currency ?? baseCurrency, rates),
+              sum +
+              (Fx.tryToUsd(_monthlyEquivalent(r).round(), accts[r.accountId]?.currency ?? baseCurrency, rates) ?? 0),
         )
         .round();
 
@@ -262,7 +263,9 @@ class InsightsScreen extends ConsumerWidget {
     final netWorth = JCard(
       title: 'Net worth · 12 months',
       trailing: Text(
-        '${Money.whole(worthNow)}  ${worthDelta >= 0 ? '+' : '\u2212'}${Money.whole(worthDelta.abs())} vs last month',
+        worth.isEmpty
+            ? '—'
+            : '${Money.whole(worthNow)}  ${worthDelta >= 0 ? '+' : '\u2212'}${Money.whole(worthDelta.abs())} vs last month',
         style: JType.chipLabel.copyWith(color: worthDelta >= 0 ? c.income : c.expense),
       ),
       child: NetWorthLine(points: worth),

@@ -312,7 +312,10 @@ List<(DateTime, int)> netWorthSeries({
     var total = 0;
     for (final e in bal.entries) {
       final a = byAccount[e.key]!;
-      total += Fx.toUsd(e.value, a.currency, perUsd);
+      final usd = Fx.tryToUsd(e.value, a.currency, perUsd);
+      // A rate not loaded yet: no series rather than a wrong one.
+      if (usd == null) return const [];
+      total += usd;
     }
     out.add((m, total));
   }

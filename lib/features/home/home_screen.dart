@@ -487,10 +487,11 @@ class _AccountsCard extends ConsumerWidget {
     // Net worth counts archived accounts too — money doesn't stop existing
     // when an account is hidden — matching the Insights net-worth chart.
     final everyAccount = ref.watch(allAccountsProvider).value ?? accounts;
-    final total = everyAccount.fold(
-      0,
-      (s, a) => s + Fx.toUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates),
-    );
+    final parts = [
+      for (final a in everyAccount) Fx.tryToUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates),
+    ];
+    // Unknown until every account's rate is loaded: never a wrong total.
+    final total = parts.contains(null) ? null : parts.fold<int>(0, (s, v) => s + v!);
     return JCard(
       title: 'Accounts',
       onTap: () => context.go('/settings/accounts'),
@@ -521,7 +522,7 @@ class _AccountsCard extends ConsumerWidget {
               Expanded(
                 child: Text('NET WORTH', style: JType.microLabel.copyWith(color: c.inkFaint)),
               ),
-              Text(Money.format(total), style: JType.cardMetric.copyWith(color: c.ink)),
+              Text(total == null ? '—' : Money.format(total), style: JType.cardMetric.copyWith(color: c.ink)),
             ],
           ),
         ],

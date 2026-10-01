@@ -171,6 +171,19 @@ class ColumnMapping {
     dateFormat: dateFormat ?? this.dateFormat,
   );
 
+  /// Sets one column, where null *clears* it ([copyWith] can't express
+  /// "unset" — choosing "—" for Debit must actually stop reading Debit).
+  ColumnMapping withColumn(String field, int? v) => ColumnMapping(
+    date: field == 'date' ? v : date,
+    description: field == 'description' ? v : description,
+    amount: field == 'amount' ? v : amount,
+    debit: field == 'debit' ? v : debit,
+    credit: field == 'credit' ? v : credit,
+    category: field == 'category' ? v : category,
+    mode: mode,
+    dateFormat: dateFormat,
+  );
+
   static int? _firstColumnWhere(CsvTable t, bool Function(String) test, {Set<int> not = const {}}) {
     if (t.rows.isEmpty) return null;
     final sample = t.rows.take(10).toList();

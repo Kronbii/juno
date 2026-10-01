@@ -54,6 +54,15 @@ abstract final class Fx {
     return (cents / rate).round();
   }
 
+  /// [toUsd] for display: null instead of throwing when the rate isn't
+  /// known (yet) — screens show "—" rather than an error.
+  static int? tryToUsd(int cents, String code, Map<String, double> perUsd) {
+    if (code == baseCurrency) return cents;
+    final rate = perUsd[code];
+    if (rate == null || rate <= 0) return null;
+    return (cents / rate).round();
+  }
+
   /// Converts between two non-base currencies through USD.
   static int convert(int cents, String from, String to, Map<String, double> perUsd) {
     if (from == to) return cents;

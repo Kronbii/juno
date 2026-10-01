@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/deeplink/deep_link_handler.dart';
+import 'package:juno/core/deeplink/quick_add.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -177,7 +178,11 @@ class _BackTapScreenState extends ConsumerState<BackTapScreen> {
                         dense: true,
                         onPressed: () {
                           final uri = Uri.tryParse(_link.text.trim());
-                          if (uri != null) handleQuickAdd(ref, uri);
+                          if (uri == null || QuickAdd.parse(uri) == null) {
+                            showToast('Not a quick-add link — it must start with juno://add');
+                            return;
+                          }
+                          handleQuickAdd(ref, uri);
                         },
                       ),
                     ),

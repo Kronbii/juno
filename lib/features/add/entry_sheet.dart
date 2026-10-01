@@ -211,22 +211,40 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       return KeyEventResult.handled;
     }
     if (e.logicalKey == LogicalKeyboardKey.enter) {
-      _save();
+      // A held Enter repeats; only the first press saves.
+      if (e is KeyDownEvent) _save();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
+  bool get _hasAccount => (ref.read(accountsProvider).value ?? const []).isNotEmpty || _accountId != null;
+
   bool get _valid {
-    if (_cents <= 0) return false;
+    if (_cents <= 0 || !_hasAccount) return false;
     if (_type == TxType.transfer) {
       return _accountId != null && _toAccountId != null && _accountId != _toAccountId;
     }
     return true;
   }
 
+  bool _saving = false;
+
+  /// Guarded: a double tap or a repeated Enter can't save twice, and any
+  /// failure is reported instead of leaving the sheet stuck.
   Future<void> _save() async {
-    if (!_valid) return;
+    if (!_valid || _saving) return;
+    _saving = true;
+    try {
+      await _saveInner();
+    } on Object catch (e) {
+      showToast('Couldn’t save: $e');
+    } finally {
+      _saving = false;
+    }
+  }
+
+  Future<void> _saveInner() async {
     final ledger = ref.read(ledgerProvider);
     final accounts = ref.read(accountsProvider).value ?? const [];
     final accountId = _accountId ?? (accounts.isEmpty ? null : accounts.first.id);
@@ -288,12 +306,13 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: Day.parse(_day),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
+    final current = Day.parse(_day);
+    // The range always contains the entry's own date (imports and links can
+    // carry any date), or the picker asserts.
+    final first = current.isBefore(DateTime(2000)) ? current : DateTime(2000);
+    final soon = DateTime.now().add(const Duration(days: 365));
+    final last = current.isAfter(soon) ? current : soon;
+    final picked = await showDatePicker(context: context, initialDate: current, firstDate: first, lastDate: last);
     if (picked != null) setState(() => _day = Day.of(picked));
   }
 
@@ -308,7 +327,9 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       if (to != from) return 'Arrives as ~${Fx.format(Fx.convert(_cents, from, to, rates), to)}';
     }
     if (from == baseCurrency) return null;
-    return '~${Money.format(Fx.toUsd(_cents, from, rates))} at ${Fx.format((rates[from] ?? 1) * 100 ~/ 1, from)} / \$1';
+    final usd = Fx.tryToUsd(_cents, from, rates);
+    if (usd == null) return 'No $from rate yet — set it in Settings → Currencies';
+    return '~${Money.format(usd)} at ${Fx.format(rates[from]! * 100 ~/ 1, from)} / \$1';
   }
 
   String _currencyOf(String? accountId) => ref.read(accountMapProvider)[accountId]?.currency ?? baseCurrency;
@@ -514,7 +535,11 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                     _AmountPad(onKey: _key),
                     const SizedBox(height: JSpace.md),
                     JButton(
-                      label: _cents > 0 ? '${_editing ? 'Save' : 'Log'} ${Money.format(_cents)}' : 'Enter an amount',
+                      label: !_hasAccount
+                          ? 'Add an account first (Settings → Accounts)'
+                          : _cents > 0
+                          ? '${_editing ? 'Save' : 'Log'} ${Fx.format(_cents, _currencyOf(_accountId))}'
+                          : 'Enter an amount',
                       accent: typeAccent,
                       expand: true,
                       onPressed: _valid ? _save : null,

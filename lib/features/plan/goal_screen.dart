@@ -26,7 +26,29 @@ class GoalScreen extends ConsumerWidget {
     final history = ref.watch(_contributionsProvider(goalId)).value ?? const <GoalContribution>[];
 
     if (goal == null) {
-      return const Scaffold(body: Center(child: Text('Goal not found')));
+      // Deleted (here or on another device), or still loading: never a dead end.
+      final loading = ref.watch(goalsProvider).isLoading;
+      return JScreen(
+        eyebrow: 'Goal',
+        title: loading ? 'Loading…' : 'Goal *gone*',
+        actions: [
+          JIconButton(
+            icon: Icons.arrow_back_rounded,
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
+        slivers: [
+          if (!loading)
+            SliverToBoxAdapter(
+              child: JEmpty(
+                icon: Icons.flag_outlined,
+                title: 'This goal was deleted',
+                action: JButton(label: 'Back to goals', dense: true, onPressed: () => Navigator.of(context).maybePop()),
+              ),
+            ),
+        ],
+      );
     }
     final color = seriesColor(c, goal.colorIndex);
 

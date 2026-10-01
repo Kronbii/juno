@@ -184,6 +184,10 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
                         kind: Value(_kind),
                         openingBalanceCents: Value(Money.parse(_opening.text) ?? 0),
                         archived: Value(_archived),
+                        // New accounts go to the end of the list.
+                        sort: widget.account == null
+                            ? Value(ref.read(allAccountsProvider).value?.length ?? 0)
+                            : const Value.absent(),
                         currency: Value(_currency),
                       ),
                     );

@@ -18,7 +18,12 @@ class SpendPlan {
     required this.committed,
     required this.daysLeft,
     required this.forecastSpend,
+    this.complete = true,
   });
+
+  /// False while a needed exchange rate is unknown; the plan is then not
+  /// shown rather than shown wrong.
+  final bool complete;
 
   /// Money in so far this month (USD cents).
   final int income;
@@ -44,7 +49,7 @@ class SpendPlan {
   int get perDay => daysLeft <= 0 ? leftToSpend : (leftToSpend / daysLeft).floor();
 
   /// Whether there's an income to plan against at all.
-  bool get meaningful => incomeExpected > 0;
+  bool get meaningful => complete && incomeExpected > 0;
 }
 
 /// Plans the rest of the month. [monthTxs] is this month's entries (any
@@ -78,8 +83,13 @@ SpendPlan planMonth({
   // are posted on launch).
   var committed = 0;
   var pendingIncome = 0;
+  var ratesMissing = false;
   for (final r in rules.where((r) => r.isLive)) {
-    final usdAmount = Fx.toUsd(r.amountCents, accounts[r.accountId]?.currency ?? baseCurrency, rates);
+    final usdAmount = Fx.tryToUsd(r.amountCents, accounts[r.accountId]?.currency ?? baseCurrency, rates);
+    if (usdAmount == null) {
+      ratesMissing = true;
+      continue;
+    }
     var d = Day.parse(r.nextDue);
     final anchor = Day.parse(r.anchorDate);
     for (var i = 0; i < 62; i++) {
@@ -105,6 +115,7 @@ SpendPlan planMonth({
     committed: committed,
     daysLeft: daysLeft,
     forecastSpend: forecast,
+    complete: !ratesMissing,
   );
 }
 

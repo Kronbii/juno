@@ -12,6 +12,7 @@ import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
 import 'package:juno/features/plan/editors.dart';
+import 'package:juno/features/plan/recurrence.dart';
 
 enum PlanTab { budgets, goals, recurring }
 
@@ -347,9 +348,17 @@ class _RecurringTab extends ConsumerWidget {
                           children: [
                             JDot(r.scope == Scope.household ? c.household : c.brand, size: 6),
                             const SizedBox(width: 6),
-                            Text(
-                              r.active ? '${every(r)} · next ${Day.relative(r.nextDue)}' : 'Paused',
-                              style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                            Flexible(
+                              child: Text(
+                                !r.active
+                                    ? 'Paused'
+                                    : r.isLive
+                                    ? '${every(r)} · next ${Day.relative(r.nextDue)}'
+                                    : 'Ended ${Day.short(r.endDate!)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                              ),
                             ),
                           ],
                         ),

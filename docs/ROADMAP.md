@@ -10,9 +10,9 @@ The audit fixes are also in:
 - **Money:** re-pricing, parsing, DST, totals.
 
 ## Milestone 1: finish hardening
-- [ ] Fix every finding from the UI audit (each button, empty state and failure path).
-- [ ] Keep the audit's probes as a permanent widget test that presses every button.
-- [ ] Run GitHub Actions CI on every push: analyze, unit, sync fuzz and reconciliation tests.
+- [x] Fix every finding from the UI audit (each button, empty state and failure path).
+- [x] Keep the audit's probes as a permanent widget test that presses every button (`test/ui_flows_test.dart`).
+- [x] Run GitHub Actions CI on every push: analyze, unit, sync fuzz and reconciliation tests.
 - [ ] Add golden screenshot tests so a visual regression fails CI.
 
 ## Milestone 2: iPhone integrations
@@ -24,13 +24,13 @@ The audit fixes are also in:
 - [ ] **Receipt scanning:** on-device text recognition prefills the total, the date and the merchant.
 
 ## Milestone 3: smarter, on-device first
-- [ ] **Quick-entry text:** "12 coffee kalei", "40k taxi yesterday" and "LBP 150000 generator" fill in the amount, currency, category, date and note.
+- [x] **Quick-entry text:** "12 coffee kalei", "40k taxi yesterday" and "LBP 150000 generator" fill in the amount, currency, category, date and note.
 - [ ] **Category suggestions** as you type, learned from your history.
-- [ ] **Safe to spend today:** the month's income, minus recurring bills still due, minus what you've spent, divided by the days left.
-- [ ] **Month-end forecast**, including the recurring bills still to come.
-- [ ] **Subscription detection:** the same merchant charging the same amount on a monthly rhythm triggers a "Make this recurring?" suggestion.
-- [ ] **Unusual-spending alerts**, measured against your own baseline per category.
-- [ ] **Budget suggestions** from your 3-month averages.
+- [x] **Safe to spend today:** the month's income, minus recurring bills still due, minus what you've spent, divided by the days left.
+- [x] **Month-end forecast**, including the recurring bills still to come.
+- [x] **Subscription detection:** the same merchant charging the same amount on a monthly rhythm triggers a "Make this recurring?" suggestion.
+- [x] **Unusual-spending alerts**, measured against your own baseline per category.
+- [x] **Budget suggestions** from your 3-month averages.
 - [ ] **Split entries:** one receipt across several categories or scopes.
 
 ## Milestone 4: UI

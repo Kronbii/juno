@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 
 /// Exchange rates against USD. Juno never fetches rates on its own — in
@@ -63,63 +64,89 @@ class CurrenciesScreen extends ConsumerWidget {
     double? current,
     Iterable<String> codes = const [],
   }) async {
-    var selected = code ?? codes.firstOrNull;
-    if (selected == null) return;
-    final ctrl = TextEditingController(text: current == null ? '' : _fmt(current).replaceAll(',', ''));
+    if (code == null && codes.isEmpty) {
+      showToast('Every supported currency is already added');
+      return;
+    }
     await showJSheet<void>(
       context,
       title: code == null ? 'Add a *currency*' : 'Rate for *$code*',
-      child: StatefulBuilder(
-        builder: (context, setState) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (code == null)
-              JField(
-                label: 'Currency',
-                child: Wrap(
-                  spacing: JSpace.sm,
-                  runSpacing: JSpace.sm,
-                  children: [
-                    for (final k in codes)
-                      JChip(label: k, selected: k == selected, onTap: () => setState(() => selected = k)),
-                  ],
-                ),
-              ),
-            JField(
-              label: '$selected per 1 USD',
-              child: TextField(
-                controller: ctrl,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[0-9.]'))],
-                style: JType.cardMetric.copyWith(color: context.jc.ink),
-              ),
-            ),
-            ListenableBuilder(
-              listenable: ctrl,
-              builder: (context, _) {
-                final v = double.tryParse(ctrl.text);
-                return JButton(
-                  label: 'Save rate',
-                  expand: true,
-                  onPressed: v == null || v <= 0
-                      ? null
-                      : () async {
-                          await ref.read(ledgerProvider).setRate(selected!, v);
-                          if (context.mounted) Navigator.of(context).pop();
-                        },
-                );
-              },
-            ),
-            const SizedBox(height: JSpace.sm),
-            Text(
-              'Changing a rate affects new entries only; past entries keep the USD value they were logged with.',
-              style: JType.body.copyWith(fontSize: 12, color: context.jc.inkFaint),
-            ),
-          ],
+      child: _RateForm(code: code, current: current, codes: codes.toList()),
+    );
+  }
+}
+
+/// Owns its controller for exactly the sheet's lifetime.
+class _RateForm extends ConsumerStatefulWidget {
+  const _RateForm({required this.code, required this.current, required this.codes});
+
+  final String? code;
+  final double? current;
+  final List<String> codes;
+
+  @override
+  ConsumerState<_RateForm> createState() => _RateFormState();
+}
+
+class _RateFormState extends ConsumerState<_RateForm> {
+  late String _selected = widget.code ?? widget.codes.first;
+  late final _ctrl = TextEditingController(
+    text: widget.current == null ? '' : CurrenciesScreen._fmt(widget.current!).replaceAll(',', ''),
+  );
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (widget.code == null)
+        JField(
+          label: 'Currency',
+          child: Wrap(
+            spacing: JSpace.sm,
+            runSpacing: JSpace.sm,
+            children: [
+              for (final k in widget.codes)
+                JChip(label: k, selected: k == _selected, onTap: () => setState(() => _selected = k)),
+            ],
+          ),
+        ),
+      JField(
+        label: '$_selected per 1 USD',
+        child: TextField(
+          controller: _ctrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[0-9.]'))],
+          style: JType.cardMetric.copyWith(color: context.jc.ink),
         ),
       ),
-    );
-    ctrl.dispose();
-  }
+      ListenableBuilder(
+        listenable: _ctrl,
+        builder: (context, _) {
+          final v = double.tryParse(_ctrl.text);
+          return JButton(
+            label: 'Save rate',
+            expand: true,
+            onPressed: v == null || v <= 0
+                ? null
+                : () async {
+                    await ref.read(ledgerProvider).setRate(_selected, v);
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+          );
+        },
+      ),
+      const SizedBox(height: JSpace.sm),
+      Text(
+        'Changing a rate affects new entries only; past entries keep the USD value they were logged with.',
+        style: JType.body.copyWith(fontSize: 12, color: context.jc.inkFaint),
+      ),
+    ],
+  );
 }

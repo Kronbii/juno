@@ -56,7 +56,11 @@ class CategoryPicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final cats = (ref.watch(categoriesProvider).value ?? const <Category>[]).where((k) => k.kind == kind);
+    final cats = (ref.watch(categoriesProvider).value ?? const <Category>[]).where((k) => k.kind == kind).toList();
+    // A budget/rule may point at a category archived since: keep it
+    // selectable (marked) instead of crashing the dropdown.
+    final archived = value == null || cats.any((k) => k.id == value) ? null : ref.watch(categoryMapProvider)[value];
+    if (archived != null) cats.add(archived);
     return DropdownButtonFormField<String?>(
       initialValue: value,
       isExpanded: true,
@@ -72,7 +76,7 @@ class CategoryPicker extends ConsumerWidget {
               children: [
                 Icon(categoryIcon(k.icon), size: 16, color: seriesColor(c, k.colorIndex)),
                 const SizedBox(width: 10),
-                Text(k.name),
+                Text(k.archived ? '${k.name} (archived)' : k.name),
               ],
             ),
           ),
@@ -91,14 +95,19 @@ class AccountPicker extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
+    final accounts = [...?ref.watch(accountsProvider).value];
+    final archived = value == null || accounts.any((a) => a.id == value) ? null : ref.watch(accountMapProvider)[value];
+    if (archived != null) accounts.add(archived);
     return DropdownButtonFormField<String>(
-      initialValue: value ?? accounts.firstOrNull?.id,
+      initialValue: accounts.any((a) => a.id == value) ? value : accounts.firstOrNull?.id,
       isExpanded: true,
       dropdownColor: c.raised,
       borderRadius: BorderRadius.circular(JRadius.chip),
       style: JType.body.copyWith(fontSize: 15, color: c.ink),
-      items: [for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
+      items: [
+        for (final a in accounts)
+          DropdownMenuItem(value: a.id, child: Text(a.archived ? '${a.name} (archived)' : a.name)),
+      ],
       onChanged: onChanged,
     );
   }
@@ -365,38 +374,67 @@ class _GoalFormState extends ConsumerState<_GoalForm> {
 
 /// Add money to (or take it out of) a goal.
 Future<void> contribute(BuildContext context, WidgetRef ref, Goal goal, {bool withdraw = false}) async {
-  final ctrl = TextEditingController();
+  final saved = ref.read(goalSavedProvider).value?[goal.id] ?? 0;
   final cents = await showJSheet<int>(
     context,
     title: withdraw ? 'Take from *${goal.name}*' : 'Add to *${goal.name}*',
-    child: Builder(
-      builder: (context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          JField(
-            label: 'Amount',
-            child: MoneyField(controller: ctrl, autofocus: true),
-          ),
-          ListenableBuilder(
-            listenable: ctrl,
-            builder: (context, _) {
-              final v = Money.parse(ctrl.text) ?? 0;
-              return JButton(
-                label: withdraw ? 'Withdraw' : 'Add',
-                accent: withdraw ? JAccent.expense : JAccent.income,
-                expand: true,
-                onPressed: v <= 0 ? null : () => Navigator.of(context).pop(v),
-              );
-            },
-          ),
-        ],
-      ),
-    ),
+    child: _ContributionForm(withdraw: withdraw, max: withdraw ? saved : null),
   );
-  ctrl.dispose();
   if (cents != null) {
     await ref.read(ledgerProvider).addContribution(goal.id, withdraw ? -cents : cents);
   }
+}
+
+/// Owns its controller, so it lives exactly as long as the sheet (disposing
+/// it when the sheet's future completes broke the closing animation).
+class _ContributionForm extends StatefulWidget {
+  const _ContributionForm({required this.withdraw, this.max});
+
+  final bool withdraw;
+
+  /// For withdrawals: what the goal holds. You can't take out more.
+  final int? max;
+
+  @override
+  State<_ContributionForm> createState() => _ContributionFormState();
+}
+
+class _ContributionFormState extends State<_ContributionForm> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      JField(
+        label: widget.max == null ? 'Amount' : 'Amount (up to ${Money.format(widget.max!)})',
+        child: MoneyField(controller: _ctrl, autofocus: true),
+      ),
+      ListenableBuilder(
+        listenable: _ctrl,
+        builder: (context, _) {
+          final v = Money.parse(_ctrl.text) ?? 0;
+          final tooMuch = widget.max != null && v > widget.max!;
+          return JButton(
+            label: tooMuch
+                ? 'More than the goal holds'
+                : widget.withdraw
+                ? 'Withdraw'
+                : 'Add',
+            accent: widget.withdraw ? JAccent.expense : JAccent.income,
+            expand: true,
+            onPressed: v <= 0 || tooMuch ? null : () => Navigator.of(context).pop(v),
+          );
+        },
+      ),
+    ],
+  );
 }
 
 // --------------------------------------------------------------- recurring
@@ -425,7 +463,7 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
     var d = Day.parse(_start);
     final anchor = Day.parse(r.anchorDate);
     for (var i = 0; i < 1000 && Day.of(d).compareTo(today) < 0; i++) {
-      d = nextOccurrence(anchor: anchor, from: d, frequency: _freq, interval: r.interval);
+      d = nextOccurrence(anchor: anchor, from: d, frequency: _freq, interval: _interval);
     }
     return Day.of(d);
   }
@@ -435,6 +473,7 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
   late String? _cat = widget.rule?.categoryId;
   late String? _account = widget.rule?.accountId;
   late Frequency _freq = widget.rule?.frequency ?? Frequency.monthly;
+  late int _interval = widget.rule?.interval ?? 1;
   late String _start = widget.rule?.nextDue ?? Day.today();
   late String? _end = widget.rule?.endDate;
   late bool _active = widget.rule?.active ?? true;
@@ -511,6 +550,35 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
           ),
         ),
         JField(
+          label: 'Every',
+          child: Row(
+            children: [
+              JIconButton(
+                icon: Icons.remove_rounded,
+                size: 38,
+                tooltip: 'Less often',
+                onPressed: _interval > 1 ? () => setState(() => _interval--) : null,
+              ),
+              const SizedBox(width: JSpace.md),
+              Text(
+                '$_interval ${switch (_freq) {
+                  Frequency.weekly => _interval == 1 ? 'week' : 'weeks',
+                  Frequency.monthly => _interval == 1 ? 'month' : 'months',
+                  Frequency.yearly => _interval == 1 ? 'year' : 'years',
+                }}',
+                style: JType.rowMetric.copyWith(color: context.jc.ink),
+              ),
+              const SizedBox(width: JSpace.md),
+              JIconButton(
+                icon: Icons.add_rounded,
+                size: 38,
+                tooltip: 'More often apart',
+                onPressed: _interval < 12 ? () => setState(() => _interval++) : null,
+              ),
+            ],
+          ),
+        ),
+        JField(
           label: widget.rule == null ? 'First on' : 'Next on',
           child: _DateButton(day: _start, onChanged: (d) => setState(() => _start = d)),
         ),
@@ -554,7 +622,8 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
                   return JButton(
                     label: 'Save',
                     expand: true,
-                    onPressed: cents <= 0 || account == null
+                    // An end before the next date would never post anything.
+                    onPressed: cents <= 0 || account == null || (_end != null && _end!.compareTo(_start) < 0)
                         ? null
                         : () async {
                             final r = widget.rule;
@@ -568,6 +637,7 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
                                 categoryId: Value(_cat),
                                 note: Value(_note.text.trim()),
                                 frequency: Value(_freq),
+                                interval: Value(_interval),
                                 // Changing the next date re-anchors the rule.
                                 anchorDate: Value(r == null || r.nextDue != _start ? _start : r.anchorDate),
                                 nextDue: Value(_resumeFrom(r)),

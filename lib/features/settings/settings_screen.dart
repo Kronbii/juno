@@ -194,12 +194,20 @@ class _NotifyRowState extends ConsumerState<_NotifyRow> {
       trailing: Switch(
         value: on,
         onChanged: (v) async {
-          if (v && !await ref.read(remindersProvider).requestPermission()) {
+          var allowed = true;
+          if (v) {
+            try {
+              allowed = await ref.read(remindersProvider).requestPermission();
+            } on Object {
+              allowed = false;
+            }
+          }
+          if (!allowed) {
             showToast('Allow notifications for Juno in iOS Settings');
             return;
           }
           await prefs.setBool(widget.prefKey, v);
-          setState(() {});
+          if (mounted) setState(() {});
           await ref.read(reminderRunnerProvider.notifier).run();
         },
       ),
@@ -233,17 +241,22 @@ class _SampleDataRowState extends ConsumerState<_SampleDataRow> {
 
   Future<void> _run(bool load) async {
     setState(() => _busy = true);
-    final db = ref.read(databaseProvider);
-    if (load) {
-      await seedDemo(db);
-      await materializeRecurring(db);
-    } else {
-      await removeDemo(db);
+    try {
+      final db = ref.read(databaseProvider);
+      if (load) {
+        await seedDemo(db);
+        await materializeRecurring(db);
+      } else {
+        await removeDemo(db);
+      }
+      await ref.read(syncEngineProvider.notifier).syncNow();
+      showToast(load ? 'Sample data loaded' : 'Sample data removed');
+    } on Object catch (e) {
+      showToast('Sample data failed: $e');
+    } finally {
+      await _refresh();
+      if (mounted) setState(() => _busy = false);
     }
-    await ref.read(syncEngineProvider.notifier).syncNow();
-    await _refresh();
-    if (mounted) setState(() => _busy = false);
-    showToast(load ? 'Sample data loaded' : 'Sample data removed');
   }
 
   @override
