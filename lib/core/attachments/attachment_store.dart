@@ -33,6 +33,10 @@ class AttachmentStore {
 
   static Directory? _dir;
 
+  /// Points the store at a folder (tests).
+  @visibleForTesting
+  static set directory(Directory d) => _dir = d;
+
   static Future<Directory> dir() async {
     if (_dir != null) return _dir!;
     final base = await getApplicationSupportDirectory();

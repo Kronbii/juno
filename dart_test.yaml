@@ -1,3 +1,5 @@
 tags:
   shots:
-    skip: "Visual snapshots; run with --tags shots --update-goldens"
+    skip: "Visual snapshots; run with --run-skipped --update-goldens"
+  live:
+    skip: "Hits the real Supabase project; set JUNO_LIVE_EMAIL/JUNO_LIVE_PASSWORD and --run-skipped"

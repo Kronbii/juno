@@ -52,3 +52,4 @@ test/failures/
 imports/
 *.xlsx
 *.xls
+supabase/.env.local

@@ -45,7 +45,10 @@ abstract class SyncRemote {
 }
 
 class SupabaseRemote implements SyncRemote {
-  SupabaseClient get _c => Supabase.instance.client;
+  SupabaseRemote([this._client]);
+
+  final SupabaseClient? _client;
+  SupabaseClient get _c => _client ?? Supabase.instance.client;
 
   @override
   String? get userId => _c.auth.currentUser?.id;

@@ -39,7 +39,7 @@ Debug builds have **Settings → Data → Load sample data**, which adds four mo
 Without configuration Juno runs local-only. To sync your desktop and phone:
 
 1. Create a Supabase project.
-2. Run the migrations in [`supabase/migrations/`](supabase/migrations/) in order, either in the SQL editor or with `npx supabase db push`. They create the tables, row-level security, the cursor triggers and the private `receipts` storage bucket.
+2. Run the migrations in [`supabase/migrations/`](supabase/migrations/) in order, either in the SQL editor or with `npx supabase db push` (timestamped files, linked project). They create the tables, row-level security, the cursor triggers and the private `receipts` storage bucket.
 3. Copy `supabase.example.json` to `supabase.json` (it's gitignored) and fill in the project URL and the anon/publishable key.
 4. Run with `flutter run --dart-define-from-file=supabase.json`, and pass the same flag to `flutter build`.
 5. Go to **Settings → Cloud sync**, create an account and sign in on each device.
