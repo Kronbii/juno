@@ -46,8 +46,9 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Automatic local backups (daily snapshot, 14 kept, export) and a merge-restore that never overwrites newer data.
 - [x] Edit history per entry, with restore.
 
-## Optional: AI assist (your own API key, off by default)
-- [x] Any of six providers (OpenAI, Gemini, Anthropic, DeepSeek, Qwen, Kimi) through one OpenAI-style client. The default is OpenAI gpt-5-mini; the model can be changed. The key stays on the device.
+## AI (Juno cloud, or your own key)
+- [x] Juno cloud: a Supabase edge function holds the OpenAI key as a secret, accepts only signed-in users, and enforces the monthly cap on the server. AI works on every signed-in device with no setup. See [ai-cloud.md](ai-cloud.md).
+- [x] Your own key, set on one device, overrides the relay there. Any of six providers (OpenAI, Gemini, Anthropic, DeepSeek, Qwen, Kimi) through one OpenAI-style client. The default is OpenAI gpt-5-mini; the model can be changed. The key stays on the device.
 - [x] Assistant: a chat about your money. It answers by calling read-only tools that query the local database (totals, categories, entries, merchants, budgets, accounts, goals, recurring, safe to spend). Only the tool results are sent, never the database. It cannot change anything.
 - [x] Receipt fallback and a monthly read, as before.
 - [x] Cost controls:

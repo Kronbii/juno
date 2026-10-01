@@ -18,6 +18,41 @@ http.Response reply(String? content, {int input = 1000, int output = 100, List<O
   200,
 );
 
+class FakeCloud implements AiCloud {
+  FakeCloud({this.available = true, this.reachable = true});
+
+  @override
+  bool available;
+  bool reachable;
+
+  static final url = Uri.parse('https://proj.supabase.co/functions/v1/ai');
+
+  @override
+  Future<(Uri, Map<String, String>)?> endpoint() async =>
+      reachable ? (url, {'Authorization': 'Bearer user-jwt', 'apikey': 'pub'}) : null;
+}
+
+http.Response relay(String content, {int spent = 1234, int cap = 2000000, int status = 200}) => http.Response.bytes(
+  utf8.encode(
+    jsonEncode(
+      status == 200
+          ? {
+              'model': 'gpt-5-mini-2025-08-07',
+              'choices': [
+                {
+                  'message': {'role': 'assistant', 'content': content},
+                },
+              ],
+            }
+          : {
+              'error': {'code': 'cap'},
+            },
+    ),
+  ),
+  status,
+  headers: {'x-juno-spent-micros': '$spent', 'x-juno-cap-micros': '$cap'},
+);
+
 Future<AiAssist> make(Map<String, Object> prefs, Future<http.Response> Function(http.Request) handler) async {
   SharedPreferences.setMockInitialValues(prefs);
   return AiAssist(await SharedPreferences.getInstance(), client: MockClient(handler));
@@ -190,5 +225,83 @@ void main() {
     now = DateTime(2026, 10, 2);
     expect(ai.spentMicros, 0);
     expect(ai.callsThisMonth, 0);
+  });
+
+  group('Juno cloud', () {
+    Future<AiAssist> cloudAi(
+      Map<String, Object> prefs,
+      Future<http.Response> Function(http.Request) handler, {
+      FakeCloud? cloud,
+    }) async {
+      SharedPreferences.setMockInitialValues(prefs);
+      return AiAssist(await SharedPreferences.getInstance(), client: MockClient(handler), cloud: cloud ?? FakeCloud());
+    }
+
+    test('signed in with no key of your own: works through the relay, never sends a key', () async {
+      late http.Request req;
+      final ai = await cloudAi({}, (r) async {
+        req = r;
+        return relay('ok');
+      });
+      expect(ai.enabled, isTrue);
+      expect(ai.usingCloud, isTrue);
+      expect(ai.sourceLabel, 'Juno cloud');
+      expect(await ai.summarize('facts'), 'ok');
+      expect(req.url, FakeCloud.url);
+      expect(req.headers['Authorization'], 'Bearer user-jwt');
+      final sent = jsonDecode(req.body) as Map<String, dynamic>;
+      expect(sent.keys.toSet(), {'messages', 'max_output'}, reason: 'the relay picks the model and holds the key');
+      expect(sent['max_output'], 300);
+    });
+
+    test("the relay's spend and cap are mirrored for display, and its cap stops calls", () async {
+      var calls = 0;
+      final ai = await cloudAi({}, (_) async {
+        calls++;
+        return calls == 1 ? relay('ok', spent: 1500000) : relay('', spent: 2000000, status: 429);
+      });
+      expect(await ai.summarize('a'), 'ok');
+      expect(ai.spentMicros, 1500000);
+      expect(ai.budgetCents, 200);
+      expect(ai.model, 'gpt-5-mini-2025-08-07');
+      expect(ai.capped, isFalse);
+      expect(await ai.summarize('b'), isNull);
+      expect(ai.capped, isTrue);
+      expect(await ai.summarize('c'), isNull);
+      expect(calls, 2, reason: 'nothing more is sent once the relay says the cap is reached');
+    });
+
+    test('your own key takes precedence over the relay', () async {
+      late http.Request req;
+      final ai = await cloudAi({'ai.key': 'sk-own'}, (r) async {
+        req = r;
+        return reply('mine');
+      });
+      expect(ai.usingCloud, isFalse);
+      expect(await ai.summarize('x'), 'mine');
+      expect(req.url.host, 'api.openai.com');
+    });
+
+    test('signed out, or session unavailable: off and silent', () async {
+      var calls = 0;
+      Future<http.Response> h(http.Request _) async {
+        calls++;
+        return relay('x');
+      }
+
+      final out = await cloudAi({}, h, cloud: FakeCloud(available: false));
+      expect(out.enabled, isFalse);
+      expect(await out.summarize('x'), isNull);
+      final stale = await cloudAi({}, h, cloud: FakeCloud(reachable: false));
+      expect(await stale.summarize('x'), isNull);
+      expect(calls, 0);
+    });
+
+    test('relay errors never throw', () async {
+      final ai = await cloudAi({}, (_) async => http.Response('<html>bad gateway</html>', 502));
+      expect(await ai.summarize('x'), isNull);
+      final down = await cloudAi({}, (_) async => throw http.ClientException('offline'));
+      expect(await down.summarize('x'), isNull);
+    });
   });
 }

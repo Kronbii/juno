@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/assistant/assistant.dart';
 import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
@@ -75,6 +76,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
+    ref.watch(syncEngineProvider.select((s) => s.phase));
     final ai = ref.watch(aiAssistProvider);
     final a = ref.watch(assistantProvider);
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
@@ -116,17 +118,17 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         if (!ai.enabled)
           JCard(
             accent: JAccent.warn,
-            title: 'Needs an API key',
+            title: 'Sign in to use the assistant',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Add a key for OpenAI, Gemini, Anthropic or another provider. A month of normal use costs '
-                  'well under a dollar, and you set the limit.',
+                  'The assistant runs through your Juno account. Sign in under Cloud sync and it works here '
+                  'and on your other devices.',
                   style: JType.body.copyWith(fontSize: 13.5, color: c.ink),
                 ),
                 const SizedBox(height: JSpace.md),
-                JButton(label: 'Set up AI assist', dense: true, onPressed: () => context.go('/settings/ai')),
+                JButton(label: 'Cloud sync', dense: true, onPressed: () => context.go('/settings/sync')),
               ],
             ),
           )
@@ -184,7 +186,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       padding: EdgeInsets.fromLTRB(hPad, 0, hPad, JSpace.sm),
       child: Text(
         ai.enabled
-            ? '${ai.provider.label} · ${ai.model} · ${_usd(ai.spentMicros)} of ${_usd(ai.budgetCents * 10000)} this month'
+            ? '${ai.sourceLabel} · ${ai.model} · ${_usd(ai.spentMicros)} of ${_usd(ai.budgetCents * 10000)} this month'
             : 'Off — no requests are made',
         style: JType.microLabel.copyWith(color: c.inkFaint),
         maxLines: 1,

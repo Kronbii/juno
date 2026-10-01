@@ -95,7 +95,7 @@ Today is ${DateFormat('EEEE d MMMM y').format(now)} (${Day.of(now)}).''';
 
   Future<ChatLine> _answer(String q) async {
     if (!ai.enabled) {
-      return const ChatLine.assistant('Add an API key in Settings → AI assist to use the assistant.', failed: true);
+      return const ChatLine.assistant('Sign in under Settings → Cloud sync to use the assistant.', failed: true);
     }
     final turn = <Map<String, dynamic>>[
       {'role': 'user', 'content': q},
@@ -116,6 +116,8 @@ Today is ${DateFormat('EEEE d MMMM y').format(now)} (${Day.of(now)}).''';
         return ChatLine.assistant(
           ai.capped
               ? 'This month’s AI budget is used up. It resets on the 1st, or you can raise it in Settings → AI assist.'
+              : ai.usingCloud
+              ? 'Couldn’t reach Juno cloud. Check the connection and try again.'
               : 'Couldn’t reach ${ai.provider.label}. Check the connection and the API key, then try again.',
           failed: true,
         );

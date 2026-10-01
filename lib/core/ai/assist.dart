@@ -98,6 +98,17 @@ class AiToolCall {
   final Map<String, dynamic>? args;
 }
 
+/// Juno's own AI relay (a Supabase edge function holding the OpenAI key).
+/// Used when you're signed in and haven't set a key of your own.
+abstract class AiCloud {
+  /// Signed in, so the relay will accept requests.
+  bool get available;
+
+  /// The relay's URL and auth headers, refreshing the session if needed.
+  /// Null when it can't be reached right now.
+  Future<(Uri, Map<String, String>)?> endpoint();
+}
+
 class AiReply {
   const AiReply(this.message, this.text, this.toolCalls);
 
@@ -107,11 +118,13 @@ class AiReply {
   final List<AiToolCall> toolCalls;
 }
 
-/// Optional AI help through *your* API key — off unless you add one.
+/// AI help, through Juno's cloud relay when you're signed in, or through a
+/// key of your own set on this device (which then takes precedence).
 ///
-/// Guard rails, all enforced here:
+/// Guard rails:
 /// * a monthly spending cap in dollars (default $2), measured from the token
-///   counts each reply reports — at the cap every call returns null and the
+///   counts each reply reports — enforced by the relay for cloud requests and
+///   here for your own key; at the cap every call returns null and the
 ///   on-device result is used;
 /// * short prompts, capped output, a small model by default;
 /// * callers send only what's needed (see each feature);
@@ -120,11 +133,12 @@ class AiReply {
 ///
 /// Note: ChatGPT Plus does not include API access; the key needs API billing.
 class AiAssist {
-  AiAssist(this.prefs, {http.Client? client, DateTime Function()? clock})
+  AiAssist(this.prefs, {http.Client? client, DateTime Function()? clock, this.cloud})
     : _client = client ?? http.Client(),
       _clock = clock ?? DateTime.now;
 
   final SharedPreferences prefs;
+  final AiCloud? cloud;
   final http.Client _client;
   final DateTime Function() _clock;
 
@@ -136,22 +150,36 @@ class AiAssist {
   static String keyPrefFor(AiProvider p) => p == AiProvider.openai ? 'ai.key' : 'ai.key.${p.name}';
   static String modelPrefFor(AiProvider p) => 'ai.model.${p.name}';
 
-  AiProvider get provider =>
+  /// The provider chosen for your own key.
+  AiProvider get chosenProvider =>
       AiProvider.values.where((p) => p.name == prefs.getString(providerPref)).firstOrNull ?? AiProvider.openai;
 
+  /// Your own key for [chosenProvider], if set.
   String? get apiKey {
-    final k = prefs.getString(keyPrefFor(provider))?.trim();
+    final k = prefs.getString(keyPrefFor(chosenProvider))?.trim();
     return k == null || k.isEmpty ? null : k;
   }
 
-  bool get enabled => apiKey != null;
+  /// Going through Juno's relay rather than your own key.
+  bool get usingCloud => apiKey == null && (cloud?.available ?? false);
+
+  bool get enabled => apiKey != null || usingCloud;
+
+  /// Who answers: the relay always uses OpenAI.
+  AiProvider get provider => usingCloud ? AiProvider.openai : chosenProvider;
+
+  String get sourceLabel => usingCloud ? 'Juno cloud' : provider.label;
 
   String get model {
+    if (usingCloud) return prefs.getString(_cloudModelKey) ?? AiProvider.openai.defaultModel;
     final m = prefs.getString(modelPrefFor(provider))?.trim();
     return m == null || m.isEmpty ? provider.defaultModel : m;
   }
 
-  int get budgetCents => prefs.getInt(budgetPref) ?? defaultBudgetCents;
+  int get budgetCents {
+    if (usingCloud) return (prefs.getInt(_cloudCapKey) ?? defaultBudgetCents * 10000) ~/ 10000;
+    return prefs.getInt(budgetPref) ?? defaultBudgetCents;
+  }
 
   String get _month {
     final n = _clock();
@@ -161,8 +189,13 @@ class AiAssist {
   String get _spentKey => 'ai.spent.$_month';
   String get _callsKey => 'ai.used.$_month';
 
+  // The relay's own figures, mirrored from each reply's headers.
+  String get _cloudSpentKey => 'ai.cloud.spent.$_month';
+  static const _cloudCapKey = 'ai.cloud.cap';
+  static const _cloudModelKey = 'ai.cloud.model';
+
   /// Spent this month, in millionths of a dollar.
-  int get spentMicros => prefs.getInt(_spentKey) ?? 0;
+  int get spentMicros => usingCloud ? prefs.getInt(_cloudSpentKey) ?? 0 : prefs.getInt(_spentKey) ?? 0;
   int get callsThisMonth => prefs.getInt(_callsKey) ?? 0;
   bool get capped => spentMicros >= budgetCents * 10000;
 
@@ -208,6 +241,7 @@ class AiAssist {
     List<Map<String, dynamic>>? tools,
     int maxOutput = 300,
   }) async {
+    if (usingCloud) return _chatCloud(messages, tools, maxOutput);
     final key = apiKey;
     if (key == null || capped) return null;
     Future<http.Response> send({required bool effort}) => _client
@@ -226,9 +260,7 @@ class AiAssist {
         res = await send(effort: false);
       }
       if (res.statusCode != 200) return null;
-      // Always UTF-8: without a charset header `body` would fall back to
-      // Latin-1 and garble Arabic, em dashes and the like.
-      final body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final body = _decode(res);
       final usage = body['usage'] as Map<String, dynamic>?;
       final details = usage?['prompt_tokens_details'] as Map<String, dynamic>?;
       await _charge(
@@ -238,34 +270,80 @@ class AiAssist {
           cached: (details?['cached_tokens'] as num?)?.toInt() ?? 0,
         ),
       );
-      final choices = body['choices'] as List<dynamic>?;
-      final first = choices?.firstOrNull as Map<String, dynamic>?;
-      final message = first?['message'] as Map<String, dynamic>?;
-      if (message == null) return null;
-      final calls = <AiToolCall>[
-        for (final c in (message['tool_calls'] as List<dynamic>?) ?? const [])
-          if (c is Map<String, dynamic> && c['function'] is Map<String, dynamic>)
-            AiToolCall(
-              c['id'] as String? ?? '',
-              (c['function'] as Map<String, dynamic>)['name'] as String? ?? '',
-              _args((c['function'] as Map<String, dynamic>)['arguments']),
-            ),
-      ];
-      final content = message['content'];
-      return AiReply(
-        {
-          'role': 'assistant',
-          'content': content is String ? content : null,
-          if (message['tool_calls'] != null) 'tool_calls': message['tool_calls'],
-        },
-        content is String ? content.trim() : null,
-        calls,
-      );
+      return _reply(body);
     } on Object {
       // A timeout may still be billed: count the input and the most output.
       await _charge(costMicros(_estimateTokens(messages, tools), maxOutput));
       return null;
     }
+  }
+
+  /// Through the relay: it holds the key, picks the model, enforces the cap
+  /// and reports the month's spend in headers, which are mirrored here.
+  Future<AiReply?> _chatCloud(
+    List<Map<String, dynamic>> messages,
+    List<Map<String, dynamic>>? tools,
+    int maxOutput,
+  ) async {
+    if (capped) return null;
+    try {
+      final ep = await cloud!.endpoint();
+      if (ep == null) return null;
+      final (url, headers) = ep;
+      final res = await _client
+          .post(
+            url,
+            headers: {...headers, 'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'messages': messages,
+              if (tools != null && tools.isNotEmpty) 'tools': tools,
+              'max_output': maxOutput,
+            }),
+          )
+          .timeout(const Duration(seconds: 50));
+      final spent = int.tryParse(res.headers['x-juno-spent-micros'] ?? '');
+      final cap = int.tryParse(res.headers['x-juno-cap-micros'] ?? '');
+      if (spent != null) await prefs.setInt(_cloudSpentKey, spent);
+      if (cap != null) await prefs.setInt(_cloudCapKey, cap);
+      if (res.statusCode != 200) return null;
+      await prefs.setInt(_callsKey, callsThisMonth + 1);
+      final body = _decode(res);
+      if (body['model'] is String) await prefs.setString(_cloudModelKey, body['model'] as String);
+      return _reply(body);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Always UTF-8: without a charset header `body` would fall back to
+  /// Latin-1 and garble Arabic, em dashes and the like.
+  static Map<String, dynamic> _decode(http.Response res) =>
+      jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+
+  static AiReply? _reply(Map<String, dynamic> body) {
+    final choices = body['choices'] as List<dynamic>?;
+    final first = choices?.firstOrNull as Map<String, dynamic>?;
+    final message = first?['message'] as Map<String, dynamic>?;
+    if (message == null) return null;
+    final calls = <AiToolCall>[
+      for (final c in (message['tool_calls'] as List<dynamic>?) ?? const [])
+        if (c is Map<String, dynamic> && c['function'] is Map<String, dynamic>)
+          AiToolCall(
+            c['id'] as String? ?? '',
+            (c['function'] as Map<String, dynamic>)['name'] as String? ?? '',
+            _args((c['function'] as Map<String, dynamic>)['arguments']),
+          ),
+    ];
+    final content = message['content'];
+    return AiReply(
+      {
+        'role': 'assistant',
+        'content': content is String ? content : null,
+        if (message['tool_calls'] != null) 'tool_calls': message['tool_calls'],
+      },
+      content is String ? content.trim() : null,
+      calls,
+    );
   }
 
   static Map<String, dynamic>? _args(Object? raw) {

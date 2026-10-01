@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
@@ -15,6 +16,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// local-only and the sync UI says so.
 const _url = String.fromEnvironment('SUPABASE_URL');
 const _anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+/// Juno's AI relay on the same Supabase project: the `ai` edge function,
+/// called with the signed-in session.
+class SupabaseAiCloud implements AiCloud {
+  const SupabaseAiCloud();
+
+  GoTrueClient get _auth => Supabase.instance.client.auth;
+
+  @override
+  bool get available => SyncEngine.configured && _auth.currentUser != null;
+
+  @override
+  Future<(Uri, Map<String, String>)?> endpoint() async {
+    if (!available) return null;
+    var session = _auth.currentSession;
+    if (session == null) return null;
+    if (session.isExpired) session = (await _auth.refreshSession()).session;
+    if (session == null) return null;
+    return (
+      Uri.parse('$_url/functions/v1/ai'),
+      {'Authorization': 'Bearer ${session.accessToken}', 'apikey': _anonKey},
+    );
+  }
+}
 
 enum SyncPhase { disabled, signedOut, idle, syncing, error }
 

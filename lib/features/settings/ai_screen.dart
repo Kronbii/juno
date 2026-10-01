@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 
-final aiAssistProvider = Provider<AiAssist>((ref) => AiAssist(ref.watch(prefsProvider)));
+/// Stable for the app's life (the assistant keeps its conversation); it reads
+/// prefs and the sign-in state on every call, so it never goes stale.
+final aiAssistProvider = Provider<AiAssist>(
+  (ref) => AiAssist(ref.watch(prefsProvider), cloud: SyncEngine.configured ? const SupabaseAiCloud() : null),
+);
 
 class AiScreen extends ConsumerStatefulWidget {
   const AiScreen({super.key});
@@ -15,7 +21,7 @@ class AiScreen extends ConsumerStatefulWidget {
 }
 
 class _AiScreenState extends ConsumerState<AiScreen> {
-  late AiProvider _provider = ref.read(aiAssistProvider).provider;
+  late AiProvider _provider = ref.read(aiAssistProvider).chosenProvider;
   late final _key = TextEditingController(text: _stored(AiAssist.keyPrefFor(_provider)));
   late final _model = TextEditingController(text: _stored(AiAssist.modelPrefFor(_provider)));
   late int _budget = ref.read(aiAssistProvider).budgetCents;
@@ -46,21 +52,28 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     await put(AiAssist.modelPrefFor(_provider), _model.text.trim());
     await prefs.setString(AiAssist.providerPref, _provider.name);
     await prefs.setInt(AiAssist.budgetPref, _budget);
-    showToast(k.isEmpty ? 'AI assist off' : 'AI assist on — ${_provider.label}, up to ${_budgets[_budget]} a month');
+    final ai = ref.read(aiAssistProvider);
+    showToast(
+      k.isNotEmpty
+          ? 'Using your ${_provider.label} key on this device, up to ${_budgets[_budget]} a month'
+          : ai.usingCloud
+          ? 'Using Juno cloud'
+          : 'AI off on this device',
+    );
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
+    ref.watch(syncEngineProvider.select((s) => s.phase));
     final ai = ref.watch(aiAssistProvider);
     final spent = ai.spentMicros / 1e6;
+    final cloudReady = ai.cloud?.available ?? false;
     return JScreen(
       eyebrow: 'Settings · AI assist',
       title: 'A little *extra* help',
-      subtitle:
-          'Optional. Juno works fully on-device; with your own API key it can also answer questions about your '
-          'money, read messy receipts and write a short monthly read.',
+      subtitle: 'The assistant, receipt reading and the monthly read. Juno works fully on-device without them.',
       actions: [
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
       ],
@@ -70,17 +83,44 @@ class _AiScreenState extends ConsumerState<AiScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               JCard(
-                accent: JAccent.warn,
-                title: 'Before you add a key',
-                child: Text(
-                  'Chat subscriptions such as ChatGPT Plus don’t include API access — the key needs API billing '
-                  'at ${_provider.keysAt} (a few dollars of credit lasts a long time here). Juno sends receipt '
-                  'text, a month’s totals, or — when you ask the assistant — the figures and matching entries it '
-                  'looked up. Never photos or your whole history. The key stays on this device.',
-                  style: JType.body.copyWith(fontSize: 13.5, color: c.ink),
+                accent: cloudReady ? JAccent.income : JAccent.warn,
+                title: cloudReady ? 'On — Juno cloud' : 'Sign in to turn it on',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cloudReady
+                          ? 'Works on every device you’re signed in to, with no key to enter. Juno sends receipt '
+                                'text, a month’s totals, or the figures the assistant looked up — never photos or '
+                                'your whole history.'
+                          : 'AI runs through your Juno account. Sign in under Cloud sync and it works here and on '
+                                'your other devices, with no key to enter.',
+                      style: JType.body.copyWith(fontSize: 13.5, color: c.ink),
+                    ),
+                    if (cloudReady && ai.usingCloud) ...[
+                      const SizedBox(height: JSpace.md),
+                      Text(
+                        '\$${spent.toStringAsFixed(2)} of \$${(ai.budgetCents / 100).toStringAsFixed(0)} this month · '
+                        '${ai.callsThisMonth} requests here · ${ai.model}',
+                        style: JType.chipLabel.copyWith(color: c.inkMuted),
+                      ),
+                    ],
+                    if (!cloudReady) ...[
+                      const SizedBox(height: JSpace.md),
+                      JButton(label: 'Cloud sync', dense: true, onPressed: () => context.go('/settings/sync')),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: JSpace.lg),
+              const JSectionLabel('Your own key (optional)'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: JSpace.lg),
+                child: Text(
+                  'Overrides Juno cloud on this device only. API keys need API billing at ${_provider.keysAt} — chat '
+                  'subscriptions such as ChatGPT Plus don’t include it. The key stays on this device.',
+                  style: JType.body.copyWith(fontSize: 13, color: c.inkMuted),
+                ),
+              ),
               JField(
                 label: 'Provider',
                 child: DropdownButtonFormField<AiProvider>(
@@ -137,20 +177,19 @@ class _AiScreenState extends ConsumerState<AiScreen> {
                 ),
               ),
               JField(
-                label: 'Monthly limit',
+                label: 'Monthly limit for your own key',
                 child: JSegmentBar<int>(
                   segments: _budgets,
                   selected: _budgets.containsKey(_budget) ? _budget : AiAssist.defaultBudgetCents,
                   onChanged: (v) => setState(() => _budget = v),
                 ),
               ),
-              Text(
-                ai.enabled
-                    ? '\$${spent.toStringAsFixed(2)} of \$${(ai.budgetCents / 100).toStringAsFixed(0)} used this '
-                          'month · ${ai.callsThisMonth} requests · ${ai.provider.label} ${ai.model}'
-                    : 'Off — no requests are made.',
-                style: JType.chipLabel.copyWith(color: c.inkMuted),
-              ),
+              if (ai.apiKey != null)
+                Text(
+                  '\$${spent.toStringAsFixed(2)} of \$${(ai.budgetCents / 100).toStringAsFixed(0)} used this '
+                  'month · ${ai.callsThisMonth} requests · ${ai.provider.label} ${ai.model}',
+                  style: JType.chipLabel.copyWith(color: c.inkMuted),
+                ),
               const SizedBox(height: JSpace.lg),
               JButton(label: 'Save', expand: true, onPressed: _save),
             ],
