@@ -20,6 +20,13 @@ class AppShell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
+  /// Whether keyboard focus is in a text field (so letters are text).
+  static bool _isTyping() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText || ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
   void _go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
 
   @override
@@ -30,7 +37,10 @@ class AppShell extends StatelessWidget {
 
     final body = CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyN): add,
+        const SingleActivator(LogicalKeyboardKey.keyN): () {
+          // A bare letter is a shortcut only when nobody is typing.
+          if (!_isTyping()) add();
+        },
         for (var i = 0; i < navItems.length; i++)
           SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), control: true): () => _go(i),
       },
