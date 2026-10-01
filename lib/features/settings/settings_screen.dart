@@ -142,31 +142,11 @@ class SettingsScreen extends ConsumerWidget {
                 JSettingRow(
                   icon: Icons.restart_alt_rounded,
                   title: 'Reset local data',
-                  subtitle: 'Wipes this device. Synced data stays in the cloud.',
+                  subtitle: sync.phase == SyncPhase.idle || sync.phase == SyncPhase.error
+                      ? 'Wipes this device, then pulls your data back from the cloud'
+                      : 'This device isn’t syncing — a reset deletes everything for good',
                   destructive: true,
-                  onTap: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Reset this device?'),
-                        content: const Text(
-                          'Every entry, budget and goal on this device will be deleted. '
-                          'This cannot be undone unless you sync.',
-                        ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: Text('Reset', style: TextStyle(color: c.expense)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (ok ?? false) {
-                      await ref.read(ledgerProvider).wipe();
-                      showToast('Local data cleared');
-                    }
-                  },
+                  onTap: () => _confirmReset(context, ref, c),
                 ),
               ],
             ),
@@ -283,5 +263,48 @@ class _SampleDataRowState extends ConsumerState<_SampleDataRow> {
       destructive: has,
       onTap: _busy ? null : () => _run(!has),
     );
+  }
+}
+
+/// Reset with guard rails: sync first, and never silently discard changes
+/// that haven't reached the cloud.
+Future<void> _confirmReset(BuildContext context, WidgetRef ref, JColors c) async {
+  final engine = ref.read(syncEngineProvider.notifier);
+  final signedIn =
+      ref.read(syncEngineProvider).phase == SyncPhase.idle || ref.read(syncEngineProvider).phase == SyncPhase.error;
+  if (signedIn) await engine.syncNow();
+  final pending = await ref.read(ledgerProvider).unsyncedCount();
+  if (!context.mounted) return;
+
+  final String message;
+  if (!signedIn) {
+    message =
+        'This device isn’t signed in to sync, so nothing is in the cloud. '
+        'Every entry, budget, goal and receipt here will be deleted permanently.';
+  } else if (pending > 0) {
+    message =
+        '$pending change${pending == 1 ? '' : 's'} on this device haven’t reached the cloud yet '
+        '(you may be offline). Resetting now deletes ${pending == 1 ? 'it' : 'them'} permanently.';
+  } else {
+    message = 'Everything on this device is safely in the cloud. Juno will wipe it and download it again.';
+  }
+  final risky = !signedIn || pending > 0;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(risky ? 'Delete data permanently?' : 'Reset this device?'),
+      content: Text(message),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(risky ? 'Delete permanently' : 'Reset', style: TextStyle(color: c.expense)),
+        ),
+      ],
+    ),
+  );
+  if (ok ?? false) {
+    await engine.resetLocal();
+    showToast(risky ? 'Local data deleted' : 'Device reset — data restored from the cloud');
   }
 }

@@ -122,8 +122,9 @@ void main() {
     await sync(b, remote);
     await sync(a, remote);
     for (final db in [a, b]) {
-      final t = await (db.select(db.transactions)..where((t) => t.id.equals(occurrenceId(ruleId, '2026-07-02'))))
-          .getSingle();
+      final t = await (db.select(
+        db.transactions,
+      )..where((t) => t.id.equals(occurrenceId(ruleId, '2026-07-02')))).getSingle();
       expect(t.deletedAt, isNotNull, reason: 'deleted occurrence came back');
     }
   });
@@ -155,7 +156,11 @@ void main() {
     await sync(a, remote);
     await sync(b, remote); // B's cursor is now at the newest stamp
     final row = (await a.customSelect("SELECT * FROM accounts WHERE name = 'Cash'").getSingle()).data;
-    remote.insertLate('accounts', {...row, 'name': 'Late cash', 'updated_at': DateTime.now().toUtc().toIso8601String(), 'user_id': 'user-1'}..remove('dirty'));
+    remote.insertLate(
+      'accounts',
+      {...row, 'name': 'Late cash', 'updated_at': DateTime.now().toUtc().toIso8601String(), 'user_id': 'user-1'}
+        ..remove('dirty'),
+    );
     await sync(b, remote);
     final cash = await (b.select(b.accounts)..where((x) => x.id.equals(row['id'] as String))).getSingle();
     expect(cash.name, 'Late cash');
@@ -185,7 +190,9 @@ void main() {
     final notes = (await Ledger(b).transactions(const TxQuery())).map((t) => t.note).toSet();
     expect(notes, {'ok-1', 'ok-2'});
     // The poisoned row stays dirty, to retry once fixed.
-    final dirty = await a.customSelect("SELECT COUNT(*) AS n FROM transactions WHERE dirty = 1 AND note = 'POISON'").getSingle();
+    final dirty = await a
+        .customSelect("SELECT COUNT(*) AS n FROM transactions WHERE dirty = 1 AND note = 'POISON'")
+        .getSingle();
     expect(dirty.read<int>('n'), 1);
   });
 }

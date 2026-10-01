@@ -74,7 +74,9 @@ class QuickAdd {
     String? day;
     if (dateRaw != null) {
       final d = DateTime.tryParse(dateRaw);
-      if (d != null) day = Day.of(d);
+      // A Shortcut may send an ISO timestamp in UTC; the entry's day is the
+      // local calendar day.
+      if (d != null) day = Day.of(d.isUtc ? d.toLocal() : d);
       if (dateRaw.toLowerCase() == 'yesterday') {
         day = Day.of(DateTime.now().subtract(const Duration(days: 1)));
       }

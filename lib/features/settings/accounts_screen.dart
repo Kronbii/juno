@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show Value, Variable;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
@@ -77,6 +77,28 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
   late bool _archived = widget.account?.archived ?? false;
   late String _currency = widget.account?.currency ?? baseCurrency;
 
+  /// An account's currency is fixed once it has entries: changing it would
+  /// re-read every past amount in the new currency (LBP 1,000 → $1,000).
+  bool _currencyLocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.account;
+    if (a != null) {
+      final db = ref.read(databaseProvider);
+      db
+          .customSelect(
+            'SELECT COUNT(*) AS n FROM transactions WHERE deleted_at IS NULL AND (account_id = ? OR to_account_id = ?)',
+            variables: [Variable.withString(a.id), Variable.withString(a.id)],
+          )
+          .getSingle()
+          .then((r) {
+            if (mounted && r.read<int>('n') > 0) setState(() => _currencyLocked = true);
+          });
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -117,10 +139,23 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
             runSpacing: JSpace.sm,
             children: [
               for (final code in ref.watch(ratesProvider).keys)
-                JChip(label: code, selected: code == _currency, onTap: () => setState(() => _currency = code)),
+                if (!_currencyLocked || code == _currency)
+                  JChip(
+                    label: code,
+                    selected: code == _currency,
+                    onTap: _currencyLocked ? () {} : () => setState(() => _currency = code),
+                  ),
             ],
           ),
         ),
+        if (_currencyLocked)
+          Padding(
+            padding: const EdgeInsets.only(bottom: JSpace.lg),
+            child: Text(
+              'Currency is fixed because this account has entries. Create a new account for another currency.',
+              style: JType.body.copyWith(fontSize: 12, color: context.jc.inkFaint),
+            ),
+          ),
         JField(
           label: 'Opening balance',
           child: MoneyField(controller: _opening, hint: '0.00 — negative for card debt', allowNegative: true),

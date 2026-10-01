@@ -75,6 +75,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(txQueryProvider(_query));
+    final totals = ref.watch(txTotalsProvider(_query.copyWith(limit: 0))).value ?? TxTotals.empty;
     final txs = async.value;
     final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
     final tags = ref.watch(tagsProvider).value ?? const <(String, int)>[];
@@ -199,8 +200,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             ),
           )
         else ...[
-          SliverToBoxAdapter(child: _Totals(txs: txs)),
-          SliverSlidableGroup(txs: txs),
+          SliverToBoxAdapter(
+            child: _Totals(totals: totals, shown: txs.length),
+          ),
+          SliverSlidableGroup(txs: txs, dayTotals: totals.expenseByDay),
           if (txs.length >= _limit)
             SliverToBoxAdapter(
               child: Center(
@@ -221,31 +224,30 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 }
 
+/// Counts and sums over every matching entry — not just the loaded page.
 class _Totals extends StatelessWidget {
-  const _Totals({required this.txs});
+  const _Totals({required this.totals, required this.shown});
 
-  final List<Transaction> txs;
+  final TxTotals totals;
+  final int shown;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    var inc = 0;
-    var exp = 0;
-    for (final t in txs) {
-      if (t.type == TxType.income) inc += t.usd;
-      if (t.type == TxType.expense) exp += t.usd;
-    }
     return Padding(
       padding: const EdgeInsets.only(bottom: JSpace.sm),
       child: Row(
         children: [
-          Text('${txs.length} ENTRIES', style: JType.microLabel.copyWith(color: c.inkFaint)),
+          Text(
+            shown < totals.count ? '${totals.count} ENTRIES · $shown SHOWN' : '${totals.count} ENTRIES',
+            style: JType.microLabel.copyWith(color: c.inkFaint),
+          ),
           const Spacer(),
           Text('IN ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-          Text(Money.whole(inc), style: JType.chipLabel.copyWith(color: c.income)),
+          Text(Money.whole(totals.income), style: JType.chipLabel.copyWith(color: c.income)),
           const SizedBox(width: JSpace.md),
           Text('OUT ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-          Text(Money.whole(exp), style: JType.chipLabel.copyWith(color: c.ink)),
+          Text(Money.whole(totals.expense), style: JType.chipLabel.copyWith(color: c.ink)),
         ],
       ),
     );
@@ -254,9 +256,13 @@ class _Totals extends StatelessWidget {
 
 /// Day-grouped list: a caps date header with the day's net, then rows.
 class SliverSlidableGroup extends StatelessWidget {
-  const SliverSlidableGroup({required this.txs, super.key});
+  const SliverSlidableGroup({required this.txs, this.dayTotals = const {}, super.key});
 
   final List<Transaction> txs;
+
+  /// Each day's full money-out, so a day cut by the page edge still shows
+  /// its real total.
+  final Map<String, int> dayTotals;
 
   @override
   Widget build(BuildContext context) {
@@ -268,22 +274,23 @@ class SliverSlidableGroup extends StatelessWidget {
     return SliverList.builder(
       itemCount: days.length,
       itemBuilder: (context, i) => SlidableAutoCloseBehavior(
-        child: _DayGroup(day: days[i], txs: groups[days[i]]!),
+        child: _DayGroup(day: days[i], txs: groups[days[i]]!, spentTotal: dayTotals[days[i]]),
       ),
     );
   }
 }
 
 class _DayGroup extends StatelessWidget {
-  const _DayGroup({required this.day, required this.txs});
+  const _DayGroup({required this.day, required this.txs, this.spentTotal});
 
   final String day;
   final List<Transaction> txs;
+  final int? spentTotal;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final spent = txs.where((t) => t.type == TxType.expense).fold(0, (s, t) => s + t.usd);
+    final spent = spentTotal ?? txs.where((t) => t.type == TxType.expense).fold<int>(0, (s, t) => s + t.usd);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -60,7 +60,7 @@ abstract final class Money {
     }
     if (s.startsWith(r'$') || s.startsWith('€') || s.startsWith('£')) s = s.substring(1).trim();
     if (!RegExp(r"^\d[\d.,'  ]*$|^[.,]\d+$").hasMatch(s)) return null;
-    s = s.replaceAll(RegExp(r"['  ]"), '');
+    s = s.replaceAll(RegExp("['  ]"), '');
 
     final lastDot = s.lastIndexOf('.');
     final lastComma = s.lastIndexOf(',');

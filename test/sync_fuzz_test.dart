@@ -15,7 +15,6 @@ import 'package:juno/core/sync/sync_engine.dart';
 
 import 'support/fake_remote.dart';
 
-
 /// Canonical content of every synced table (minus local-only columns).
 Future<Map<String, Map<String, Map<String, Object?>>>> dump(AppDatabase db) async {
   final out = <String, Map<String, Map<String, Object?>>>{};
@@ -26,7 +25,9 @@ Future<Map<String, Map<String, Map<String, Object?>>>> dump(AppDatabase db) asyn
         r.data['id'] as String: {
           for (final e in r.data.entries)
             if (e.key != 'dirty' && e.key != 'user_id')
-              e.key: e.value is String && (e.key.endsWith('_at')) ? DateTime.parse(e.value! as String).toUtc().microsecondsSinceEpoch : e.value,
+              e.key: e.value is String && (e.key.endsWith('_at'))
+                  ? DateTime.parse(e.value! as String).toUtc().microsecondsSinceEpoch
+                  : e.value,
         },
     };
   }

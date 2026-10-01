@@ -86,7 +86,10 @@ void main() {
   });
 
   test('dedupe hash depends on the account', () {
-    expect(dedupeHash('2026-09-01', -450, 'X', 1, account: 'a'), isNot(dedupeHash('2026-09-01', -450, 'X', 1, account: 'b')));
+    expect(
+      dedupeHash('2026-09-01', -450, 'X', 1, account: 'a'),
+      isNot(dedupeHash('2026-09-01', -450, 'X', 1, account: 'b')),
+    );
   });
 
   test('balances and net worth today exclude future-dated entries', () async {

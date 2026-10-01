@@ -8,6 +8,7 @@ import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart' show budgetName;
+import 'package:juno/features/plan/recurrence.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -88,7 +89,7 @@ class Reminders {
   Future<void> planBills(List<RecurringRule> rules, Map<String, Account> accounts, Map<String, Category> cats) async {
     await init();
     if (!supported) return;
-    final bills = rules.where((r) => r.active && r.type == TxType.expense && r.deletedAt == null).toList();
+    final bills = rules.where((r) => r.isLive && r.type == TxType.expense).toList();
 
     if (canSchedule) {
       for (var i = 0; i < 64; i++) {

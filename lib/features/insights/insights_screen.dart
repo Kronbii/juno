@@ -11,6 +11,7 @@ import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/home/home_screen.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/insights/charts.dart';
+import 'package:juno/features/plan/recurrence.dart';
 
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
@@ -29,6 +30,7 @@ class InsightsScreen extends ConsumerWidget {
     final trail = ref.watch(trailingTxProvider((month, 6))).value ?? const <Transaction>[];
     final cats = ref.watch(categoryMapProvider);
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final lens = ref.watch(scopeFilterProvider);
     final accts = ref.watch(accountMapProvider);
     final rates = ref.watch(ratesProvider);
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
@@ -46,6 +48,8 @@ class InsightsScreen extends ConsumerWidget {
       previous: comparable ? ps : PeriodSummary.of(const []),
       names: {for (final k in cats.values) k.id: k.name},
       prevLabel: pace.isCurrent ? 'this point in ${Day.month(prev)}' : Day.month(prev),
+      // Under a scope lens every entry is that scope; a share would be 100%.
+      scopeShare: lens == null,
     );
     final series = monthlySeries(trail, month, 6);
 
@@ -67,7 +71,7 @@ class InsightsScreen extends ConsumerWidget {
     ];
 
     final subsMonthly = rules
-        .where((r) => r.active && r.type == TxType.expense)
+        .where((r) => r.isLive && r.type == TxType.expense && (lens == null || r.scope == lens))
         .fold<double>(
           0,
           (sum, r) =>
@@ -222,7 +226,7 @@ class InsightsScreen extends ConsumerWidget {
       compact: true,
       caption: subsMonthly == 0
           ? 'Add subscriptions and bills in Plan → Recurring.'
-          : '${Money.whole(subsMonthly * 12)} a year across ${rules.where((r) => r.active && r.type == TxType.expense).length} rules',
+          : '${Money.whole(subsMonthly * 12)} a year across ${rules.where((r) => r.isLive && r.type == TxType.expense && (lens == null || r.scope == lens)).length} rules',
     );
 
     final worth = netWorthSeries(

@@ -207,4 +207,28 @@ void main() {
     expect(await hasDemo(db), isFalse);
     await db.close();
   });
+
+  test('demo never touches real accounts and can be reloaded after removal', () async {
+    final db = AppDatabase.memory(NativeDatabase.memory());
+    final ledger = Ledger(db);
+    await ledger.upsertAccount(
+      AccountsCompanion(
+        id: Value(seedId('acct:checking')),
+        name: const Value('BLOM'),
+        kind: const Value(AccountKind.checking),
+        openingBalanceCents: const Value(777700),
+      ),
+    );
+    await seedDemo(db, now: DateTime(2026, 10, 15));
+    await removeDemo(db);
+    await seedDemo(db, now: DateTime(2026, 10, 15)); // reload works
+    expect((await ledger.watchBudgets().first).length, 4);
+    expect((await ledger.watchGoals().first).length, 2);
+    await removeDemo(db);
+    final mine = await (db.select(db.accounts)..where((a) => a.id.equals(seedId('acct:checking')))).getSingle();
+    expect(mine.name, 'BLOM');
+    expect(mine.openingBalanceCents, 777700);
+    expect(await ledger.transactions(const TxQuery()), isEmpty);
+    await db.close();
+  });
 }

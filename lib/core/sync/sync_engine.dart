@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -373,6 +374,24 @@ class SyncEngine extends Notifier<SyncStatus> {
     } finally {
       _running = false;
     }
+  }
+
+  /// Wipes this device and restores it: defaults re-seeded, then (when
+  /// signed in) everything pulled back from the cloud. Waits for any sync in
+  /// flight so a pull can't write a cursor after the wipe.
+  Future<void> resetLocal() async {
+    while (_running) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    _running = true;
+    try {
+      final db = ref.read(databaseProvider);
+      await Ledger(db).wipe();
+      await seedDefaults(db);
+    } finally {
+      _running = false;
+    }
+    await syncNow();
   }
 
   Future<String?> signIn(String email, String password) async {

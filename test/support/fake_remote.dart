@@ -23,7 +23,9 @@ class FakeRemote implements SyncRemote {
   void insertLate(String table, Map<String, dynamic> row, {int microsBeforeNewest = 5}) {
     tables.putIfAbsent(table, () => {})[row['id'] as String] = {
       ...row,
-      'server_updated_at': DateTime.utc(2030).add(Duration(microseconds: _clock - microsBeforeNewest)).toIso8601String(),
+      'server_updated_at': DateTime.utc(
+        2030,
+      ).add(Duration(microseconds: _clock - microsBeforeNewest)).toIso8601String(),
     };
   }
 

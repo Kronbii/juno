@@ -5,6 +5,17 @@ import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
+class TxTotals {
+  const TxTotals({required this.count, required this.income, required this.expense, required this.expenseByDay});
+
+  static const empty = TxTotals(count: 0, income: 0, expense: 0, expenseByDay: {});
+
+  final int count;
+  final int income;
+  final int expense;
+  final Map<String, int> expenseByDay;
+}
+
 /// Filters for transaction queries. Null fields don't filter.
 @immutable
 class TxQuery {
@@ -124,30 +135,67 @@ class Ledger {
     return q.watch();
   }
 
-  SimpleSelectStatement<$TransactionsTable, Transaction> _txSelect(TxQuery f) {
-    final q = db.select(db.transactions)..where((t) => t.deletedAt.isNull());
-    if (f.from != null) q.where((t) => t.occurredOn.isBiggerOrEqualValue(f.from!));
-    if (f.to != null) q.where((t) => t.occurredOn.isSmallerOrEqualValue(f.to!));
-    if (f.scope != null) q.where((t) => t.scope.equalsValue(f.scope));
-    if (f.type != null) q.where((t) => t.type.equalsValue(f.type));
-    if (f.categoryIds != null && f.categoryIds!.isNotEmpty) {
-      q.where((t) => t.categoryId.isIn(f.categoryIds!));
-    }
-    if (f.accountId != null) {
-      q.where((t) => t.accountId.equals(f.accountId!) | t.toAccountId.equals(f.accountId!));
-    }
-    final s = f.search?.trim();
+  /// The filter half of a query, shared by row lists and aggregates so the
+  /// totals above a list always describe exactly the rows it can show.
+  Expression<bool> _filter($TransactionsTable t, TxQuery f) {
+    final parts = <Expression<bool>>[t.deletedAt.isNull()];
+    if (f.from != null) parts.add(t.occurredOn.isBiggerOrEqualValue(f.from!));
+    if (f.to != null) parts.add(t.occurredOn.isSmallerOrEqualValue(f.to!));
+    if (f.scope != null) parts.add(t.scope.equalsValue(f.scope));
+    if (f.type != null) parts.add(t.type.equalsValue(f.type));
+    if (f.categoryIds != null && f.categoryIds!.isNotEmpty) parts.add(t.categoryId.isIn(f.categoryIds!));
+    if (f.accountId != null) parts.add(t.accountId.equals(f.accountId!) | t.toAccountId.equals(f.accountId!));
+    final s = f.search?.trim().toLowerCase();
     if (s != null && s.isNotEmpty) {
-      final like = '%${s.replaceAll('%', r'\%')}%';
-      q.where((t) => t.note.like(like) | t.merchant.like(like));
+      // instr, not LIKE: "50%" or "a_b" must match literally.
+      Expression<bool> has(Expression<String> col) =>
+          FunctionCallExpression<int>('instr', [col.lower(), Variable(s)]).isBiggerThanValue(0);
+      parts.add(has(t.note) | has(t.merchant));
     }
-    if (f.tag != null && f.tag!.isNotEmpty) q.where((t) => t.tags.like('%,${f.tag},%'));
+    if (f.tag != null && f.tag!.isNotEmpty) parts.add(t.tags.like('%,${f.tag},%'));
+    return parts.reduce((a, b) => a & b);
+  }
+
+  SimpleSelectStatement<$TransactionsTable, Transaction> _txSelect(TxQuery f) {
+    final q = db.select(db.transactions)..where((t) => _filter(t, f));
     q.orderBy([
       (t) => OrderingTerm.desc(t.occurredOn),
       (t) => OrderingTerm.desc(t.createdAt),
     ]);
     if (f.limit != null) q.limit(f.limit!);
     return q;
+  }
+
+  /// Totals over *every* row matching [f] (its limit ignored): entry count,
+  /// USD in/out, and money out per day — for headers above a paged list.
+  Stream<TxTotals> watchTotals(TxQuery f) {
+    final t = db.transactions;
+    final usd = coalesce([t.baseCents, t.amountCents]);
+    final sum = usd.sum();
+    final n = t.id.count();
+    final q = db.selectOnly(t)
+      ..addColumns([t.occurredOn, t.type, sum, n])
+      ..where(_filter(t, f))
+      ..groupBy([t.occurredOn, t.type]);
+    return q.watch().map((rows) {
+      var count = 0;
+      var inc = 0;
+      var out = 0;
+      final perDay = <String, int>{};
+      for (final r in rows) {
+        final c = r.read(n) ?? 0;
+        final v = r.read(sum) ?? 0;
+        count += c;
+        final type = t.type.converter.fromSql(r.read(t.type));
+        if (type == TxType.income) inc += v;
+        if (type == TxType.expense) {
+          out += v;
+          final d = r.read(t.occurredOn)!;
+          perDay[d] = (perDay[d] ?? 0) + v;
+        }
+      }
+      return TxTotals(count: count, income: inc, expense: out, expenseByDay: perDay);
+    });
   }
 
   Stream<List<Transaction>> watchTransactions(TxQuery f) => _txSelect(f).watch();
@@ -586,6 +634,30 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
       );
     });
     _wrote();
+  }
+
+  /// Local changes not yet pushed, across every synced table.
+  Future<int> unsyncedCount() async {
+    var n = 0;
+    for (final t in const [
+      'accounts',
+      'categories',
+      'transactions',
+      'budgets',
+      'goals',
+      'goal_contributions',
+      'recurring_rules',
+      'import_batches',
+      'currency_rates',
+      'attachments',
+    ]) {
+      // Seeded defaults are dirty until first sync but hold nothing of yours.
+      final r = await db
+          .customSelect("SELECT COUNT(*) AS n FROM $t WHERE dirty = 1 AND created_at > '2000-01-02'")
+          .getSingle();
+      n += r.read<int>('n');
+    }
+    return n;
   }
 
   /// Wipes every local row (used by "Reset local data").

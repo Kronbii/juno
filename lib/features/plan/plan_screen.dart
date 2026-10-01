@@ -94,9 +94,9 @@ class _BudgetsTab extends ConsumerWidget {
     }
 
     final over = statuses.where((s) => s.over).length;
-    final limit = statuses.fold(0, (a, s) => a + s.budget.limitCents);
-    // Budget lines can overlap (a category and "all"), so the headline uses
-    // only the overall caps when there are any.
+    final near = statuses.where((s) => s.near).length;
+    // Budgets overlap (a category inside "all spending"), so the headline
+    // counts budgets by state rather than adding their limits.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -112,7 +112,7 @@ class _BudgetsTab extends ConsumerWidget {
               child: JMicroStat(value: '${pace.daysInMonth - now.day}', label: 'Days left'),
             ),
             Expanded(
-              child: JMicroStat(value: Money.whole(limit), label: 'Total caps'),
+              child: JMicroStat(value: '$near', label: 'Close', valueColor: near > 0 ? c.warn : null),
             ),
           ],
         ),

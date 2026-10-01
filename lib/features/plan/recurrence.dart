@@ -107,3 +107,10 @@ Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
   });
   return created;
 }
+
+extension RuleLive on RecurringRule {
+  /// Whether the rule will post again: active, not deleted, and its next
+  /// due date is not past its end. Ended or paused rules don't count toward
+  /// recurring costs, upcoming lists or reminders.
+  bool get isLive => active && deletedAt == null && (endDate == null || nextDue.compareTo(endDate!) <= 0);
+}

@@ -417,6 +417,19 @@ class _RecurringForm extends ConsumerStatefulWidget {
 }
 
 class _RecurringFormState extends ConsumerState<_RecurringForm> {
+  /// Resuming a paused rule must not back-fill the paused months: the next
+  /// date moves to the first occurrence on or after today.
+  String _resumeFrom(RecurringRule? r) {
+    final today = Day.today();
+    if (r == null || r.active || !_active || _start.compareTo(today) >= 0) return _start;
+    var d = Day.parse(_start);
+    final anchor = Day.parse(r.anchorDate);
+    for (var i = 0; i < 1000 && Day.of(d).compareTo(today) < 0; i++) {
+      d = nextOccurrence(anchor: anchor, from: d, frequency: _freq, interval: r.interval);
+    }
+    return Day.of(d);
+  }
+
   late TxType _type = widget.rule?.type ?? TxType.expense;
   late Scope _scope = widget.rule?.scope ?? Scope.personal;
   late String? _cat = widget.rule?.categoryId;
@@ -557,7 +570,7 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
                                 frequency: Value(_freq),
                                 // Changing the next date re-anchors the rule.
                                 anchorDate: Value(r == null || r.nextDue != _start ? _start : r.anchorDate),
-                                nextDue: Value(_start),
+                                nextDue: Value(_resumeFrom(r)),
                                 endDate: Value(_end),
                                 active: Value(_active),
                               ),

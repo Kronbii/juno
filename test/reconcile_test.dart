@@ -51,7 +51,11 @@ Future<World> buildWorld(int seed, {int entries = 400}) async {
   for (var i = 0; i < entries; i++) {
     final day = Day.of(today.subtract(Duration(days: rnd.nextInt(240))));
     final r = rnd.nextDouble();
-    final type = r < 0.75 ? TxType.expense : r < 0.9 ? TxType.income : TxType.transfer;
+    final type = r < 0.75
+        ? TxType.expense
+        : r < 0.9
+        ? TxType.income
+        : TxType.transfer;
     final acct = accounts[rnd.nextInt(accounts.length)];
     final lbp = acct.currency == 'LBP';
     final cents = lbp ? (rnd.nextInt(400) + 1) * 5000000 : rnd.nextInt(60000) + 1;
@@ -73,8 +77,9 @@ Future<World> buildWorld(int seed, {int entries = 400}) async {
               : rnd.nextDouble() < 0.05
               ? null // uncategorised
               : (type == TxType.income ? incomeCats : expenseCats)[rnd.nextInt(
-                  (type == TxType.income ? incomeCats : expenseCats).length,
-                )].id,
+                      (type == TxType.income ? incomeCats : expenseCats).length,
+                    )]
+                    .id,
         ),
         occurredOn: day,
         note: Value(['Spinneys', 'Taxi', 'Rent', '', 'Netflix'][rnd.nextInt(5)]),
@@ -105,7 +110,11 @@ Future<World> buildWorld(int seed, {int entries = 400}) async {
   await ledger.upsertBudget(BudgetsCompanion.insert(limitCents: 150000));
   await ledger.upsertBudget(BudgetsCompanion.insert(scope: const Value(Scope.household), limitCents: 90000));
   await ledger.upsertBudget(
-    BudgetsCompanion.insert(categoryId: Value(expenseCats.first.id), scope: const Value(Scope.personal), limitCents: 20000),
+    BudgetsCompanion.insert(
+      categoryId: Value(expenseCats.first.id),
+      scope: const Value(Scope.personal),
+      limitCents: 20000,
+    ),
   );
   return World(db, ledger, await db.select(db.accounts).get(), categories);
 }
@@ -147,7 +156,12 @@ void main() {
             expect(e.value, await sqlSum(w.db, "type = 'expense' AND $range AND $where"), reason: 'cat ${e.key}');
           }
           // Transfers never count.
-          expect(txs.where((t) => t.type == TxType.transfer).every((t) => !s.byCategory.containsKey(t.categoryId) || t.categoryId == null), isTrue);
+          expect(
+            txs
+                .where((t) => t.type == TxType.transfer)
+                .every((t) => !s.byCategory.containsKey(t.categoryId) || t.categoryId == null),
+            isTrue,
+          );
         }
         // Budgets against SQL.
         final monthTx = await w.ledger.transactions(TxQuery(from: from, to: to));

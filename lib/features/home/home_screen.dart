@@ -12,6 +12,7 @@ import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/add/entry_sheet.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
+import 'package:juno/features/plan/recurrence.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -333,7 +334,10 @@ class _UpcomingCard extends ConsumerWidget {
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
     final cats = ref.watch(categoryMapProvider);
     final horizon = Day.of(DateTime.now().add(const Duration(days: 7)));
-    final soon = rules.where((r) => r.active && r.nextDue.compareTo(horizon) <= 0).toList();
+    final lens = ref.watch(scopeFilterProvider);
+    final soon = rules
+        .where((r) => r.isLive && (lens == null || r.scope == lens) && r.nextDue.compareTo(horizon) <= 0)
+        .toList();
 
     return JCard(
       title: 'Next 7 days',
@@ -425,7 +429,13 @@ class _AccountsCard extends ConsumerWidget {
     final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
     final balances = ref.watch(balancesProvider).value ?? const <String, int>{};
     final rates = ref.watch(ratesProvider);
-    final total = accounts.fold(0, (s, a) => s + Fx.toUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates));
+    // Net worth counts archived accounts too — money doesn't stop existing
+    // when an account is hidden — matching the Insights net-worth chart.
+    final everyAccount = ref.watch(allAccountsProvider).value ?? accounts;
+    final total = everyAccount.fold(
+      0,
+      (s, a) => s + Fx.toUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates),
+    );
     return JCard(
       title: 'Accounts',
       onTap: () => context.go('/settings/accounts'),

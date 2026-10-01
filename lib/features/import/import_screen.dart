@@ -83,6 +83,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       existingHashes: await ledger.existingDedupeHashes(),
       memory: await ledger.merchantCategoryMemory(),
       categories: ref.read(categoriesProvider).value ?? const [],
+      accountId: _accountId ?? ref.read(accountsProvider).value?.firstOrNull?.id ?? '',
     );
     if (mounted) setState(() => _rows = rows);
   }
@@ -214,7 +215,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     children: [
                       JField(
                         label: 'Account',
-                        child: AccountPicker(value: _accountId, onChanged: (v) => setState(() => _accountId = v)),
+                        child: AccountPicker(
+                          value: _accountId,
+                          onChanged: (v) {
+                            setState(() => _accountId = v);
+                            _rebuild(); // duplicates are per account
+                          },
+                        ),
                       ),
                       JField(
                         label: 'Default scope',
@@ -353,6 +360,24 @@ class _MappingCard extends StatelessWidget {
               onChanged: (f) => onChanged(mapping.copyWith(dateFormat: f)),
             ),
           ),
+          if (mapping.dateFormat != null && DateFormats.isAmbiguous(dateSamples, mapping.dateFormat!))
+            Padding(
+              padding: const EdgeInsets.only(bottom: JSpace.lg),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 16, color: c.warn),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'These dates read both day-first and month-first. Juno chose ${mapping.dateFormat}; '
+                      'check a row below (e.g. ${dateSamples.firstOrNull ?? ''}) and switch if it’s wrong.',
+                      style: JType.body.copyWith(fontSize: 12.5, color: c.ink),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           column('Description', mapping.description, (v) => onChanged(mapping.copyWith(description: v))),
           column(
             'Category (optional)',

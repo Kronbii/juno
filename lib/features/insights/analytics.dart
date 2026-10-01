@@ -147,6 +147,7 @@ List<Insight> compareInsights({
   required String prevLabel,
   MonthPace? pace,
   int minDeltaCents = 2000,
+  bool scopeShare = true,
 }) {
   final out = <Insight>[];
 
@@ -205,7 +206,7 @@ List<Insight> compareInsights({
   }
 
   final h = current.byScope[Scope.household]!;
-  if (current.expense > 0 && h > 0) {
+  if (scopeShare && current.expense > 0 && h > 0) {
     out.add(
       Insight(
         'Household is ${_pct(h / current.expense)} of all spending.',

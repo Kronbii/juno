@@ -148,7 +148,8 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       }
       final dot = _amount.indexOf('.');
       if (dot >= 0 && _amount.length - dot > 2) return; // two decimals max
-      if (dot < 0 && _amount.replaceAll('.', '').length >= 8) return;
+      // 11 whole digits: room for LBP amounts in the hundreds of millions.
+      if (dot < 0 && _amount.replaceAll('.', '').length >= 11) return;
       _amount = _amount == '0' ? k : '$_amount$k';
     });
   }

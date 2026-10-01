@@ -91,7 +91,13 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
       accounts.firstOrNull;
   final scope = q.scope ?? cat?.defaultScope ?? Scope.personal;
 
-  if (!q.saveDirectly || account == null) {
+  // Asked for a currency no account holds (or a named account in another
+  // currency): never save LBP 150,000 into a USD account as $150,000.
+  final currencyMismatch = q.currency != null && account != null && account.currency != q.currency;
+  if (currencyMismatch) {
+    showToast('No ${q.currency} account matched — check the entry before saving');
+  }
+  if (!q.saveDirectly || account == null || currencyMismatch) {
     final ctx = rootNavigatorKey.currentContext;
     if (ctx == null || !ctx.mounted) return;
     await showEntrySheet(
