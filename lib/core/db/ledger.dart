@@ -378,6 +378,66 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     _wrote();
   }
 
+  /// Splits one entry into parts (category, scope, amount in the entry's own
+  /// currency) that must add up to the original. The first part keeps the
+  /// original row; all parts share a split group. USD values are divided in
+  /// proportion — at the rate the entry was logged with, not today's — and
+  /// the last part takes the rounding so the totals stay exact.
+  Future<List<String>> splitTransaction(String id, List<(String? categoryId, Scope scope, int cents)> parts) async {
+    final t = await (db.select(db.transactions)..where((x) => x.id.equals(id))).getSingle();
+    if (t.type == TxType.transfer) throw ArgumentError('Transfers cannot be split');
+    if (parts.length < 2) throw ArgumentError('A split needs at least two parts');
+    if (parts.any((p) => p.$3 <= 0)) throw ArgumentError('Every part needs an amount');
+    final sum = parts.fold(0, (a, p) => a + p.$3);
+    if (sum != t.amountCents) throw ArgumentError('Parts add up to $sum, not ${t.amountCents}');
+
+    final group = t.splitGroup ?? newId();
+    final base = t.baseCents;
+    var baseLeft = base ?? 0;
+    final ids = <String>[];
+    await db.transaction(() async {
+      for (var i = 0; i < parts.length; i++) {
+        final (cat, scope, cents) = parts[i];
+        final last = i == parts.length - 1;
+        final partBase = base == null ? null : (last ? baseLeft : (base * cents / t.amountCents).round());
+        if (partBase != null) baseLeft -= partBase;
+        final fields = TransactionsCompanion(
+          categoryId: Value(cat),
+          scope: Value(scope),
+          amountCents: Value(cents),
+          currency: Value(t.currency),
+          baseCents: Value(partBase),
+          splitGroup: Value(group),
+        );
+        if (i == 0) {
+          await _remember(t, 'edit');
+          await (db.update(db.transactions)..where((x) => x.id.equals(id))).write(
+            fields.copyWith(updatedAt: Value(_now), dirty: const Value(true)),
+          );
+          ids.add(id);
+        } else {
+          final nid = newId();
+          await db
+              .into(db.transactions)
+              .insert(
+                fields.copyWith(
+                  id: Value(nid),
+                  type: Value(t.type),
+                  accountId: Value(t.accountId),
+                  occurredOn: Value(t.occurredOn),
+                  note: Value(t.note),
+                  merchant: Value(t.merchant),
+                  tags: Value(t.tags),
+                ),
+              );
+          ids.add(nid);
+        }
+      }
+    });
+    _wrote();
+    return ids;
+  }
+
   Future<void> deleteTransaction(String id) => updateTransaction(id, TransactionsCompanion(deletedAt: Value(_now)));
 
   Future<void> restoreTransaction(String id) =>

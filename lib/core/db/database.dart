@@ -34,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +59,7 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('CREATE INDEX IF NOT EXISTS tx_recurring ON transactions (recurring_id)');
       }
       if (from < 4) await m.createTable(entryHistory);
+      if (from < 5) await m.addColumn(transactions, transactions.splitGroup);
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

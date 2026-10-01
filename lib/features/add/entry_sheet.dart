@@ -15,6 +15,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_extras.dart';
+import 'package:juno/features/add/split_sheet.dart';
 import 'package:juno/features/smart/entry_parser.dart';
 
 /// Values to start a new entry with (from a deep link, a duplicate, …).
@@ -456,6 +457,15 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                       Row(
                         children: [
                           Expanded(child: JEyebrow(_editing ? 'Edit entry' : 'New entry')),
+                          if (_editing && widget.edit!.type != TxType.transfer) ...[
+                            JIconButton(
+                              icon: Icons.call_split_rounded,
+                              tooltip: 'Split',
+                              size: 38,
+                              onPressed: () => showSplitSheet(context, widget.edit!),
+                            ),
+                            const SizedBox(width: JSpace.sm),
+                          ],
                           if (_editing) ...[
                             JIconButton(
                               icon: Icons.history_rounded,

@@ -40,6 +40,7 @@ class TxRow extends ConsumerWidget {
       if (!isTransfer && (tx.note.isNotEmpty || tx.merchant.isNotEmpty)) cat?.name ?? 'Uncategorised',
       if (!isTransfer) account?.name,
       for (final t in tx.tagList) '#$t',
+      if (tx.splitGroup != null) 'split',
     ].whereType<String>().join(' · ');
 
     final iconColor = isTransfer

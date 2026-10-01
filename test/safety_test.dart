@@ -7,6 +7,7 @@ import 'package:juno/core/db/backups.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
 TransactionsCompanion entry(String note, int cents) => TransactionsCompanion.insert(
@@ -76,6 +77,40 @@ void main() {
     expect(t.amountCents, 450);
     expect(t.note, 'coffee');
     expect(t.deletedAt, isNull);
+    await db.close();
+  });
+
+  test('split keeps totals exact, in USD too, at the original rate', () async {
+    final db = AppDatabase.memory(NativeDatabase.memory());
+    final l = Ledger(db);
+    final lbp = await l.upsertAccount(
+      AccountsCompanion.insert(name: 'LBP', kind: AccountKind.cash, currency: const Value('LBP')),
+    );
+    final id = await l.addTransaction(
+      TransactionsCompanion.insert(
+        type: TxType.expense,
+        scope: Scope.household,
+        amountCents: 100000000, // LBP 1,000,000 at 89,500 → $11.17
+        accountId: lbp,
+        occurredOn: Day.today(),
+        note: const Value('Spinneys'),
+      ),
+    );
+    final before = (await l.transactions(const TxQuery())).single.usd;
+    await l.setRate('LBP', 100000); // later rate change must not leak in
+    final ids = await l.splitTransaction(id, [
+      (seedId('cat:Groceries'), Scope.household, 70000000),
+      (seedId('cat:Shopping'), Scope.personal, 20000000),
+      (seedId('cat:Coffee'), Scope.personal, 10000000),
+    ]);
+    final rows = await l.transactions(const TxQuery());
+    expect(rows, hasLength(3));
+    expect(rows.fold(0, (a, t) => a + t.amountCents), 100000000);
+    expect(rows.fold(0, (a, t) => a + t.usd), before);
+    expect(rows.map((t) => t.splitGroup).toSet(), hasLength(1));
+    expect(ids.first, id);
+    expect(rows.every((t) => t.note == 'Spinneys' && t.currency == 'LBP'), isTrue);
+    expect(() => l.splitTransaction(id, [(null, Scope.personal, 1)]), throwsArgumentError);
     await db.close();
   });
 }

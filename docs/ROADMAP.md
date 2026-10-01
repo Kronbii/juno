@@ -32,7 +32,7 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] **Subscription detection:** the same merchant charging the same amount on a monthly rhythm triggers a "Make this recurring?" suggestion.
 - [x] **Unusual-spending alerts**, measured against your own baseline per category.
 - [x] **Budget suggestions** from your 3-month averages.
-- [ ] **Split entries:** one receipt across several categories or scopes.
+- [x] **Split entries:** one receipt across several categories or scopes.
 
 ## Milestone 4: UI
 - [x] First-launch onboarding: accounts, opening balances, LBP rate, first budget, sync.

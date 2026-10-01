@@ -100,6 +100,9 @@ class Transactions extends Table with SyncColumns {
   /// Tags as `,trip,gift,` — delimited at both ends so a LIKE '%,tag,%'
   /// match never hits a prefix of another tag.
   TextColumn get tags => text().withDefault(const Constant(''))();
+
+  /// Entries split from one payment share this id (null = not split).
+  TextColumn get splitGroup => text().nullable()();
 }
 
 /// A monthly limit. Null [categoryId] means an overall cap for the scope;

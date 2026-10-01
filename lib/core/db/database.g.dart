@@ -1686,6 +1686,17 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _splitGroupMeta = const VerificationMeta(
+    'splitGroup',
+  );
+  @override
+  late final GeneratedColumn<String> splitGroup = GeneratedColumn<String>(
+    'split_group',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1710,6 +1721,7 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
     baseCents,
     toAmountCents,
     tags,
+    splitGroup,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1861,6 +1873,12 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
         tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
       );
     }
+    if (data.containsKey('split_group')) {
+      context.handle(
+        _splitGroupMeta,
+        splitGroup.isAcceptableOrUnknown(data['split_group']!, _splitGroupMeta),
+      );
+    }
     return context;
   }
 
@@ -1962,6 +1980,10 @@ class $TransactionsTable extends Transactions with TableInfo<$TransactionsTable,
         DriftSqlType.string,
         data['${effectivePrefix}tags'],
       )!,
+      splitGroup: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}split_group'],
+      ),
     );
   }
 
@@ -2019,6 +2041,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   /// Tags as `,trip,gift,` — delimited at both ends so a LIKE '%,tag,%'
   /// match never hits a prefix of another tag.
   final String tags;
+
+  /// Entries split from one payment share this id (null = not split).
+  final String? splitGroup;
   const Transaction({
     required this.id,
     this.userId,
@@ -2042,6 +2067,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.baseCents,
     this.toAmountCents,
     required this.tags,
+    this.splitGroup,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2094,6 +2120,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       map['to_amount_cents'] = Variable<int>(toAmountCents);
     }
     map['tags'] = Variable<String>(tags);
+    if (!nullToAbsent || splitGroup != null) {
+      map['split_group'] = Variable<String>(splitGroup);
+    }
     return map;
   }
 
@@ -2121,6 +2150,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       baseCents: baseCents == null && nullToAbsent ? const Value.absent() : Value(baseCents),
       toAmountCents: toAmountCents == null && nullToAbsent ? const Value.absent() : Value(toAmountCents),
       tags: Value(tags),
+      splitGroup: splitGroup == null && nullToAbsent ? const Value.absent() : Value(splitGroup),
     );
   }
 
@@ -2156,6 +2186,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       baseCents: serializer.fromJson<int?>(json['baseCents']),
       toAmountCents: serializer.fromJson<int?>(json['toAmountCents']),
       tags: serializer.fromJson<String>(json['tags']),
+      splitGroup: serializer.fromJson<String?>(json['splitGroup']),
     );
   }
   @override
@@ -2188,6 +2219,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'baseCents': serializer.toJson<int?>(baseCents),
       'toAmountCents': serializer.toJson<int?>(toAmountCents),
       'tags': serializer.toJson<String>(tags),
+      'splitGroup': serializer.toJson<String?>(splitGroup),
     };
   }
 
@@ -2214,6 +2246,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<int?> baseCents = const Value.absent(),
     Value<int?> toAmountCents = const Value.absent(),
     String? tags,
+    Value<String?> splitGroup = const Value.absent(),
   }) => Transaction(
     id: id ?? this.id,
     userId: userId.present ? userId.value : this.userId,
@@ -2237,6 +2270,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     baseCents: baseCents.present ? baseCents.value : this.baseCents,
     toAmountCents: toAmountCents.present ? toAmountCents.value : this.toAmountCents,
     tags: tags ?? this.tags,
+    splitGroup: splitGroup.present ? splitGroup.value : this.splitGroup,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -2262,6 +2296,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       baseCents: data.baseCents.present ? data.baseCents.value : this.baseCents,
       toAmountCents: data.toAmountCents.present ? data.toAmountCents.value : this.toAmountCents,
       tags: data.tags.present ? data.tags.value : this.tags,
+      splitGroup: data.splitGroup.present ? data.splitGroup.value : this.splitGroup,
     );
   }
 
@@ -2289,7 +2324,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('currency: $currency, ')
           ..write('baseCents: $baseCents, ')
           ..write('toAmountCents: $toAmountCents, ')
-          ..write('tags: $tags')
+          ..write('tags: $tags, ')
+          ..write('splitGroup: $splitGroup')
           ..write(')'))
         .toString();
   }
@@ -2318,6 +2354,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     baseCents,
     toAmountCents,
     tags,
+    splitGroup,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -2344,7 +2381,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.currency == this.currency &&
           other.baseCents == this.baseCents &&
           other.toAmountCents == this.toAmountCents &&
-          other.tags == this.tags);
+          other.tags == this.tags &&
+          other.splitGroup == this.splitGroup);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -2370,6 +2408,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<int?> baseCents;
   final Value<int?> toAmountCents;
   final Value<String> tags;
+  final Value<String?> splitGroup;
   final Value<int> rowid;
   const TransactionsCompanion({
     this.id = const Value.absent(),
@@ -2394,6 +2433,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.baseCents = const Value.absent(),
     this.toAmountCents = const Value.absent(),
     this.tags = const Value.absent(),
+    this.splitGroup = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   TransactionsCompanion.insert({
@@ -2419,6 +2459,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.baseCents = const Value.absent(),
     this.toAmountCents = const Value.absent(),
     this.tags = const Value.absent(),
+    this.splitGroup = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : type = Value(type),
        scope = Value(scope),
@@ -2448,6 +2489,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<int>? baseCents,
     Expression<int>? toAmountCents,
     Expression<String>? tags,
+    Expression<String>? splitGroup,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2473,6 +2515,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (baseCents != null) 'base_cents': baseCents,
       if (toAmountCents != null) 'to_amount_cents': toAmountCents,
       if (tags != null) 'tags': tags,
+      if (splitGroup != null) 'split_group': splitGroup,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2500,6 +2543,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<int?>? baseCents,
     Value<int?>? toAmountCents,
     Value<String>? tags,
+    Value<String?>? splitGroup,
     Value<int>? rowid,
   }) {
     return TransactionsCompanion(
@@ -2525,6 +2569,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       baseCents: baseCents ?? this.baseCents,
       toAmountCents: toAmountCents ?? this.toAmountCents,
       tags: tags ?? this.tags,
+      splitGroup: splitGroup ?? this.splitGroup,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2602,6 +2647,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (tags.present) {
       map['tags'] = Variable<String>(tags.value);
     }
+    if (splitGroup.present) {
+      map['split_group'] = Variable<String>(splitGroup.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2633,6 +2681,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('baseCents: $baseCents, ')
           ..write('toAmountCents: $toAmountCents, ')
           ..write('tags: $tags, ')
+          ..write('splitGroup: $splitGroup, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8348,6 +8397,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<int?> baseCents,
       Value<int?> toAmountCents,
       Value<String> tags,
+      Value<String?> splitGroup,
       Value<int> rowid,
     });
 typedef $$TransactionsTableUpdateCompanionBuilder =
@@ -8374,6 +8424,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<int?> baseCents,
       Value<int?> toAmountCents,
       Value<String> tags,
+      Value<String?> splitGroup,
       Value<int> rowid,
     });
 
@@ -8492,6 +8543,11 @@ class $$TransactionsTableFilterComposer extends Composer<_$AppDatabase, $Transac
 
   ColumnFilters<String> get tags => $composableBuilder(
     column: $table.tags,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get splitGroup => $composableBuilder(
+    column: $table.splitGroup,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -8613,6 +8669,11 @@ class $$TransactionsTableOrderingComposer extends Composer<_$AppDatabase, $Trans
     column: $table.tags,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get splitGroup => $composableBuilder(
+    column: $table.splitGroup,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TransactionsTableAnnotationComposer extends Composer<_$AppDatabase, $TransactionsTable> {
@@ -8692,6 +8753,11 @@ class $$TransactionsTableAnnotationComposer extends Composer<_$AppDatabase, $Tra
   );
 
   GeneratedColumn<String> get tags => $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<String> get splitGroup => $composableBuilder(
+    column: $table.splitGroup,
+    builder: (column) => column,
+  );
 }
 
 class $$TransactionsTableTableManager
@@ -8744,6 +8810,7 @@ class $$TransactionsTableTableManager
                 Value<int?> baseCents = const Value.absent(),
                 Value<int?> toAmountCents = const Value.absent(),
                 Value<String> tags = const Value.absent(),
+                Value<String?> splitGroup = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
@@ -8768,6 +8835,7 @@ class $$TransactionsTableTableManager
                 baseCents: baseCents,
                 toAmountCents: toAmountCents,
                 tags: tags,
+                splitGroup: splitGroup,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -8794,6 +8862,7 @@ class $$TransactionsTableTableManager
                 Value<int?> baseCents = const Value.absent(),
                 Value<int?> toAmountCents = const Value.absent(),
                 Value<String> tags = const Value.absent(),
+                Value<String?> splitGroup = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
@@ -8818,6 +8887,7 @@ class $$TransactionsTableTableManager
                 baseCents: baseCents,
                 toAmountCents: toAmountCents,
                 tags: tags,
+                splitGroup: splitGroup,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
