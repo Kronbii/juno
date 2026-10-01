@@ -575,12 +575,19 @@ class SpendCalendar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GridView.count(
-          crossAxisCount: 7,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.15,
-          children: cells,
+        LayoutBuilder(
+          builder: (context, box) {
+            // Square-ish on phones, but never taller than 52px a row on wide
+            // screens — a desktop calendar shouldn't fill the page.
+            final cellW = box.maxWidth / 7;
+            return GridView.count(
+              crossAxisCount: 7,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: cellW / 52 > 1.15 ? cellW / 52 : 1.15,
+              children: cells,
+            );
+          },
         ),
         const SizedBox(height: JSpace.md),
         Row(

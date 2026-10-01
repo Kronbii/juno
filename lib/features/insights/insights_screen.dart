@@ -154,7 +154,7 @@ class InsightsScreen extends ConsumerWidget {
         : const <BudgetSuggestion>[];
     final suggestions = (subsFound.isEmpty && budgetIdeas.isEmpty)
         ? null
-        : SuggestionsCard(subscriptions: subsFound.take(3).toList(), budgets: budgetIdeas.take(3).toList());
+        : SuggestionsCard(subscriptions: subsFound.take(2).toList(), budgets: budgetIdeas.take(2).toList());
 
     final feed = JCard(
       title: 'What changed',
@@ -342,52 +342,34 @@ class InsightsScreen extends ConsumerWidget {
       slivers: [
         SliverToBoxAdapter(
           child: wide
-              ? Column(
+              // Two independent columns: each stacks its own cards, so a tall
+              // card (Suggestions) never leaves a hole beside a short one.
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 3, child: breakdown),
-                        const SizedBox(width: JSpace.gap),
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            children: [
-                              feed,
-                              gap(),
-                              if (suggestions != null) ...[suggestions, gap()],
-                              subs,
-                            ],
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        children: [breakdown, gap(), calendar, gap(), trend, gap(), netWorth, gap(), lists],
+                      ),
                     ),
-                    gap(),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: trend),
-                        const SizedBox(width: JSpace.gap),
-                        Expanded(child: scopeTrend),
-                      ],
-                    ),
-                    gap(),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 3, child: netWorth),
-                        const SizedBox(width: JSpace.gap),
-                        Expanded(flex: 2, child: Column(children: [calendar, gap(), tagsCard])),
-                      ],
-                    ),
-                    gap(),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: lists),
-                        const SizedBox(width: JSpace.gap),
-                        Expanded(child: big),
-                      ],
+                    const SizedBox(width: JSpace.gap),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        children: [
+                          feed,
+                          if (suggestions != null) ...[gap(), suggestions],
+                          gap(),
+                          subs,
+                          gap(),
+                          scopeTrend,
+                          gap(),
+                          tagsCard,
+                          gap(),
+                          big,
+                        ],
+                      ),
                     ),
                   ],
                 )
