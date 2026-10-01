@@ -69,12 +69,13 @@ Future<Harness> boot(
   WidgetTester tester, {
   Size size = const Size(393, 852),
   bool demo = true,
+  bool onboarded = true,
   Future<void> Function(AppDatabase db)? setup,
 }) async {
   tester.view.physicalSize = size * 2;
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({'onboarded': onboarded});
   final prefs = await SharedPreferences.getInstance();
   final db = AppDatabase.memory(NativeDatabase.memory());
   await tester.runAsync(() async {
@@ -92,7 +93,7 @@ Future<Harness> boot(
     ),
   );
   final h = Harness(tester, db);
-  await h.go('/home');
+  if (onboarded) await h.go('/home');
   return h;
 }
 
@@ -261,6 +262,28 @@ void main() {
     expect(t.amountCents, 1200);
     expect(t.categoryId, seedId('cat:Coffee'));
     expect(t.note, 'Kalei');
+    await h.dispose();
+  });
+
+  testWidgets('first launch: onboarding sets balances, LBP account and rate', (tester) async {
+    final h = await boot(tester, demo: false, onboarded: false);
+    await h.settle();
+    expect(find.textContaining('clearly'), findsOneWidget);
+    await tester.tap(find.text('Next'));
+    await h.settle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), '1250'); // Checking
+    await tester.enterText(find.widgetWithText(TextField, 'LBP ').first, '2000000');
+    await h.settle(1);
+    await tester.tap(find.text('Next'));
+    await h.settle();
+    await tester.tap(find.text('Start'));
+    await h.settle();
+    expect(tester.takeException(), isNull);
+    final accounts = (await tester.runAsync(() => h.db.select(h.db.accounts).get()))!;
+    expect(accounts.firstWhere((a) => a.id == seedId('acct:checking')).openingBalanceCents, 125000);
+    final lbp = accounts.firstWhere((a) => a.currency == 'LBP');
+    expect(lbp.openingBalanceCents, 200000000);
     await h.dispose();
   });
 }

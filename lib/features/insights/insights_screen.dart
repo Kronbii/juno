@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:go_router/go_router.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
@@ -108,7 +110,12 @@ class InsightsScreen extends ConsumerWidget {
               builder: (context, box) {
                 final side = box.maxWidth > 520;
                 final donut = Donut(slices: slices, centerLabel: 'Spent');
-                final list = RankedBars(slices: slices);
+                final list = RankedBars(
+                  slices: slices,
+                  onTap: (sl) {
+                    if (sl.id != null) context.push('/insights/category/${sl.id}');
+                  },
+                );
                 return side
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,6 +194,19 @@ class InsightsScreen extends ConsumerWidget {
                   ),
               ],
             ),
+    );
+
+    final byDay = <String, int>{};
+    for (final t in txs.where((t) => t.type == TxType.expense)) {
+      byDay[t.occurredOn] = (byDay[t.occurredOn] ?? 0) + t.usd;
+    }
+    final calendar = JCard(
+      title: 'Day by day',
+      child: SpendCalendar(
+        month: month,
+        byDay: byDay,
+        onDay: (day) => showDaySheet(context, day),
+      ),
     );
 
     final trend = JCard(
@@ -346,7 +366,7 @@ class InsightsScreen extends ConsumerWidget {
                       children: [
                         Expanded(flex: 3, child: netWorth),
                         const SizedBox(width: JSpace.gap),
-                        Expanded(flex: 2, child: tagsCard),
+                        Expanded(flex: 2, child: Column(children: [calendar, gap(), tagsCard])),
                       ],
                     ),
                     gap(),
@@ -364,6 +384,8 @@ class InsightsScreen extends ConsumerWidget {
                   children: [
                     feed,
                     if (suggestions != null) ...[gap(), suggestions],
+                    gap(),
+                    calendar,
                     gap(),
                     breakdown,
                     gap(),
@@ -429,3 +451,21 @@ class _MonthPicker extends ConsumerWidget {
     );
   }
 }
+
+/// A day's entries in a sheet (from the calendar).
+Future<void> showDaySheet(BuildContext context, String day) => showJSheet<void>(
+  context,
+  title: '*${Day.relative(day)}*',
+  child: Consumer(
+    builder: (context, ref, _) {
+      final txs = ref.watch(txQueryProvider(TxQuery(from: day, to: day, scope: ref.watch(scopeFilterProvider)))).value;
+      if (txs == null) return const SizedBox(height: 80);
+      if (txs.isEmpty) {
+        return Text('Nothing logged.', style: JType.body.copyWith(color: context.jc.inkMuted));
+      }
+      return SlidableAutoCloseBehavior(
+        child: Column(children: [for (final t in txs) TxRow(tx: t)]),
+      );
+    },
+  ),
+);

@@ -16,16 +16,17 @@ The audit fixes are also in:
 - [ ] Add golden screenshot tests so a visual regression fails CI.
 
 ## Milestone 2: iPhone integrations
-- [ ] **Headless logging:** a native App Intent, "Log expense", that never opens the app. Shortcut, Back Tap, Siri and the Action Button all use it. The entry goes into a shared App Group queue, which Juno imports on its next launch or sync.
-- [ ] **Siri phrases:** "Log 12 dollars groceries in Juno".
-- [ ] **Interactive widget:** iOS 17 buttons for preset amounts and the top categories.
-- [ ] **Lock Screen widgets:** accessory circular and rectangular sizes showing spent this month and budget left.
-- [ ] **Control Center control** (iOS 18): one tap to log an expense.
-- [ ] **Receipt scanning:** on-device text recognition prefills the total, the date and the merchant.
+The Dart side is built and tested. The native Swift needs one Xcode session on the Mac (docs/ios-setup.md).
+- [x] **Headless logging:** a native App Intent, "Log expense", that never opens the app. Shortcut, Back Tap, Siri and the Action Button all use it. The entry goes into a shared App Group queue, which Juno imports on its next launch or sync.
+- [x] **Siri phrases:** "Log 12 dollars groceries in Juno".
+- [x] **Interactive widget:** iOS 17 buttons for preset amounts and the top categories.
+- [x] **Lock Screen widgets:** accessory circular and rectangular sizes showing spent this month and budget left.
+- [x] **Control Center control** (iOS 18): one tap to log an expense.
+- [x] **Receipt scanning:** on-device text recognition prefills the total, the date and the merchant.
 
 ## Milestone 3: smarter, on-device first
 - [x] **Quick-entry text:** "12 coffee kalei", "40k taxi yesterday" and "LBP 150000 generator" fill in the amount, currency, category, date and note.
-- [ ] **Category suggestions** as you type, learned from your history.
+- [x] **Category suggestions** as you type, learned from your history.
 - [x] **Safe to spend today:** the month's income, minus recurring bills still due, minus what you've spent, divided by the days left.
 - [x] **Month-end forecast**, including the recurring bills still to come.
 - [x] **Subscription detection:** the same merchant charging the same amount on a monthly rhythm triggers a "Make this recurring?" suggestion.
@@ -34,10 +35,10 @@ The audit fixes are also in:
 - [ ] **Split entries:** one receipt across several categories or scopes.
 
 ## Milestone 4: UI
-- [ ] First-launch onboarding: accounts, opening balances, LBP rate, first budget, sync.
+- [x] First-launch onboarding: accounts, opening balances, LBP rate, first budget, sync.
 - [ ] A transaction detail screen, with history, receipts and splits.
-- [ ] Category drill-down: trend, entries and the budget.
-- [ ] A calendar heatmap of spending.
+- [x] Category drill-down: trend, entries and the budget.
+- [x] A calendar heatmap of spending.
 - [ ] Monthly and yearly reports.
 - [ ] A design-critique pass over every screen, plus accessibility (dynamic type, VoiceOver labels, contrast).
 

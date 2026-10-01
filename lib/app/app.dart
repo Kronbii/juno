@@ -10,6 +10,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/onboarding/onboarding_screen.dart';
 import 'package:juno/features/plan/recurrence.dart';
 
 class JunoApp extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _onForeground();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboard());
   }
 
   @override
@@ -36,6 +38,21 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) _onForeground();
+  }
+
+  /// First launch on a fresh device: a short welcome. Skipped when there is
+  /// already data (a reinstall that synced, or the sample data).
+  Future<void> _maybeOnboard() async {
+    final prefs = ref.read(prefsProvider);
+    if (prefs.getBool(OnboardingScreen.doneKey) ?? false) return;
+    final any = await ref.read(databaseProvider).customSelect('SELECT COUNT(*) AS n FROM transactions').getSingle();
+    if (any.read<int>('n') > 0) {
+      await prefs.setBool(OnboardingScreen.doneKey, true);
+      return;
+    }
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return;
+    await nav.push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => const OnboardingScreen()));
   }
 
   /// Launch and resume: post due recurring entries, then sync.

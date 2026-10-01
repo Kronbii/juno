@@ -4,6 +4,7 @@ import 'package:juno/app/shell.dart';
 import 'package:juno/features/activity/activity_screen.dart';
 import 'package:juno/features/home/home_screen.dart';
 import 'package:juno/features/import/import_screen.dart';
+import 'package:juno/features/insights/category_screen.dart';
 import 'package:juno/features/insights/insights_screen.dart';
 import 'package:juno/features/plan/goal_screen.dart';
 import 'package:juno/features/plan/plan_screen.dart';
@@ -34,7 +35,19 @@ final router = GoRouter(
           routes: [GoRoute(path: '/activity', builder: (_, _) => const ActivityScreen())],
         ),
         StatefulShellBranch(
-          routes: [GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen())],
+          routes: [
+            GoRoute(
+              path: '/insights',
+              builder: (_, _) => const InsightsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'category/:id',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (_, s) => CategoryScreen(categoryId: s.pathParameters['id']!),
+                ),
+              ],
+            ),
+          ],
         ),
         StatefulShellBranch(
           routes: [

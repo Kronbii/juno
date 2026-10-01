@@ -15,7 +15,7 @@ void main() {
     tester.view.physicalSize = const Size(1440, 920);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'onboarded': true});
     final prefs = await SharedPreferences.getInstance();
     final db = AppDatabase.memory(NativeDatabase.memory());
     await tester.pumpWidget(

@@ -499,3 +499,106 @@ class NetWorthLine extends StatelessWidget {
     );
   }
 }
+
+/// A month as a calendar, each day shaded by money out. One hue, light →
+/// dark (the sequential ramp), five steps by quantile so a single big day
+/// doesn't wash the rest out. Values are printed on tap; days are labelled.
+class SpendCalendar extends StatelessWidget {
+  const SpendCalendar({required this.month, required this.byDay, this.onDay, super.key});
+
+  final DateTime month;
+
+  /// 'YYYY-MM-DD' → USD cents spent.
+  final Map<String, int> byDay;
+  final ValueChanged<String>? onDay;
+
+  static const _light = [Color(0xFFCDE2FB), Color(0xFF9EC5F4), Color(0xFF6DA7EC), Color(0xFF3987E5), Color(0xFF256ABF)];
+  static const _dark = [Color(0xFF104281), Color(0xFF1C5CAB), Color(0xFF2A78D6), Color(0xFF5598E7), Color(0xFF9EC5F4)];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    final ramp = c.isDark ? _dark : _light;
+    final days = Day.daysInMonth(month);
+    final values = [
+      for (final v in byDay.values)
+        if (v > 0) v,
+    ]..sort();
+    int step(int v) {
+      if (v <= 0 || values.isEmpty) return -1;
+      // Quantile bucket 0..4.
+      final rank = values.indexWhere((x) => x >= v);
+      return ((rank / values.length) * 5).floor().clamp(0, 4);
+    }
+
+    final leading = DateTime(month.year, month.month).weekday - 1; // Monday first
+    final today = Day.today();
+    final cells = <Widget>[
+      for (final d in const ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
+        Center(
+          child: Text(d, style: JType.microLabel.copyWith(color: c.inkFaint)),
+        ),
+      for (var i = 0; i < leading; i++) const SizedBox.shrink(),
+      for (var d = 1; d <= days; d++)
+        () {
+          final key = Day.of(DateTime(month.year, month.month, d));
+          final v = byDay[key] ?? 0;
+          final s = step(v);
+          final fill = s < 0 ? null : ramp[s];
+          // Ink on the fill: dark steps get light text and vice versa.
+          final onFill = s < 0
+              ? c.inkMuted
+              : (c.isDark ? (s >= 3 ? c.onAccent : c.ink) : (s >= 3 ? Colors.white : c.ink));
+          return Tooltip(
+            message: v == 0 ? '${Day.short(key)} · nothing spent' : '${Day.short(key)} · ${Money.format(v)}',
+            child: Semantics(
+              button: onDay != null,
+              label: '${Day.short(key)}, ${v == 0 ? 'nothing spent' : Money.format(v)}',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: onDay == null ? null : () => onDay!(key),
+                child: Container(
+                  margin: const EdgeInsets.all(1.5),
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: key == today ? c.ink : (fill == null ? c.hairline : Colors.transparent)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('$d', style: JType.chipLabel.copyWith(fontSize: 11, color: onFill)),
+                ),
+              ),
+            ),
+          );
+        }(),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GridView.count(
+          crossAxisCount: 7,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.15,
+          children: cells,
+        ),
+        const SizedBox(height: JSpace.md),
+        Row(
+          children: [
+            Text('LESS', style: JType.microLabel.copyWith(color: c.inkFaint)),
+            const SizedBox(width: 6),
+            for (final col in ramp)
+              Container(
+                width: 14,
+                height: 10,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(color: col, borderRadius: BorderRadius.circular(2)),
+              ),
+            const SizedBox(width: 4),
+            Text('MORE', style: JType.microLabel.copyWith(color: c.inkFaint)),
+          ],
+        ),
+      ],
+    );
+  }
+}
