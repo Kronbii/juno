@@ -73,6 +73,8 @@ supabase/         server schema
 test/             logic + sync tests; screenshots_test renders every screen
 ```
 
+Before pushing, run `scripts/check.sh`. It runs exactly what CI runs: generated code, formatting, analysis with infos counted as failures, and every test. To have it run automatically on each push, enable the hook once per clone with `git config core.hooksPath .githooks`.
+
 Visual check: `flutter test test/screenshots_test.dart --update-goldens --run-skipped` writes PNGs of every screen at phone and desktop sizes, light and dark, to `test/goldens/`.
 
 ## Design
