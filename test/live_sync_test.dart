@@ -79,9 +79,13 @@ void main() {
     await SyncCore(a, SupabaseRemote(ca)).run();
     await SyncCore(b, SupabaseRemote(cb)).run();
     final att = (await b.select(b.attachments).get()).single;
-    expect(att.uploaded, isTrue);
-    final remote = await cb.storage.from('receipts').download('${cb.auth.currentUser!.id}/${att.id}.png');
-    expect(remote.length, 64);
+    // Both test "devices" share one folder; remove the file so B must fetch
+    // it from Storage like a real second device.
+    final f = await AttachmentStore.fileFor(att);
+    await f.delete();
+    await AttachmentStore(lb).sync(cb);
+    expect(f.existsSync(), isTrue, reason: 'receipt not downloaded on B');
+    expect(f.lengthSync(), 64);
 
     // Server-side LWW: B edits first but syncs last; A's newer edit must win.
     await lb.updateTransaction(id, const TransactionsCompanion(note: Value('older edit on B')));
