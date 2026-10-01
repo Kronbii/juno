@@ -155,3 +155,50 @@ int _levenshtein(String a, String b) {
   }
   return prev[b.length];
 }
+
+/// A quick-add request matched against your categories and accounts.
+class ResolvedEntry {
+  const ResolvedEntry({
+    required this.type,
+    required this.scope,
+    this.category,
+    this.account,
+    this.currencyMismatch = false,
+  });
+
+  final TxType type;
+  final Scope scope;
+  final Category? category;
+  final Account? account;
+
+  /// The request named a currency (or an account) that doesn't line up:
+  /// never save LBP 150,000 into a USD account as $150,000.
+  final bool currencyMismatch;
+}
+
+/// The single place quick-add meaning is decided — shared by `juno://add`
+/// links and the iOS App Intent inbox, so both behave identically.
+ResolvedEntry resolveQuickAdd(QuickAdd q, List<Category> categories, List<Account> accounts) {
+  // Without an explicit type, the category decides: "Salary" means income.
+  final Category? cat;
+  final TxType type;
+  if (q.type == null) {
+    cat = fuzzyMatch(q.category, categories, (c) => c.name);
+    type = cat?.kind == CategoryKind.income ? TxType.income : TxType.expense;
+  } else {
+    type = q.type!;
+    final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+    cat = fuzzyMatch(q.category, categories.where((c) => c.kind == kind), (c) => c.name);
+  }
+  final account =
+      fuzzyMatch(q.account, accounts, (a) => a.name) ??
+      (q.currency == null ? null : accounts.where((a) => a.currency == q.currency).firstOrNull) ??
+      accounts.firstOrNull;
+  return ResolvedEntry(
+    type: type,
+    scope: q.scope ?? cat?.defaultScope ?? Scope.personal,
+    category: cat,
+    account: account,
+    currencyMismatch: q.currency != null && account != null && account.currency != q.currency,
+  );
+}

@@ -90,7 +90,19 @@ class _BackTapScreenState extends ConsumerState<BackTapScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               JCard(
-                title: 'Build the Shortcut',
+                title: 'Fastest: no app opening',
+                accent: JAccent.income,
+                child: Text(
+                  'Juno adds its own “Log expense” action to the Shortcuts app. Make a shortcut with just that '
+                  'action, attach it to Back Tap (Settings → Accessibility → Touch → Back Tap), and a double tap '
+                  'asks for the amount and category and logs it — Juno stays closed and imports it next time you '
+                  'open it. Siri works too: “Log an expense in Juno”.',
+                  style: JType.body.copyWith(fontSize: 13.5, color: c.inkMuted),
+                ),
+              ),
+              const SizedBox(height: JSpace.gap),
+              JCard(
+                title: 'Or: a link Shortcut (opens Juno)',
                 accent: JAccent.brand,
                 child: Column(
                   children: [

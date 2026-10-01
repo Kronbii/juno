@@ -190,4 +190,29 @@ void main() {
     expect(s.single.averageCents, 23167);
     expect(s.single.limitCents, 24000);
   });
+
+  test('widget presets: two most frequent USD categories at their median', () {
+    Category c(String id, String name) => Category(
+      id: id,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+      dirty: false,
+      name: name,
+      icon: 'dots',
+      colorIndex: 0,
+      kind: CategoryKind.expense,
+      defaultScope: Scope.personal,
+      sort: 0,
+      archived: false,
+    );
+    final cats = {'coffee': c('coffee', 'Coffee'), 'groc': c('groc', 'Groceries'), 'rare': c('rare', 'Rare')};
+    final recent = [
+      for (final v in [380, 420, 450, 400, 900]) tx('2026-09-10', v, cat: 'coffee'),
+      for (final v in [3500, 4200, 6100]) tx('2026-09-10', v, cat: 'groc'),
+      for (final v in [100, 100]) tx('2026-09-10', v, cat: 'rare'), // too few
+      for (var i = 0; i < 6; i++) tx('2026-09-10', 4000000, cat: 'groc', currency: 'LBP', base: 4470), // not USD
+    ];
+    final p = quickPresets(recent, cats);
+    expect(p.map((x) => x.label), [r'Coffee $4', r'Groceries $42']);
+  });
 }

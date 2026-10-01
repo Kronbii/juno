@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,6 +7,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/features/insights/analytics.dart';
+import 'package:juno/features/smart/advisor.dart';
 
 /// Pushes this month's figures to the iOS home-screen widget through the
 /// shared App Group. The Swift side is in ios/JunoWidget (see
@@ -26,8 +28,23 @@ abstract final class HomeWidgetSync {
     final top = budgetStatuses(budgets, txs).firstOrNull;
     final pace = MonthPace(month: month, expense: s.expense);
 
+    final ledger = Ledger(db);
+    final cats = {for (final c in await db.select(db.categories).get()) c.id: c};
+    final accounts = {for (final a in await db.select(db.accounts).get()) a.id: a};
+    final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull())).get();
+    final plan = planMonth(monthTxs: txs, rules: rules, accounts: accounts, rates: {'USD': 1, ...await ledger.rates()});
+    final recent = await ledger.transactions(TxQuery(from: Day.of(now.subtract(const Duration(days: 60)))));
+    final presets = quickPresets(recent, cats);
+
     await HomeWidget.setAppGroupId(appGroup);
     await Future.wait([
+      HomeWidget.saveWidgetData<String>('safe', plan.meaningful ? Money.whole(plan.perDay.clamp(0, 1 << 40)) : ''),
+      HomeWidget.saveWidgetData<String>(
+        'presets',
+        jsonEncode([
+          for (final p in presets) {'category': p.categoryName, 'amount': p.amountCents / 100, 'label': p.label},
+        ]),
+      ),
       HomeWidget.saveWidgetData<String>('month', Day.month(month).toUpperCase()),
       HomeWidget.saveWidgetData<String>('spent', Money.whole(s.expense)),
       HomeWidget.saveWidgetData<String>('personal', Money.whole(s.byScope[Scope.personal]!)),

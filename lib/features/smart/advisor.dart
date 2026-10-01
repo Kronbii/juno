@@ -347,3 +347,38 @@ List<BudgetSuggestion> suggestBudgets({
   out.sort((a, b) => b.averageCents.compareTo(a.averageCents));
   return out;
 }
+
+// ------------------------------------------------------------ widget presets
+
+class QuickPreset {
+  const QuickPreset(this.categoryName, this.amountCents);
+
+  final String categoryName;
+  final int amountCents;
+
+  /// "Coffee $4" — what the widget button shows.
+  String get label => '$categoryName ${Money.whole(amountCents)}';
+}
+
+/// Your two most frequent USD expenses of the last 60 days, each at its
+/// typical (median) amount rounded to whole dollars — the one-tap buttons on
+/// the iOS widget.
+List<QuickPreset> quickPresets(List<Transaction> recent, Map<String, Category> categories, {int take = 2}) {
+  final byCat = <String, List<int>>{};
+  for (final t in recent) {
+    if (t.type != TxType.expense || t.currency != baseCurrency || t.categoryId == null) continue;
+    if (categories[t.categoryId]?.archived ?? true) continue;
+    (byCat[t.categoryId!] ??= []).add(t.amountCents);
+  }
+  final ranked = byCat.entries.where((e) => e.value.length >= 3).toList()
+    ..sort((a, b) => b.value.length.compareTo(a.value.length));
+  return [
+    for (final e in ranked.take(take))
+      () {
+        final sorted = [...e.value]..sort();
+        final median = sorted[sorted.length ~/ 2];
+        final whole = ((median + 50) ~/ 100).clamp(1, 1 << 30) * 100;
+        return QuickPreset(categories[e.key]!.name, whole);
+      }(),
+  ];
+}

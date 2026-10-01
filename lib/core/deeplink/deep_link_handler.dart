@@ -76,26 +76,12 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
   final categories = await ref.read(categoriesProvider.future);
   final accounts = await ref.read(accountsProvider.future);
 
-  // Without an explicit type, the category decides: "Salary" means income.
-  final Category? cat;
-  final TxType type;
-  if (q.type == null) {
-    cat = fuzzyMatch(q.category, categories, (c) => c.name);
-    type = cat?.kind == CategoryKind.income ? TxType.income : TxType.expense;
-  } else {
-    type = q.type!;
-    final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
-    cat = fuzzyMatch(q.category, categories.where((c) => c.kind == kind), (c) => c.name);
-  }
-  final account =
-      fuzzyMatch(q.account, accounts, (a) => a.name) ??
-      (q.currency == null ? null : accounts.where((a) => a.currency == q.currency).firstOrNull) ??
-      accounts.firstOrNull;
-  final scope = q.scope ?? cat?.defaultScope ?? Scope.personal;
-
-  // Asked for a currency no account holds (or a named account in another
-  // currency): never save LBP 150,000 into a USD account as $150,000.
-  final currencyMismatch = q.currency != null && account != null && account.currency != q.currency;
+  final r = resolveQuickAdd(q, categories, accounts);
+  final cat = r.category;
+  final type = r.type;
+  final account = r.account;
+  final scope = r.scope;
+  final currencyMismatch = r.currencyMismatch;
   if (currencyMismatch) {
     showToast('No ${q.currency} account matched — check the entry before saving');
   }

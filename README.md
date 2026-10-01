@@ -6,14 +6,14 @@ A personal and household finance tracker for the Linux desktop and iPhone. It's 
 - **Insights:** where your money went this month, what changed compared with the same point last month, six-month trends, top places, and recurring costs.
 - **Plan:** monthly budgets per category or per scope, savings goals with contributions, and recurring entries that log themselves on their due date.
 - **Import** a bank CSV. Juno guesses the columns, learns your categories, skips rows it has already seen, and lets you undo an import. **Export** writes everything to CSV.
-- **Back Tap quick add:** double-tap the back of your iPhone, enter an amount, and the expense is logged. See [docs/back-tap-shortcut.md](docs/back-tap-shortcut.md).
+- **Log without opening the app:** App Intents for Siri ("Log an expense in Juno"), Shortcuts, Back Tap and the Action Button. Entries land in a shared inbox that Juno imports on its next launch. See [docs/ios-setup.md](docs/ios-setup.md) and [docs/back-tap-shortcut.md](docs/back-tap-shortcut.md).
 - **Currencies:** accounts can hold LBP (or EUR and others) at rates you set. Totals stay in USD, and each entry keeps the USD value it was logged at.
 - **Tags** cut across categories, for things like `#trip-istanbul` or `#gift`. You can filter Activity by tag, and Insights totals spending per tag.
 - **Receipts:** attach a photo to any entry (camera or library on iPhone, a file on desktop). Receipts sync through Supabase Storage.
 - **Net worth over time:** a 12-month history rebuilt from your accounts and entries.
 - **Reminders:** a notification on the day a recurring bill is due, plus budget alerts at 80% and 100%.
 - **Face ID lock** (iPhone): Juno asks on open and after a minute in the background.
-- **Home-screen widget** (iPhone): shows this month's spending and opens a new entry on tap. Adding it needs a one-time step in Xcode, described in [docs/ios-widget.md](docs/ios-widget.md).
+- **Home-screen widget** (iPhone): shows this month's spending and opens a new entry on tap. It has one-tap logging buttons, Lock Screen sizes and a Control Center control. Setup is in [docs/ios-setup.md](docs/ios-setup.md).
 - **Excel and Notion imports:** `.xlsx` workbooks (with a sheet picker) and Notion CSV exports. If the file has a Category column, its values are matched to your categories.
 
 ## Run
