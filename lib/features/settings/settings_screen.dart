@@ -10,6 +10,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/plan/recurrence.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -137,16 +138,7 @@ class SettingsScreen extends ConsumerWidget {
             const JSectionLabel('Data'),
             JGroup(
               children: [
-                if (kDebugMode)
-                  JSettingRow(
-                    icon: Icons.science_outlined,
-                    title: 'Load sample data',
-                    subtitle: 'Debug builds only — four months of demo entries',
-                    onTap: () async {
-                      await seedDemo(ref.read(databaseProvider));
-                      showToast('Sample data loaded');
-                    },
-                  ),
+                if (kDebugMode) const _SampleDataRow(),
                 JSettingRow(
                   icon: Icons.restart_alt_rounded,
                   title: 'Reset local data',
@@ -231,6 +223,65 @@ class _NotifyRowState extends ConsumerState<_NotifyRow> {
           await ref.read(reminderRunnerProvider.notifier).run();
         },
       ),
+    );
+  }
+}
+
+/// Debug builds: load four months of demo data, or remove exactly that data.
+/// Both sync, so the cloud copy follows.
+class _SampleDataRow extends ConsumerStatefulWidget {
+  const _SampleDataRow();
+
+  @override
+  ConsumerState<_SampleDataRow> createState() => _SampleDataRowState();
+}
+
+class _SampleDataRowState extends ConsumerState<_SampleDataRow> {
+  bool? _has;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final has = await hasDemo(ref.read(databaseProvider));
+    if (mounted) setState(() => _has = has);
+  }
+
+  Future<void> _run(bool load) async {
+    setState(() => _busy = true);
+    final db = ref.read(databaseProvider);
+    if (load) {
+      await seedDemo(db);
+      await materializeRecurring(db);
+    } else {
+      await removeDemo(db);
+    }
+    await ref.read(syncEngineProvider.notifier).syncNow();
+    await _refresh();
+    if (mounted) setState(() => _busy = false);
+    showToast(load ? 'Sample data loaded' : 'Sample data removed');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final has = _has;
+    if (has == null) return const SizedBox.shrink();
+    return JSettingRow(
+      icon: has ? Icons.cleaning_services_outlined : Icons.science_outlined,
+      title: _busy
+          ? 'Working…'
+          : has
+          ? 'Remove sample data'
+          : 'Load sample data',
+      subtitle: has
+          ? 'Deletes only the demo entries, budgets, goals and rules'
+          : 'Debug builds only — four months of demo entries, removable later',
+      destructive: has,
+      onTap: _busy ? null : () => _run(!has),
     );
   }
 }

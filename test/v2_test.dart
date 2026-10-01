@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/deeplink/quick_add.dart';
@@ -173,6 +174,37 @@ void main() {
     expect(t.usd, 1200);
     expect(t.tags, '');
     expect((await db.select(db.currencyRates).get()).map((r) => r.code), containsAll(['LBP', 'EUR']));
+    await db.close();
+  });
+
+  test('sample data loads once and removes cleanly', () async {
+    final db = AppDatabase.memory(NativeDatabase.memory());
+    final ledger = Ledger(db);
+    await seedDemo(db, now: DateTime(2026, 10, 15));
+    await seedDemo(db, now: DateTime(2026, 10, 15)); // idempotent
+    final loaded = await ledger.transactions(const TxQuery());
+    expect(loaded.length, greaterThan(100));
+    expect(await hasDemo(db), isTrue);
+    expect((await ledger.watchBudgets().first).length, 4);
+
+    // A real entry made alongside the demo survives removal.
+    final mine = await ledger.addTransaction(
+      TransactionsCompanion.insert(
+        type: TxType.expense,
+        scope: Scope.personal,
+        amountCents: 999,
+        accountId: seedId('acct:checking'),
+        occurredOn: '2026-10-15',
+      ),
+    );
+    await removeDemo(db);
+    final left = await ledger.transactions(const TxQuery());
+    expect(left.map((t) => t.id), [mine]);
+    expect(await ledger.watchBudgets().first, isEmpty);
+    expect(await ledger.watchGoals().first, isEmpty);
+    expect(await ledger.watchRecurring().first, isEmpty);
+    expect((await ledger.watchAccounts().first).map((a) => a.name), isNot(contains('Cash LBP')));
+    expect(await hasDemo(db), isFalse);
     await db.close();
   });
 }

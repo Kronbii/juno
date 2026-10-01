@@ -9,6 +9,7 @@ import 'package:juno/core/money.dart';
 /// Four months of plausible activity for screenshots and trying the app.
 /// Deterministic for a given [now] so test renders are stable.
 Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
+  if (await hasDemo(db)) return;
   final today = now ?? DateTime.now();
   final rnd = math.Random(7);
   String cat(String name) => seedId('cat:$name');
@@ -18,16 +19,34 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
 
   await (db.update(
     db.accounts,
-  )..where((a) => a.id.equals(checking))).write(const AccountsCompanion(openingBalanceCents: Value(420000)));
+  )..where((a) => a.id.equals(checking))).write(
+    AccountsCompanion(
+      openingBalanceCents: const Value(420000),
+      updatedAt: Value(DateTime.now().toUtc()),
+      dirty: const Value(true),
+    ),
+  );
   await (db.update(
     db.accounts,
-  )..where((a) => a.id.equals(savings))).write(const AccountsCompanion(openingBalanceCents: Value(1250000)));
+  )..where((a) => a.id.equals(savings))).write(
+    AccountsCompanion(
+      openingBalanceCents: const Value(1250000),
+      updatedAt: Value(DateTime.now().toUtc()),
+      dirty: const Value(true),
+    ),
+  );
   await (db.update(
     db.accounts,
-  )..where((a) => a.id.equals(cash))).write(const AccountsCompanion(openingBalanceCents: Value(18000)));
+  )..where((a) => a.id.equals(cash))).write(
+    AccountsCompanion(
+      openingBalanceCents: const Value(18000),
+      updatedAt: Value(DateTime.now().toUtc()),
+      dirty: const Value(true),
+    ),
+  );
 
   final rows = <TransactionsCompanion>[];
-  final lbp = seedId('acct:cash-lbp');
+  final lbp = _demo('acct:cash-lbp');
   await db
       .into(db.accounts)
       .insertOnConflictUpdate(
@@ -182,17 +201,37 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
       if (rnd.nextDouble() < 0.04) add(day, 'Health', 2000 + rnd.nextInt(6000), Scope.personal, 'Pharmacy');
     }
   }
-  await db.batch((b) => b.insertAll(db.transactions, rows));
+  await db
+      .into(db.importBatches)
+      .insertOnConflictUpdate(
+        ImportBatchesCompanion.insert(
+          id: Value(demoBatchId),
+          filename: 'Sample data',
+          rowCount: rows.length,
+          deletedAt: const Value(null),
+        ),
+      );
+  await db.batch(
+    (b) => b.insertAll(db.transactions, [for (final r in rows) r.copyWith(importBatchId: Value(demoBatchId))]),
+  );
 
   await db.batch((b) {
     b.insertAll(db.budgets, [
-      BudgetsCompanion.insert(categoryId: Value(cat('Dining')), limitCents: 30000),
-      BudgetsCompanion.insert(categoryId: Value(cat('Groceries')), limitCents: 60000),
-      BudgetsCompanion.insert(categoryId: Value(cat('Coffee')), limitCents: 6000),
-      BudgetsCompanion.insert(scope: const Value(Scope.household), limitCents: 250000),
+      BudgetsCompanion.insert(id: Value(_demo('budget:dining')), categoryId: Value(cat('Dining')), limitCents: 30000),
+      BudgetsCompanion.insert(
+        id: Value(_demo('budget:groceries')),
+        categoryId: Value(cat('Groceries')),
+        limitCents: 60000,
+      ),
+      BudgetsCompanion.insert(id: Value(_demo('budget:coffee')), categoryId: Value(cat('Coffee')), limitCents: 6000),
+      BudgetsCompanion.insert(
+        id: Value(_demo('budget:household')),
+        scope: const Value(Scope.household),
+        limitCents: 250000,
+      ),
     ]);
-    final g1 = seedId('goal:emergency');
-    final g2 = seedId('goal:laptop');
+    final g1 = _demo('goal:emergency');
+    final g2 = _demo('goal:laptop');
     b
       ..insertAll(db.goals, [
         GoalsCompanion.insert(id: Value(g1), name: 'Emergency fund', targetCents: 1800000, colorIndex: const Value(2)),
@@ -206,16 +245,19 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
       ])
       ..insertAll(db.goalContributions, [
         GoalContributionsCompanion.insert(
+          id: Value(_demo('goalcontributions:1')),
           goalId: g1,
           amountCents: 1100000,
           occurredOn: Day.of(today.subtract(const Duration(days: 90))),
         ),
         GoalContributionsCompanion.insert(
+          id: Value(_demo('goalcontributions:2')),
           goalId: g1,
           amountCents: 150000,
           occurredOn: Day.of(today.subtract(const Duration(days: 30))),
         ),
         GoalContributionsCompanion.insert(
+          id: Value(_demo('goalcontributions:3')),
           goalId: g2,
           amountCents: 95000,
           occurredOn: Day.of(today.subtract(const Duration(days: 20))),
@@ -224,6 +266,7 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
     final nextMonth = DateTime(today.year, today.month + 1);
     b.insertAll(db.recurringRules, [
       RecurringRulesCompanion.insert(
+        id: Value(_demo('recurringrules:4')),
         type: TxType.expense,
         scope: Scope.household,
         amountCents: 145000,
@@ -235,6 +278,7 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
         nextDue: Day.of(DateTime(nextMonth.year, nextMonth.month, 2)),
       ),
       RecurringRulesCompanion.insert(
+        id: Value(_demo('recurringrules:5')),
         type: TxType.expense,
         scope: Scope.personal,
         amountCents: 1599,
@@ -246,6 +290,7 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
         nextDue: Day.of(today.add(const Duration(days: 3))),
       ),
       RecurringRulesCompanion.insert(
+        id: Value(_demo('recurringrules:6')),
         type: TxType.income,
         scope: Scope.personal,
         amountCents: 520000,
@@ -257,5 +302,61 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
         nextDue: Day.of(nextMonth),
       ),
     ]);
+  });
+}
+
+/// Every demo row has an id derived from this prefix (transactions are
+/// tied to [demoBatchId]), so the whole set can be found and removed.
+String _demo(String key) => seedId('demo:$key');
+
+final demoBatchId = seedId('demo:batch');
+
+Future<bool> hasDemo(AppDatabase db) async {
+  final b = await (db.select(db.importBatches)..where((t) => t.id.equals(demoBatchId))).getSingleOrNull();
+  return b != null && b.deletedAt == null;
+}
+
+/// Soft-deletes everything [seedDemo] created — the deletions sync, so the
+/// cloud copy is cleaned too. Seeded categories and the base accounts stay;
+/// the demo opening balances are reset to zero.
+Future<void> removeDemo(AppDatabase db) async {
+  final now = DateTime.now().toUtc();
+  final gone = Value(now);
+  const dirty = Value(true);
+  await db.transaction(() async {
+    await (db.update(db.transactions)..where((t) => t.importBatchId.equals(demoBatchId))).write(
+      TransactionsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    // Recurring rules may already have posted occurrences after seeding.
+    final ruleIds = [for (var i = 1; i <= 8; i++) _demo('recurringrules:$i')];
+    await (db.update(db.transactions)..where((t) => t.recurringId.isIn(ruleIds))).write(
+      TransactionsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    await (db.update(db.importBatches)..where((t) => t.id.equals(demoBatchId))).write(
+      ImportBatchesCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    await (db.update(db.recurringRules)..where((t) => t.id.isIn(ruleIds))).write(
+      RecurringRulesCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    for (final k in ['dining', 'groceries', 'coffee', 'household']) {
+      await (db.update(db.budgets)..where((t) => t.id.equals(_demo('budget:$k')))).write(
+        BudgetsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+      );
+    }
+    for (final k in ['emergency', 'laptop']) {
+      await (db.update(db.goals)..where((t) => t.id.equals(_demo('goal:$k')))).write(
+        GoalsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+      );
+    }
+    final contribIds = [for (var i = 1; i <= 8; i++) _demo('goalcontributions:$i')];
+    await (db.update(db.goalContributions)..where((t) => t.id.isIn(contribIds))).write(
+      GoalContributionsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    await (db.update(db.accounts)..where((t) => t.id.equals(_demo('acct:cash-lbp')))).write(
+      AccountsCompanion(deletedAt: gone, updatedAt: Value(now), dirty: dirty),
+    );
+    await (db.update(db.accounts)
+          ..where((t) => t.id.isIn([seedId('acct:checking'), seedId('acct:cash'), seedId('acct:savings')])))
+        .write(AccountsCompanion(openingBalanceCents: const Value(0), updatedAt: Value(now), dirty: dirty));
   });
 }
