@@ -16,7 +16,9 @@ import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_extras.dart';
 import 'package:juno/features/add/split_sheet.dart';
+import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
 import 'package:juno/features/smart/entry_parser.dart';
+import 'package:juno/features/smart/receipt_parser.dart';
 
 /// Values to start a new entry with (from a deep link, a duplicate, …).
 class EntryPrefill {
@@ -401,8 +403,24 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     if (f == null || !mounted) return;
     setState(() => _pending.add(f));
     // Read the receipt on-device and fill what's still empty.
-    final read = await ReceiptScanner.read(f.bytes);
-    if (read == null || !mounted) return;
+    final scanned = await ReceiptScanner.read(f.bytes);
+    if (scanned == null || !mounted) return;
+    var read = scanned;
+    // Not sure on-device? Ask the optional AI with the recognised *text*.
+    final ai = ref.read(aiAssistProvider);
+    if (!read.confident && ai.enabled && !ai.capped) {
+      final r = await ai.readReceipt(ReceiptScanner.lastLines);
+      if (r?.total != null && mounted) {
+        read = ReceiptRead(
+          totalCents: (r!.total! * 100).round(),
+          currency: r.currency ?? read.currency,
+          day: r.date ?? read.day,
+          merchant: r.merchant ?? read.merchant,
+          confident: true,
+        );
+      }
+    }
+    if (!mounted) return;
     setState(() {
       if (_cents == 0 && read.totalCents != null) {
         _amount = _centsToBuffer(read.totalCents!);

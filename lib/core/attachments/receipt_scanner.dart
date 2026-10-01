@@ -11,6 +11,9 @@ import 'package:path_provider/path_provider.dart';
 abstract final class ReceiptScanner {
   static bool get supported => !kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST') && Platform.isIOS;
 
+  /// The recognised lines from the last [read] (for an optional AI retry).
+  static List<String> lastLines = const [];
+
   static Future<ReceiptRead?> read(Uint8List imageBytes) async {
     if (!supported) return null;
     final dir = await getTemporaryDirectory();
@@ -23,6 +26,7 @@ abstract final class ReceiptScanner {
         for (final block in result.blocks)
           for (final line in block.lines) line.text,
       ];
+      lastLines = lines;
       return parseReceipt(lines);
     } on Object {
       return null;

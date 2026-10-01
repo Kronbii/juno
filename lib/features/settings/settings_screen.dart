@@ -11,6 +11,7 @@ import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/plan/recurrence.dart';
+import 'package:juno/features/settings/ai_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -107,6 +108,18 @@ class SettingsScreen extends ConsumerWidget {
                   icon: Icons.notifications_active_outlined,
                   title: 'Budget alerts',
                   subtitle: 'At 80% of a limit, and when you go over',
+                ),
+              ],
+            ),
+            const JSectionLabel('Smart'),
+            JGroup(
+              children: [
+                JSettingRow(
+                  icon: Icons.auto_awesome_outlined,
+                  title: 'AI assist',
+                  subtitle: 'Optional, with your OpenAI API key — off by default',
+                  value: ref.watch(aiAssistProvider).enabled ? 'On' : 'Off',
+                  onTap: () => context.go('/settings/ai'),
                 ),
               ],
             ),

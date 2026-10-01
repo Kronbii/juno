@@ -121,6 +121,7 @@ void main() {
         '/settings/back-tap',
         '/settings/sync',
         '/settings/backups',
+        '/settings/ai',
         '/insights/review',
       ]) {
         await h.go(r);
@@ -134,7 +135,15 @@ void main() {
     tester.platformDispatcher.textScaleFactorTestValue = 1.6;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final h = await boot(tester);
-    for (final r in const ['/home', '/activity', '/insights', '/plan', '/settings', '/insights/review', '/settings/backups']) {
+    for (final r in const [
+      '/home',
+      '/activity',
+      '/insights',
+      '/plan',
+      '/settings',
+      '/insights/review',
+      '/settings/backups',
+    ]) {
       await h.go(r);
       final e = tester.takeException();
       expect(e, isNull, reason: '$r at 160% text');

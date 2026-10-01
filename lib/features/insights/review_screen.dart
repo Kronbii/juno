@@ -10,6 +10,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/insights/review.dart';
+import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
 
 final _contribProvider = StreamProvider.family<List<GoalContribution>, (String, String)>((ref, range) {
   final db = ref.watch(databaseProvider);
@@ -197,6 +198,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                     ),
                   ],
                 ),
+                if (ref.watch(aiAssistProvider).enabled) ...[
+                  const SizedBox(height: JSpace.gap),
+                  _AiRead(facts: review.toText(names)),
+                ],
                 if (review.biggest != null) ...[
                   const SizedBox(height: JSpace.gap),
                   JCard(
@@ -213,6 +218,60 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// An AI read of the period — sent only the summary lines above.
+class _AiRead extends ConsumerStatefulWidget {
+  const _AiRead({required this.facts});
+
+  final String facts;
+
+  @override
+  ConsumerState<_AiRead> createState() => _AiReadState();
+}
+
+class _AiReadState extends ConsumerState<_AiRead> {
+  String? _text;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    final ai = ref.watch(aiAssistProvider);
+    return JCard(
+      title: 'AI read',
+      accent: JAccent.household,
+      trailing: Text('${ai.usedThisMonth}/${ai.cap}', style: JType.microLabel.copyWith(color: c.inkFaint)),
+      child: _text != null
+          ? Text(_text!, style: JType.body.copyWith(fontSize: 14, color: c.ink))
+          : Align(
+              alignment: Alignment.centerLeft,
+              child: JButton(
+                label: _busy
+                    ? 'Thinking…'
+                    : ai.capped
+                    ? 'Monthly limit reached'
+                    : 'Write a short read',
+                icon: Icons.auto_awesome_outlined,
+                kind: JButtonKind.secondary,
+                dense: true,
+                onPressed: _busy || ai.capped
+                    ? null
+                    : () async {
+                        setState(() => _busy = true);
+                        final t = await ai.summarize(widget.facts);
+                        if (!mounted) return;
+                        setState(() {
+                          _busy = false;
+                          _text =
+                              t ??
+                              'Couldn’t reach the AI (offline, key or quota). Everything above is computed on-device.';
+                        });
+                      },
+              ),
+            ),
     );
   }
 }

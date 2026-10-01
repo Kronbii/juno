@@ -13,7 +13,7 @@ The audit fixes are also in:
 - [x] Fix every finding from the UI audit (each button, empty state and failure path).
 - [x] Keep the audit's probes as a permanent widget test that presses every button (`test/ui_flows_test.dart`).
 - [x] Run GitHub Actions CI on every push: analyze, unit, sync fuzz and reconciliation tests.
-- [ ] Add golden screenshot tests so a visual regression fails CI.
+- [ ] Golden screenshot tests in CI. Deferred: they need an injectable clock first, because the app reads the real date (greetings, "today", relative demo data), so baselines would change every day. Layout breakage is already caught by the every-screen sweeps at 320, 393 and 1440 px and at 160% text.
 
 ## Milestone 2: iPhone integrations
 The Dart side is built and tested. The native Swift needs one Xcode session on the Mac (docs/ios-setup.md).
@@ -47,9 +47,9 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Edit history per entry, with restore.
 
 ## Optional: AI assist (OpenAI API, off by default)
-- [ ] Your own API key, stored on the device. It needs API billing, which ChatGPT Plus doesn't include.
-- [ ] Used only when the on-device result is uncertain: messy receipts, ambiguous text, and a monthly summary.
-- [ ] Hard caps:
+- [x] Your own API key, stored on the device. It needs API billing, which ChatGPT Plus doesn't include.
+- [x] Used only when the on-device result is uncertain: messy receipts, ambiguous text, and a monthly summary.
+- [x] Hard caps:
   - a monthly call limit (default 100)
   - short prompts
   - a cheap model
