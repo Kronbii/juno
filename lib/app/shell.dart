@@ -20,13 +20,6 @@ class AppShell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
-  /// Whether keyboard focus is in a text field (so letters are text).
-  static bool _isTyping() {
-    final ctx = FocusManager.instance.primaryFocus?.context;
-    if (ctx == null) return false;
-    return ctx.widget is EditableText || ctx.findAncestorWidgetOfExactType<EditableText>() != null;
-  }
-
   void _go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
 
   @override
@@ -35,16 +28,19 @@ class AppShell extends StatelessWidget {
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
     void add() => showEntrySheet(context);
 
-    final body = CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyN): () {
-          // A bare letter is a shortcut only when nobody is typing.
-          if (!_isTyping()) add();
-        },
+    final body = Shortcuts(
+      shortcuts: {
+        const SingleActivator(LogicalKeyboardKey.keyN): const _NewEntryIntent(),
         for (var i = 0; i < navItems.length; i++)
-          SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), control: true): () => _go(i),
+          SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), control: true): _TabIntent(i),
       },
-      child: Focus(autofocus: true, child: shell),
+      child: Actions(
+        actions: {
+          _NewEntryIntent: _NewEntryAction(add),
+          _TabIntent: CallbackAction<_TabIntent>(onInvoke: (t) => _go(t.index)),
+        },
+        child: Focus(autofocus: true, child: shell),
+      ),
     );
 
     if (wide) {
@@ -115,4 +111,34 @@ class AppShell extends StatelessWidget {
       ),
     );
   }
+}
+
+class _NewEntryIntent extends Intent {
+  const _NewEntryIntent();
+}
+
+class _TabIntent extends Intent {
+  const _TabIntent(this.index);
+
+  final int index;
+}
+
+/// `N` for a new entry — disabled while a text field has focus. A disabled
+/// action makes Shortcuts return "ignored", so the key reaches the field and
+/// types an n (a callback that merely does nothing would still swallow it).
+class _NewEntryAction extends Action<_NewEntryIntent> {
+  _NewEntryAction(this.onNew);
+
+  final VoidCallback onNew;
+
+  @override
+  bool isEnabled(_NewEntryIntent intent) {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return true;
+    final typing = ctx.widget is EditableText || ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+    return !typing;
+  }
+
+  @override
+  void invoke(_NewEntryIntent intent) => onNew();
 }

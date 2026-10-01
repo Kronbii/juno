@@ -34,11 +34,14 @@ void main() {
     router.go('/activity');
     await settle();
 
-    // Typing "n" into the search field types an n.
+    // A real key press in a focused field must be left for the field:
+    // not handled by the shortcut (so the text input gets the n), and no
+    // sheet opens.
     await tester.tap(find.byType(TextField).first);
-    await tester.enterText(find.byType(TextField).first, 'n');
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
     await settle();
+    final handled = await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await settle();
+    expect(handled, isFalse, reason: 'the shortcut swallowed a key meant for the text field');
     expect(find.byType(EntrySheet), findsNothing);
 
     // With nothing focused, N opens the sheet.
