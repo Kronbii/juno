@@ -174,6 +174,21 @@ class ImportBatches extends Table with SyncColumns {
   IntColumn get rowCount => integer()();
 }
 
+/// Previous versions of entries, written on every edit and delete so you
+/// can see what changed and roll back. Local to the device (not synced).
+@TableIndex(name: 'history_tx', columns: {#transactionId})
+class EntryHistory extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get transactionId => text()();
+
+  /// The row as it was *before* the change, as JSON.
+  TextColumn get snapshot => text()();
+
+  /// 'edit' or 'delete'.
+  TextColumn get action => text()();
+  DateTimeColumn get at => dateTime()();
+}
+
 /// Local key/value state that never syncs (last pull time, seed flags).
 class LocalMeta extends Table {
   TextColumn get key => text()();

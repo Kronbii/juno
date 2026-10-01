@@ -7075,6 +7075,357 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
   }
 }
 
+class $EntryHistoryTable extends EntryHistory with TableInfo<$EntryHistoryTable, EntryHistoryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EntryHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _transactionIdMeta = const VerificationMeta(
+    'transactionId',
+  );
+  @override
+  late final GeneratedColumn<String> transactionId = GeneratedColumn<String>(
+    'transaction_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _snapshotMeta = const VerificationMeta(
+    'snapshot',
+  );
+  @override
+  late final GeneratedColumn<String> snapshot = GeneratedColumn<String>(
+    'snapshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    transactionId,
+    snapshot,
+    action,
+    at,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'entry_history';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EntryHistoryData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('transaction_id')) {
+      context.handle(
+        _transactionIdMeta,
+        transactionId.isAcceptableOrUnknown(
+          data['transaction_id']!,
+          _transactionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_transactionIdMeta);
+    }
+    if (data.containsKey('snapshot')) {
+      context.handle(
+        _snapshotMeta,
+        snapshot.isAcceptableOrUnknown(data['snapshot']!, _snapshotMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_snapshotMeta);
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EntryHistoryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EntryHistoryData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      transactionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transaction_id'],
+      )!,
+      snapshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}snapshot'],
+      )!,
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}at'],
+      )!,
+    );
+  }
+
+  @override
+  $EntryHistoryTable createAlias(String alias) {
+    return $EntryHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class EntryHistoryData extends DataClass implements Insertable<EntryHistoryData> {
+  final int id;
+  final String transactionId;
+
+  /// The row as it was *before* the change, as JSON.
+  final String snapshot;
+
+  /// 'edit' or 'delete'.
+  final String action;
+  final DateTime at;
+  const EntryHistoryData({
+    required this.id,
+    required this.transactionId,
+    required this.snapshot,
+    required this.action,
+    required this.at,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['transaction_id'] = Variable<String>(transactionId);
+    map['snapshot'] = Variable<String>(snapshot);
+    map['action'] = Variable<String>(action);
+    map['at'] = Variable<DateTime>(at);
+    return map;
+  }
+
+  EntryHistoryCompanion toCompanion(bool nullToAbsent) {
+    return EntryHistoryCompanion(
+      id: Value(id),
+      transactionId: Value(transactionId),
+      snapshot: Value(snapshot),
+      action: Value(action),
+      at: Value(at),
+    );
+  }
+
+  factory EntryHistoryData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EntryHistoryData(
+      id: serializer.fromJson<int>(json['id']),
+      transactionId: serializer.fromJson<String>(json['transactionId']),
+      snapshot: serializer.fromJson<String>(json['snapshot']),
+      action: serializer.fromJson<String>(json['action']),
+      at: serializer.fromJson<DateTime>(json['at']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'transactionId': serializer.toJson<String>(transactionId),
+      'snapshot': serializer.toJson<String>(snapshot),
+      'action': serializer.toJson<String>(action),
+      'at': serializer.toJson<DateTime>(at),
+    };
+  }
+
+  EntryHistoryData copyWith({
+    int? id,
+    String? transactionId,
+    String? snapshot,
+    String? action,
+    DateTime? at,
+  }) => EntryHistoryData(
+    id: id ?? this.id,
+    transactionId: transactionId ?? this.transactionId,
+    snapshot: snapshot ?? this.snapshot,
+    action: action ?? this.action,
+    at: at ?? this.at,
+  );
+  EntryHistoryData copyWithCompanion(EntryHistoryCompanion data) {
+    return EntryHistoryData(
+      id: data.id.present ? data.id.value : this.id,
+      transactionId: data.transactionId.present ? data.transactionId.value : this.transactionId,
+      snapshot: data.snapshot.present ? data.snapshot.value : this.snapshot,
+      action: data.action.present ? data.action.value : this.action,
+      at: data.at.present ? data.at.value : this.at,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EntryHistoryData(')
+          ..write('id: $id, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('action: $action, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, transactionId, snapshot, action, at);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EntryHistoryData &&
+          other.id == this.id &&
+          other.transactionId == this.transactionId &&
+          other.snapshot == this.snapshot &&
+          other.action == this.action &&
+          other.at == this.at);
+}
+
+class EntryHistoryCompanion extends UpdateCompanion<EntryHistoryData> {
+  final Value<int> id;
+  final Value<String> transactionId;
+  final Value<String> snapshot;
+  final Value<String> action;
+  final Value<DateTime> at;
+  const EntryHistoryCompanion({
+    this.id = const Value.absent(),
+    this.transactionId = const Value.absent(),
+    this.snapshot = const Value.absent(),
+    this.action = const Value.absent(),
+    this.at = const Value.absent(),
+  });
+  EntryHistoryCompanion.insert({
+    this.id = const Value.absent(),
+    required String transactionId,
+    required String snapshot,
+    required String action,
+    required DateTime at,
+  }) : transactionId = Value(transactionId),
+       snapshot = Value(snapshot),
+       action = Value(action),
+       at = Value(at);
+  static Insertable<EntryHistoryData> custom({
+    Expression<int>? id,
+    Expression<String>? transactionId,
+    Expression<String>? snapshot,
+    Expression<String>? action,
+    Expression<DateTime>? at,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (transactionId != null) 'transaction_id': transactionId,
+      if (snapshot != null) 'snapshot': snapshot,
+      if (action != null) 'action': action,
+      if (at != null) 'at': at,
+    });
+  }
+
+  EntryHistoryCompanion copyWith({
+    Value<int>? id,
+    Value<String>? transactionId,
+    Value<String>? snapshot,
+    Value<String>? action,
+    Value<DateTime>? at,
+  }) {
+    return EntryHistoryCompanion(
+      id: id ?? this.id,
+      transactionId: transactionId ?? this.transactionId,
+      snapshot: snapshot ?? this.snapshot,
+      action: action ?? this.action,
+      at: at ?? this.at,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (transactionId.present) {
+      map['transaction_id'] = Variable<String>(transactionId.value);
+    }
+    if (snapshot.present) {
+      map['snapshot'] = Variable<String>(snapshot.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<DateTime>(at.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EntryHistoryCompanion(')
+          ..write('id: $id, ')
+          ..write('transactionId: $transactionId, ')
+          ..write('snapshot: $snapshot, ')
+          ..write('action: $action, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalMetaTable extends LocalMeta with TableInfo<$LocalMetaTable, LocalMetaData> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -7292,6 +7643,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ImportBatchesTable importBatches = $ImportBatchesTable(this);
   late final $CurrencyRatesTable currencyRates = $CurrencyRatesTable(this);
   late final $AttachmentsTable attachments = $AttachmentsTable(this);
+  late final $EntryHistoryTable entryHistory = $EntryHistoryTable(this);
   late final $LocalMetaTable localMeta = $LocalMetaTable(this);
   late final Index txDay = Index(
     'tx_day',
@@ -7300,6 +7652,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index txRecurring = Index(
     'tx_recurring',
     'CREATE INDEX tx_recurring ON transactions (recurring_id)',
+  );
+  late final Index historyTx = Index(
+    'history_tx',
+    'CREATE INDEX history_tx ON entry_history (transaction_id)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7315,9 +7671,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     importBatches,
     currencyRates,
     attachments,
+    entryHistory,
     localMeta,
     txDay,
     txRecurring,
+    historyTx,
   ];
   @override
   DriftDatabaseOptions get options => const DriftDatabaseOptions(storeDateTimeAsText: true);
@@ -10546,6 +10904,190 @@ typedef $$AttachmentsTableProcessedTableManager =
       Attachment,
       PrefetchHooks Function()
     >;
+typedef $$EntryHistoryTableCreateCompanionBuilder =
+    EntryHistoryCompanion Function({
+      Value<int> id,
+      required String transactionId,
+      required String snapshot,
+      required String action,
+      required DateTime at,
+    });
+typedef $$EntryHistoryTableUpdateCompanionBuilder =
+    EntryHistoryCompanion Function({
+      Value<int> id,
+      Value<String> transactionId,
+      Value<String> snapshot,
+      Value<String> action,
+      Value<DateTime> at,
+    });
+
+class $$EntryHistoryTableFilterComposer extends Composer<_$AppDatabase, $EntryHistoryTable> {
+  $$EntryHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$EntryHistoryTableOrderingComposer extends Composer<_$AppDatabase, $EntryHistoryTable> {
+  $$EntryHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get snapshot => $composableBuilder(
+    column: $table.snapshot,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$EntryHistoryTableAnnotationComposer extends Composer<_$AppDatabase, $EntryHistoryTable> {
+  $$EntryHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get transactionId => $composableBuilder(
+    column: $table.transactionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get snapshot => $composableBuilder(column: $table.snapshot, builder: (column) => column);
+
+  GeneratedColumn<String> get action => $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get at => $composableBuilder(column: $table.at, builder: (column) => column);
+}
+
+class $$EntryHistoryTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EntryHistoryTable,
+          EntryHistoryData,
+          $$EntryHistoryTableFilterComposer,
+          $$EntryHistoryTableOrderingComposer,
+          $$EntryHistoryTableAnnotationComposer,
+          $$EntryHistoryTableCreateCompanionBuilder,
+          $$EntryHistoryTableUpdateCompanionBuilder,
+          (
+            EntryHistoryData,
+            BaseReferences<_$AppDatabase, $EntryHistoryTable, EntryHistoryData>,
+          ),
+          EntryHistoryData,
+          PrefetchHooks Function()
+        > {
+  $$EntryHistoryTableTableManager(_$AppDatabase db, $EntryHistoryTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$EntryHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$EntryHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$EntryHistoryTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> transactionId = const Value.absent(),
+                Value<String> snapshot = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+              }) => EntryHistoryCompanion(
+                id: id,
+                transactionId: transactionId,
+                snapshot: snapshot,
+                action: action,
+                at: at,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String transactionId,
+                required String snapshot,
+                required String action,
+                required DateTime at,
+              }) => EntryHistoryCompanion.insert(
+                id: id,
+                transactionId: transactionId,
+                snapshot: snapshot,
+                action: action,
+                at: at,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EntryHistoryTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EntryHistoryTable,
+      EntryHistoryData,
+      $$EntryHistoryTableFilterComposer,
+      $$EntryHistoryTableOrderingComposer,
+      $$EntryHistoryTableAnnotationComposer,
+      $$EntryHistoryTableCreateCompanionBuilder,
+      $$EntryHistoryTableUpdateCompanionBuilder,
+      (
+        EntryHistoryData,
+        BaseReferences<_$AppDatabase, $EntryHistoryTable, EntryHistoryData>,
+      ),
+      EntryHistoryData,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalMetaTableCreateCompanionBuilder =
     LocalMetaCompanion Function({
       required String key,
@@ -10690,5 +11232,6 @@ class $AppDatabaseManager {
   $$ImportBatchesTableTableManager get importBatches => $$ImportBatchesTableTableManager(_db, _db.importBatches);
   $$CurrencyRatesTableTableManager get currencyRates => $$CurrencyRatesTableTableManager(_db, _db.currencyRates);
   $$AttachmentsTableTableManager get attachments => $$AttachmentsTableTableManager(_db, _db.attachments);
+  $$EntryHistoryTableTableManager get entryHistory => $$EntryHistoryTableTableManager(_db, _db.entryHistory);
   $$LocalMetaTableTableManager get localMeta => $$LocalMetaTableTableManager(_db, _db.localMeta);
 }

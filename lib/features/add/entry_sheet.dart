@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -455,6 +456,15 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                       Row(
                         children: [
                           Expanded(child: JEyebrow(_editing ? 'Edit entry' : 'New entry')),
+                          if (_editing) ...[
+                            JIconButton(
+                              icon: Icons.history_rounded,
+                              tooltip: 'History',
+                              size: 38,
+                              onPressed: () => showEntryHistory(context, widget.edit!.id),
+                            ),
+                            const SizedBox(width: JSpace.sm),
+                          ],
                           if (_editing)
                             JIconButton(
                               icon: Icons.delete_outline_rounded,
@@ -1007,3 +1017,71 @@ class _CellLabel extends StatelessWidget {
     return Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: style);
   }
 }
+
+/// Earlier versions of an entry, newest first, each restorable.
+Future<void> showEntryHistory(BuildContext context, String transactionId) => showJSheet<void>(
+  context,
+  title: 'Entry *history*',
+  child: Consumer(
+    builder: (context, ref, _) {
+      final c = context.jc;
+      final versions = ref.watch(entryHistoryProvider(transactionId)).value;
+      if (versions == null) return const SizedBox(height: 60);
+      if (versions.isEmpty) {
+        return Text('No changes yet — this is the original.', style: JType.body.copyWith(color: c.inkMuted));
+      }
+      final cats = ref.watch(categoryMapProvider);
+      return Column(
+        children: [
+          for (final h in versions)
+            () {
+              final t = Transaction.fromJson(jsonDecode(h.snapshot) as Map<String, dynamic>);
+              final local = h.at.toLocal();
+              final when = '${Day.relative(Day.of(local))} ${TimeOfDay.fromDateTime(local).format(context)}';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      h.action == 'delete' ? Icons.delete_outline_rounded : Icons.edit_outlined,
+                      size: 17,
+                      color: c.inkFaint,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${Fx.format(t.amountCents, t.currency)} · ${cats[t.categoryId]?.name ?? 'Uncategorised'}'
+                            '${t.note.isEmpty ? '' : ' · ${t.note}'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: JType.bodyStrong.copyWith(color: c.ink),
+                          ),
+                          Text(
+                            '${h.action == 'delete' ? 'Before deleting' : 'Before editing'} · $when',
+                            style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                          ),
+                        ],
+                      ),
+                    ),
+                    JButton(
+                      label: 'Restore',
+                      kind: JButtonKind.ghost,
+                      dense: true,
+                      onPressed: () async {
+                        await ref.read(ledgerProvider).restoreVersion(h);
+                        if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                        showToast('Entry restored to that version');
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }(),
+        ],
+      );
+    },
+  ),
+);

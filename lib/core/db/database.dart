@@ -19,6 +19,7 @@ part 'database.g.dart';
     ImportBatches,
     CurrencyRates,
     Attachments,
+    EntryHistory,
     LocalMeta,
   ],
 )
@@ -33,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -57,6 +58,7 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('DROP INDEX IF EXISTS tx_recurring_day');
         await customStatement('CREATE INDEX IF NOT EXISTS tx_recurring ON transactions (recurring_id)');
       }
+      if (from < 4) await m.createTable(entryHistory);
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

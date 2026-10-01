@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:juno/core/db/database.dart';
@@ -313,12 +315,43 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     return id;
   }
 
+  /// Keeps the row as it was before an edit/delete (see EntryHistory).
+  Future<void> _remember(Transaction before, String action) => db
+      .into(db.entryHistory)
+      .insert(
+        EntryHistoryCompanion.insert(
+          transactionId: before.id,
+          snapshot: jsonEncode(before.toJson()),
+          action: action,
+          at: DateTime.now().toUtc(),
+        ),
+      );
+
+  Stream<List<EntryHistoryData>> watchHistory(String transactionId) =>
+      (db.select(db.entryHistory)
+            ..where((h) => h.transactionId.equals(transactionId))
+            ..orderBy([(h) => OrderingTerm.desc(h.at)]))
+          .watch();
+
+  /// Puts an entry back to a saved version (itself recorded, so a restore
+  /// can be undone too).
+  Future<void> restoreVersion(EntryHistoryData h) async {
+    final old = Transaction.fromJson(jsonDecode(h.snapshot) as Map<String, dynamic>);
+    await updateTransaction(
+      old.id,
+      old
+          .toCompanion(true)
+          .copyWith(deletedAt: const Value(null), updatedAt: const Value.absent(), dirty: const Value.absent()),
+    );
+  }
+
   Future<void> updateTransaction(String id, TransactionsCompanion patch) async {
     var p = patch;
     // Re-price only when the money or the accounts actually changed — the
     // entry sheet sends every field back, and re-pricing an untouched LBP
     // entry at today's rate would silently rewrite past USD totals.
     final cur = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingle();
+    await _remember(cur, patch.deletedAt.present && patch.deletedAt.value != null ? 'delete' : 'edit');
     bool changed<T>(Value<T> v, T now) => v.present && v.value != now;
     if (changed(patch.amountCents, cur.amountCents) ||
         changed(patch.accountId, cur.accountId) ||

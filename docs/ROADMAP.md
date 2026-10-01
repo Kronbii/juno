@@ -43,8 +43,8 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [ ] A design-critique pass over every screen, plus accessibility (dynamic type, VoiceOver labels, contrast).
 
 ## Milestone 5: safety
-- [ ] Automatic encrypted local backups and a restore option.
-- [ ] Edit history per entry, with undo.
+- [x] Automatic local backups (daily snapshot, 14 kept, export) and a merge-restore that never overwrites newer data.
+- [x] Edit history per entry, with restore.
 
 ## Optional: AI assist (OpenAI API, off by default)
 - [ ] Your own API key, stored on the device. It needs API billing, which ChatGPT Plus doesn't include.

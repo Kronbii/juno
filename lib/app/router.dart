@@ -10,6 +10,7 @@ import 'package:juno/features/plan/goal_screen.dart';
 import 'package:juno/features/plan/plan_screen.dart';
 import 'package:juno/features/settings/accounts_screen.dart';
 import 'package:juno/features/settings/back_tap_screen.dart';
+import 'package:juno/features/settings/backups_screen.dart';
 import 'package:juno/features/settings/categories_screen.dart';
 import 'package:juno/features/settings/currencies_screen.dart';
 import 'package:juno/features/settings/settings_screen.dart';
@@ -76,6 +77,7 @@ final router = GoRouter(
                 GoRoute(path: 'back-tap', builder: (_, _) => const BackTapScreen()),
                 GoRoute(path: 'sync', builder: (_, _) => const SyncScreen()),
                 GoRoute(path: 'currencies', builder: (_, _) => const CurrenciesScreen()),
+                GoRoute(path: 'backups', builder: (_, _) => const BackupsScreen()),
               ],
             ),
           ],

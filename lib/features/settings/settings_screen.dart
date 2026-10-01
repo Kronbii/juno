@@ -138,6 +138,12 @@ class SettingsScreen extends ConsumerWidget {
             const JSectionLabel('Data'),
             JGroup(
               children: [
+                JSettingRow(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Backups',
+                  subtitle: 'Daily snapshots on this device, restore anytime',
+                  onTap: () => context.go('/settings/backups'),
+                ),
                 if (kDebugMode) const _SampleDataRow(),
                 JSettingRow(
                   icon: Icons.restart_alt_rounded,

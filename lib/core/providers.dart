@@ -191,3 +191,7 @@ final allTxProvider = StreamProvider<List<Transaction>>(
 
 /// Totals over everything a query matches (limit ignored).
 final txTotalsProvider = StreamProvider.family<TxTotals, TxQuery>((ref, q) => ref.watch(ledgerProvider).watchTotals(q));
+
+final entryHistoryProvider = StreamProvider.family<List<EntryHistoryData>, String>(
+  (ref, id) => ref.watch(ledgerProvider).watchHistory(id),
+);

@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/app/router.dart';
+import 'package:juno/core/db/backups.dart';
 import 'package:juno/core/deeplink/deep_link_handler.dart';
 import 'package:juno/core/ios/intent_inbox.dart';
 import 'package:juno/core/lock/app_lock.dart';
@@ -62,6 +65,13 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
     final imported = await IntentInbox.drain(db);
     if (imported > 0) showToast('Added $imported entr${imported == 1 ? 'y' : 'ies'} logged from Shortcuts');
     await IntentInbox.publishCatalog(db);
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        await Backups(db).snapshotIfDue();
+      } on Object {
+        // A failed backup must never block opening the app.
+      }
+    }
     await materializeRecurring(db);
     await ref.read(syncEngineProvider.notifier).syncNow();
     await ref.read(reminderRunnerProvider.notifier).run();
