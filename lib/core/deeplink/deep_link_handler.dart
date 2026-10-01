@@ -14,6 +14,7 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/features/add/entry_sheet.dart';
+import 'package:juno/features/smart/entry_parser.dart';
 
 /// Listens for `juno://add` links (cold start and while running) and either
 /// saves the entry or opens the add sheet prefilled.
@@ -67,8 +68,9 @@ class _DeepLinkHandlerState extends ConsumerState<DeepLinkHandler> {
 /// Applies a quick-add link. Public so Settings → Back Tap can test links on
 /// desktop, where the OS can't deliver them.
 Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
-  final q = QuickAdd.parse(uri);
-  if (q == null) return;
+  final parsed = QuickAdd.parse(uri);
+  if (parsed == null) return;
+  final q = parsed.text != null ? await _fromText(ref, parsed) : parsed;
 
   // Wait for the first emission of the catalog streams on cold start.
   final categories = await ref.read(categoriesProvider.future);
@@ -138,5 +140,31 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
     '${type == TxType.income ? 'Received' : 'Logged'} ${parts.join(' · ')}',
     onUndo: () => ledger.deleteTransaction(id),
     duration: const Duration(seconds: 6),
+  );
+}
+
+/// Folds a `text=` sentence into the link: explicit parameters still win.
+Future<QuickAdd> _fromText(WidgetRef ref, QuickAdd q) async {
+  final categories = await ref.read(categoriesProvider.future);
+  final accounts = await ref.read(accountsProvider.future);
+  final e = parseEntry(
+    q.text!,
+    categories: categories,
+    memory: await ref.read(ledgerProvider).merchantCategoryMemory(),
+    hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+  );
+  final cat = categories.where((c) => c.id == e.categoryId).firstOrNull;
+  return QuickAdd(
+    amountCents: q.amountCents ?? e.amountCents,
+    category: q.category ?? cat?.name,
+    account: q.account,
+    currency: q.currency ?? e.currency,
+    tags: q.tags,
+    scope: q.scope ?? e.scope,
+    type: q.type ?? e.type,
+    note: q.note ?? (e.note.isEmpty ? null : e.note),
+    day: q.day ?? e.day,
+    // A guessed currency is worth a glance before saving.
+    confirm: q.confirm || e.currencyGuessed,
   );
 }

@@ -11,7 +11,9 @@ import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/home/home_screen.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/insights/charts.dart';
+import 'package:juno/features/insights/suggestions_card.dart';
 import 'package:juno/features/plan/recurrence.dart';
+import 'package:juno/features/smart/advisor.dart';
 
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
@@ -125,6 +127,26 @@ class InsightsScreen extends ConsumerWidget {
               },
             ),
     );
+
+    final everything = (ref.watch(allTxProvider).value ?? const <Transaction>[])
+        .where((t) => lens == null || t.scope == lens)
+        .toList();
+    final isCurrentMonth = pace.isCurrent;
+    if (isCurrentMonth) {
+      for (final a in detectAnomalies(
+        history: everything,
+        categoryNames: {for (final k in cats.values) k.id: k.name},
+      )) {
+        insights.insert(0, Insight(a.text, InsightTone.bad, categoryId: a.categoryId));
+      }
+    }
+    final subsFound = isCurrentMonth ? detectSubscriptions(everything, rules) : const <SubscriptionSuggestion>[];
+    final budgetIdeas = isCurrentMonth
+        ? suggestBudgets(history: everything, budgets: ref.watch(budgetsProvider).value ?? const [])
+        : const <BudgetSuggestion>[];
+    final suggestions = (subsFound.isEmpty && budgetIdeas.isEmpty)
+        ? null
+        : SuggestionsCard(subscriptions: subsFound.take(3).toList(), budgets: budgetIdeas.take(3).toList());
 
     final feed = JCard(
       title: 'What changed',
@@ -293,7 +315,17 @@ class InsightsScreen extends ConsumerWidget {
                       children: [
                         Expanded(flex: 3, child: breakdown),
                         const SizedBox(width: JSpace.gap),
-                        Expanded(flex: 2, child: Column(children: [feed, gap(), subs])),
+                        Expanded(
+                          flex: 2,
+                          child: Column(
+                            children: [
+                              feed,
+                              gap(),
+                              if (suggestions != null) ...[suggestions, gap()],
+                              subs,
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                     gap(),
@@ -328,6 +360,7 @@ class InsightsScreen extends ConsumerWidget {
               : Column(
                   children: [
                     feed,
+                    if (suggestions != null) ...[gap(), suggestions],
                     gap(),
                     breakdown,
                     gap(),

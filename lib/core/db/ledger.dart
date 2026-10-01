@@ -157,11 +157,12 @@ class Ledger {
   }
 
   SimpleSelectStatement<$TransactionsTable, Transaction> _txSelect(TxQuery f) {
-    final q = db.select(db.transactions)..where((t) => _filter(t, f));
-    q.orderBy([
-      (t) => OrderingTerm.desc(t.occurredOn),
-      (t) => OrderingTerm.desc(t.createdAt),
-    ]);
+    final q = db.select(db.transactions)
+      ..where((t) => _filter(t, f))
+      ..orderBy([
+        (t) => OrderingTerm.desc(t.occurredOn),
+        (t) => OrderingTerm.desc(t.createdAt),
+      ]);
     if (f.limit != null) q.limit(f.limit!);
     return q;
   }

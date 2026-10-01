@@ -120,7 +120,7 @@ void main() {
         // weekly coffee: not monthly
         for (var i = 0; i < 8; i++) tx('2026-09-${(i * 3 + 1).toString().padLeft(2, '0')}', 450, merchant: 'Kalei'),
       ];
-      final s = detectSubscriptions(txs, const [], now: DateTime(2026, 10, 1));
+      final s = detectSubscriptions(txs, const [], now: DateTime(2026, 10));
       expect(s.map((x) => x.label), ['netflix.com']);
       expect(s.single.amountCents, 1599);
       expect(s.single.months, 3);
@@ -133,7 +133,7 @@ void main() {
         tx('2026-05-12', 999, merchant: 'Spotify'),
         tx('2026-06-12', 999, merchant: 'Spotify'),
       ];
-      expect(detectSubscriptions(txs, const [], now: DateTime(2026, 10, 1)), isEmpty); // last seen > 45 days
+      expect(detectSubscriptions(txs, const [], now: DateTime(2026, 10)), isEmpty); // last seen > 45 days
       final recent = [
         for (final t in txs)
           tx(
@@ -143,7 +143,7 @@ void main() {
           ),
       ];
       expect(
-        detectSubscriptions(recent, [rule('Spotify', TxType.expense, 999, '2026-10-12')], now: DateTime(2026, 10, 1)),
+        detectSubscriptions(recent, [rule('Spotify', TxType.expense, 999, '2026-10-12')], now: DateTime(2026, 10)),
         isEmpty,
       );
     });
@@ -157,7 +157,7 @@ void main() {
         tx('2026-10-05', 4000, cat: 'dining'),
       ];
       final a = detectAnomalies(history: h, categoryNames: {'dining': 'Dining'}, now: DateTime(2026, 10, 6));
-      expect(a.single.text, contains('Dining is at \$130'));
+      expect(a.single.text, contains(r'Dining is at $130'));
       expect(a.single.text, contains('2.6×'));
     });
 
@@ -178,7 +178,7 @@ void main() {
     });
   });
 
-  test('budget suggestions round the 3-month average up to \$10', () {
+  test(r'budget suggestions round the 3-month average up to $10', () {
     final h = [
       tx('2026-07-10', 21000, cat: 'dining'),
       tx('2026-08-10', 25500, cat: 'dining'),

@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' hide isNull, isNotNull;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:juno/core/db/database.dart';
@@ -15,7 +15,7 @@ AppDatabase fresh() => AppDatabase.memory(NativeDatabase.memory());
 Future<void> sync(AppDatabase db, FakeRemote r) => SyncCore(db, r).run();
 
 void main() {
-  test('C1: a new device\'s seed rows never overwrite edits made elsewhere', () async {
+  test("C1: a new device's seed rows never overwrite edits made elsewhere", () async {
     final remote = FakeRemote();
     final a = fresh();
     final la = Ledger(a);

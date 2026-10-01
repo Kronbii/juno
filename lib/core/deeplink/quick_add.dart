@@ -24,6 +24,7 @@ class QuickAdd {
     this.note,
     this.day,
     this.confirm = false,
+    this.text,
   });
 
   final int? amountCents;
@@ -38,6 +39,10 @@ class QuickAdd {
   final String? note;
   final String? day;
   final bool confirm;
+
+  /// Free text ("12 coffee kalei") from a dictation Shortcut; parsed with
+  /// the same on-device parser as the add sheet's quick line.
+  final String? text;
 
   bool get saveDirectly => !confirm && (amountCents ?? 0) > 0;
 
@@ -93,6 +98,7 @@ class QuickAdd {
       note: s('note') ?? s('n'),
       day: day,
       confirm: s('confirm') == '1' || s('confirm') == 'true',
+      text: s('text') ?? s('q'),
     );
   }
 }

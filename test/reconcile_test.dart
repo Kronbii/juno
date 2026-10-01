@@ -14,12 +14,11 @@ import 'package:juno/core/money.dart';
 import 'package:juno/features/insights/analytics.dart';
 
 class World {
-  World(this.db, this.ledger, this.accounts, this.categories);
+  World(this.db, this.ledger, this.accounts);
 
   final AppDatabase db;
   final Ledger ledger;
   final List<Account> accounts;
-  final List<Category> categories;
 }
 
 Future<World> buildWorld(int seed, {int entries = 400}) async {
@@ -116,7 +115,7 @@ Future<World> buildWorld(int seed, {int entries = 400}) async {
       limitCents: 20000,
     ),
   );
-  return World(db, ledger, await db.select(db.accounts).get(), categories);
+  return World(db, ledger, await db.select(db.accounts).get());
 }
 
 /// Oracle: USD value of a live row, straight from columns.

@@ -13,6 +13,7 @@ import 'package:juno/features/add/entry_sheet.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
 import 'package:juno/features/plan/recurrence.dart';
+import 'package:juno/features/smart/advisor.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,7 @@ class HomeScreen extends ConsumerWidget {
     final main = [
       const JReveal(child: _HeroTile()),
       const SizedBox(height: JSpace.gap),
+      const JReveal(index: 1, child: _SafeToSpendTile()),
       JReveal(index: 1, child: _ScopeSplitTile(month: month)),
     ];
     final side = [
@@ -182,6 +184,59 @@ class _HeroTile extends ConsumerWidget {
 
 /// Personal vs household this month — always across both scopes, since the
 /// comparison is the point. Tapping a side focuses the app on that scope.
+/// Safe to spend today: income still to come minus bills still due, spread
+/// over the days left. Hidden until there's an income to plan against.
+class _SafeToSpendTile extends ConsumerWidget {
+  const _SafeToSpendTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final lens = ref.watch(scopeFilterProvider);
+    final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
+    final rules = (ref.watch(recurringProvider).value ?? const <RecurringRule>[])
+        .where((r) => lens == null || r.scope == lens)
+        .toList();
+    final plan = planMonth(
+      monthTxs: txs,
+      rules: rules,
+      accounts: ref.watch(accountMapProvider),
+      rates: ref.watch(ratesProvider),
+      now: now,
+    );
+    if (!plan.meaningful) return const SizedBox.shrink();
+    final over = plan.leftToSpend < 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: JSpace.gap),
+      child: JCard(
+        accent: over ? JAccent.expense : JAccent.income,
+        alert: over,
+        title: 'Safe to spend today',
+        trailing: JPill('${plan.daysLeft} days left'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              over ? Money.whole(0) : Money.whole(plan.perDay),
+              style: JType.panelMetric.copyWith(color: over ? c.expense : c.ink),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              over
+                  ? '${Money.whole(-plan.leftToSpend)} over this month once ${Money.whole(plan.committed)} of bills are paid.'
+                  : '${Money.whole(plan.leftToSpend)} left after ${Money.whole(plan.committed)} of bills still due · '
+                        'on pace to spend ${Money.whole(plan.forecastSpend)} by month end',
+              style: JType.body.copyWith(color: over ? c.ink : c.inkMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ScopeSplitTile extends ConsumerWidget {
   const _ScopeSplitTile({required this.month});
 

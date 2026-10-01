@@ -13,6 +13,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_extras.dart';
+import 'package:juno/features/smart/entry_parser.dart';
 
 /// Values to start a new entry with (from a deep link, a duplicate, …).
 class EntryPrefill {
@@ -116,11 +117,49 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     ref.read(ledgerProvider).recentCategoryIds().then((r) {
       if (mounted) setState(() => _recent = r);
     });
+    ref.read(ledgerProvider).merchantCategoryMemory().then((m) => _memory = m);
+  }
+
+  // ---- quick text ----------------------------------------------------------
+  final _quick = TextEditingController();
+  Map<String, String> _memory = const {};
+
+  /// Applies what the quick line understood. Fields it didn't mention keep
+  /// whatever the user already set.
+  void _applyQuick(String text) {
+    final accounts = ref.read(accountsProvider).value ?? const <Account>[];
+    final e = parseEntry(
+      text,
+      categories: ref.read(categoriesProvider).value ?? const [],
+      memory: _memory,
+      hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+    );
+    setState(() {
+      if (e.type != null) _type = e.type!;
+      if (e.amountCents != null) _amount = _centsToBuffer(e.amountCents!);
+      if (e.categoryId != null) {
+        _categoryId = e.categoryId;
+        final cat = ref.read(categoryMapProvider)[e.categoryId];
+        if (cat != null && !_scopeTouched && e.scope == null) _scope = cat.defaultScope;
+      }
+      if (e.scope != null) {
+        _scope = e.scope!;
+        _scopeTouched = true;
+      }
+      if (e.day != null) _day = e.day!;
+      if (e.note.isNotEmpty) _note.text = e.note;
+      // A currency in the text picks an account holding it.
+      if (e.currency != null && _currencyOf(_accountId) != e.currency) {
+        final match = accounts.where((a) => a.currency == e.currency).firstOrNull;
+        if (match != null) _accountId = match.id;
+      }
+    });
   }
 
   @override
   void dispose() {
     _note.dispose();
+    _quick.dispose();
     _tagInput.dispose();
     _focus.dispose();
     super.dispose();
@@ -351,6 +390,20 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                             ),
                         ],
                       ),
+                      if (!_editing) ...[
+                        const SizedBox(height: JSpace.md),
+                        TextField(
+                          controller: _quick,
+                          textInputAction: TextInputAction.done,
+                          style: JType.body.copyWith(fontSize: 15, color: c.ink),
+                          decoration: InputDecoration(
+                            hintText: 'Type it — “12 coffee kalei”, “40k taxi yesterday”',
+                            prefixIcon: Icon(Icons.auto_awesome_outlined, size: 17, color: c.inkFaint),
+                          ),
+                          onChanged: _applyQuick,
+                          onSubmitted: (_) => _save(),
+                        ),
+                      ],
                       const SizedBox(height: JSpace.md),
                       JSegmentBar<TxType>(
                         segments: const {
