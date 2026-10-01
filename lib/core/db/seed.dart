@@ -6,11 +6,29 @@ import 'package:uuid/uuid.dart';
 /// launch converge on the same rows when they sync instead of duplicating.
 String seedId(String key) => const Uuid().v5(Namespace.url.value, 'juno:seed:$key');
 
+/// Seeded rows carry this timestamp instead of "now": any real edit made on
+/// any device is newer and wins, and two devices' identical seeds tie
+/// harmlessly. (Stamped "now", a phone installed later would overwrite your
+/// renamed accounts and edited rates with defaults.)
+final seedStamp = DateTime.utc(2000);
+
 /// Rates for currencies Juno knows out of the box. Editable in Settings.
 Future<void> seedRates(AppDatabase db) => db.batch((b) {
   b.insertAll(db.currencyRates, [
-    CurrencyRatesCompanion.insert(id: Value(seedId('fx:LBP')), code: 'LBP', perUsd: 89500),
-    CurrencyRatesCompanion.insert(id: Value(seedId('fx:EUR')), code: 'EUR', perUsd: 0.86),
+    CurrencyRatesCompanion.insert(
+      id: Value(seedId('fx:LBP')),
+      code: 'LBP',
+      perUsd: 89500,
+      createdAt: Value(seedStamp),
+      updatedAt: Value(seedStamp),
+    ),
+    CurrencyRatesCompanion.insert(
+      id: Value(seedId('fx:EUR')),
+      code: 'EUR',
+      perUsd: 0.86,
+      createdAt: Value(seedStamp),
+      updatedAt: Value(seedStamp),
+    ),
   ], mode: InsertMode.insertOrIgnore);
 });
 
@@ -21,18 +39,24 @@ Future<void> seedDefaults(AppDatabase db) async {
     b.insertAll(db.accounts, [
       AccountsCompanion.insert(
         id: Value(seedId('acct:checking')),
+        createdAt: Value(seedStamp),
+        updatedAt: Value(seedStamp),
         name: 'Checking',
         kind: AccountKind.checking,
         sort: const Value(0),
       ),
       AccountsCompanion.insert(
         id: Value(seedId('acct:cash')),
+        createdAt: Value(seedStamp),
+        updatedAt: Value(seedStamp),
         name: 'Cash',
         kind: AccountKind.cash,
         sort: const Value(1),
       ),
       AccountsCompanion.insert(
         id: Value(seedId('acct:savings')),
+        createdAt: Value(seedStamp),
+        updatedAt: Value(seedStamp),
         name: 'Savings',
         kind: AccountKind.savings,
         sort: const Value(2),
@@ -48,6 +72,8 @@ Future<void> seedDefaults(AppDatabase db) async {
       Scope scope = Scope.personal,
     }) => CategoriesCompanion.insert(
       id: Value(seedId('cat:$name')),
+      createdAt: Value(seedStamp),
+      updatedAt: Value(seedStamp),
       name: name,
       icon: icon,
       colorIndex: color,

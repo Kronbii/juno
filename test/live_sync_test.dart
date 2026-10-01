@@ -83,6 +83,36 @@ void main() {
     final remote = await cb.storage.from('receipts').download('${cb.auth.currentUser!.id}/${att.id}.png');
     expect(remote.length, 64);
 
+    // Server-side LWW: B edits first but syncs last; A's newer edit must win.
+    await lb.updateTransaction(id, const TransactionsCompanion(note: Value('older edit on B')));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await la.updateTransaction(id, const TransactionsCompanion(note: Value('newer edit on A')));
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    expect((await la.transactions(const TxQuery())).single.note, 'newer edit on A');
+    expect((await lb.transactions(const TxQuery())).single.note, 'newer edit on A');
+
+    // Paging: 600 rows in one push share a server timestamp; all must arrive.
+    await la.commitImport('bulk.csv', [
+      for (var i = 0; i < 600; i++)
+        TransactionsCompanion.insert(
+          type: TxType.expense,
+          scope: Scope.personal,
+          amountCents: i + 1,
+          accountId: seedId('acct:checking'),
+          occurredOn: Day.today(),
+        ),
+    ]);
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    expect((await lb.transactions(const TxQuery())).length, 601);
+    final batch = (await la.watchImports().first).single;
+    await la.undoImport(batch.id);
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    expect((await lb.transactions(const TxQuery())).length, 1);
+
     await la.deleteTransaction(id);
     await SyncCore(a, SupabaseRemote(ca)).run();
     await SyncCore(b, SupabaseRemote(cb)).run();

@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/db/seed.dart' show seedStamp;
 import 'package:juno/core/money.dart';
 import 'package:uuid/uuid.dart';
 
@@ -17,7 +18,9 @@ DateTime nextOccurrence({
 }) {
   switch (frequency) {
     case Frequency.weekly:
-      return from.add(Duration(days: 7 * interval));
+      // Calendar arithmetic, not Duration: adding 7×24h across a DST change
+      // lands on 23:00 the day before and the rule drifts a weekday.
+      return DateTime(from.year, from.month, from.day + 7 * interval);
     case Frequency.monthly:
       return _monthAt(anchor, from.year, from.month + interval);
     case Frequency.yearly:
@@ -55,9 +58,9 @@ String occurrenceId(String ruleId, String day) => const Uuid().v5(Namespace.url.
 
 /// Turns every due occurrence of every active rule into a transaction.
 ///
-/// Idempotent: the unique (recurring_id, occurred_on) index means a second
-/// run — or a second device that synced the rule — inserts nothing new, and
-/// an occurrence the user deleted stays deleted.
+/// Idempotent: occurrence ids derive from (rule, day), so a second run — or a
+/// second device — finds the row and inserts nothing; an occurrence the user
+/// deleted stays deleted.
 Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
   final today = now ?? DateTime.now();
   final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull() & r.active.equals(true))).get();
@@ -67,15 +70,16 @@ Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
       final (due, next) = dueDates(rule, today);
       if (due.isEmpty) continue;
       for (final day in due) {
-        // Includes soft-deleted rows: a deleted occurrence must stay deleted.
-        final exists = await (db.select(
-          db.transactions,
-        )..where((t) => t.recurringId.equals(rule.id) & t.occurredOn.equals(day))).getSingleOrNull();
+        final id = occurrenceId(rule.id, day);
+        // By id, and including soft-deleted rows: an occurrence that exists
+        // anywhere — edited, moved to another date, or deleted — is never
+        // posted again.
+        final exists = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
         if (exists != null) continue;
         final row = await Ledger.price(
           db,
           TransactionsCompanion.insert(
-            id: Value(occurrenceId(rule.id, day)),
+            id: Value(id),
             type: rule.type,
             scope: rule.scope,
             amountCents: rule.amountCents,
@@ -84,17 +88,20 @@ Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
             occurredOn: day,
             note: Value(rule.note),
             recurringId: Value(rule.id),
+            // An automatic posting is not an edit: stamped old, so a copy the
+            // user already changed or deleted on another device always wins.
+            createdAt: Value(seedStamp),
+            updatedAt: Value(seedStamp),
           ),
         );
         await db.into(db.transactions).insert(row, mode: InsertMode.insertOrIgnore);
         created++;
       }
+      // nextDue is local bookkeeping, recomputable on every device. Writing it
+      // as a synced edit would let a stale device overwrite the rule's real
+      // changes (amount, deletion) made elsewhere.
       await (db.update(db.recurringRules)..where((r) => r.id.equals(rule.id))).write(
-        RecurringRulesCompanion(
-          nextDue: Value(next),
-          updatedAt: Value(DateTime.now().toUtc()),
-          dirty: const Value(true),
-        ),
+        RecurringRulesCompanion(nextDue: Value(next)),
       );
     }
   });

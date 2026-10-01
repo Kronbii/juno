@@ -33,7 +33,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +50,12 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(currencyRates);
         await m.createTable(attachments);
         await seedRates(this);
+      }
+      if (from < 3) {
+        // The (recurring_id, occurred_on) unique index could make a moved
+        // occurrence fail to merge during sync; ids are deterministic now.
+        await customStatement('DROP INDEX IF EXISTS tx_recurring_day');
+        await customStatement('CREATE INDEX IF NOT EXISTS tx_recurring ON transactions (recurring_id)');
       }
     },
     beforeOpen: (details) async {

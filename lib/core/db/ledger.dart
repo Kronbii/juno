@@ -166,10 +166,11 @@ class Ledger {
                                           WHEN 'expense' THEN -t.amount_cents
                                           ELSE -t.amount_cents END)
                     FROM transactions t
-                    WHERE t.account_id = a.id AND t.deleted_at IS NULL), 0)
+                    WHERE t.account_id = a.id AND t.deleted_at IS NULL
+                      AND t.occurred_on <= date('now', 'localtime')), 0)
         + COALESCE((SELECT SUM(COALESCE(t.to_amount_cents, t.amount_cents)) FROM transactions t
                     WHERE t.to_account_id = a.id AND t.type = 'transfer'
-                      AND t.deleted_at IS NULL), 0) AS balance
+                      AND t.deleted_at IS NULL AND t.occurred_on <= date('now', 'localtime')), 0) AS balance
       FROM accounts a WHERE a.deleted_at IS NULL
     ''';
     return db
@@ -265,9 +266,14 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Future<void> updateTransaction(String id, TransactionsCompanion patch) async {
     var p = patch;
-    // Re-price when the money or the account changed.
-    if (patch.amountCents.present || patch.accountId.present) {
-      final cur = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingle();
+    // Re-price only when the money or the accounts actually changed — the
+    // entry sheet sends every field back, and re-pricing an untouched LBP
+    // entry at today's rate would silently rewrite past USD totals.
+    final cur = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingle();
+    bool changed<T>(Value<T> v, T now) => v.present && v.value != now;
+    if (changed(patch.amountCents, cur.amountCents) ||
+        changed(patch.accountId, cur.accountId) ||
+        changed(patch.toAccountId, cur.toAccountId)) {
       p = await price(
         db,
         patch.copyWith(
@@ -275,6 +281,13 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
           accountId: patch.accountId.present ? patch.accountId : Value(cur.accountId),
           toAccountId: patch.toAccountId.present ? patch.toAccountId : Value(cur.toAccountId),
         ),
+      );
+    } else {
+      // Keep the stored pricing exactly as logged.
+      p = patch.copyWith(
+        currency: const Value.absent(),
+        baseCents: const Value.absent(),
+        toAmountCents: const Value.absent(),
       );
     }
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
@@ -529,9 +542,12 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
   Future<List<Attachment>> attachmentsWhere({required bool uploaded}) =>
       (db.select(db.attachments)..where((a) => a.deletedAt.isNull() & a.uploaded.equals(uploaded))).get();
 
+  /// Local knowledge that this device's copy of the file is in the cloud.
+  /// Not a synced edit: bumping the row would undo a deletion made on
+  /// another device. Other devices find files by trying to download them.
   Future<void> markUploaded(String id) async {
     await (db.update(db.attachments)..where((a) => a.id.equals(id))).write(
-      AttachmentsCompanion(uploaded: const Value(true), updatedAt: Value(_now), dirty: const Value(true)),
+      const AttachmentsCompanion(uploaded: Value(true)),
     );
   }
 

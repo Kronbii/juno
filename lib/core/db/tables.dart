@@ -62,7 +62,7 @@ class Categories extends Table with SyncColumns {
 }
 
 @TableIndex(name: 'tx_day', columns: {#occurredOn})
-@TableIndex(name: 'tx_recurring_day', columns: {#recurringId, #occurredOn}, unique: true)
+@TableIndex(name: 'tx_recurring', columns: {#recurringId})
 class Transactions extends Table with SyncColumns {
   TextColumn get type => textEnum<TxType>()();
   TextColumn get scope => textEnum<Scope>()();

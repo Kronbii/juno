@@ -7,37 +7,7 @@ import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 
-/// An in-memory stand-in for Supabase: rows keyed by (table, id), stamped
-/// with a monotonically increasing server_updated_at like the SQL trigger.
-class FakeRemote implements SyncRemote {
-  final Map<String, Map<String, Map<String, dynamic>>> tables = {};
-  var _clock = 0;
-
-  @override
-  String? get userId => 'user-1';
-
-  @override
-  Future<void> upsert(String table, List<Map<String, dynamic>> rows) async {
-    final t = tables.putIfAbsent(table, () => {});
-    for (final r in rows) {
-      _clock++;
-      t[r['id'] as String] = {
-        ...r,
-        'server_updated_at': '2030-01-01T00:00:${_clock.toString().padLeft(6, '0')}Z',
-      };
-    }
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> changedSince(String table, String? cursor, int limit) async {
-    final rows =
-        (tables[table]?.values ?? const <Map<String, dynamic>>[])
-            .where((r) => cursor == null || (r['server_updated_at'] as String).compareTo(cursor) > 0)
-            .toList()
-          ..sort((a, b) => (a['server_updated_at'] as String).compareTo(b['server_updated_at'] as String));
-    return rows.take(limit).toList();
-  }
-}
+import 'support/fake_remote.dart';
 
 void main() {
   test('two devices converge; newer edit wins; deletes propagate', () async {

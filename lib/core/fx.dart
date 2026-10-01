@@ -48,7 +48,9 @@ abstract final class Fx {
   static int toUsd(int cents, String code, Map<String, double> perUsd) {
     if (code == baseCurrency) return cents;
     final rate = perUsd[code];
-    if (rate == null || rate <= 0) return cents;
+    // Never fall back to "treat it as dollars": LBP 1,500,000 would become
+    // $1.5M. A missing rate is a bug to surface, not a number to show.
+    if (rate == null || rate <= 0) throw StateError('No exchange rate for $code');
     return (cents / rate).round();
   }
 
@@ -58,7 +60,8 @@ abstract final class Fx {
     final usd = toUsd(cents, from, perUsd);
     if (to == baseCurrency) return usd;
     final rate = perUsd[to];
-    return rate == null ? usd : (usd * rate).round();
+    if (rate == null || rate <= 0) throw StateError('No exchange rate for $to');
+    return (usd * rate).round();
   }
 
   /// Values for the transaction columns a new entry in [currency] needs.

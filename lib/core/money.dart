@@ -24,36 +24,71 @@ abstract final class Money {
       // U+2060 keeps the sign glued to the figure when text wraps.
       cents < 0 ? '\u2212\u2060${format(-cents)}' : '+\u2060${format(cents)}';
 
-  /// Parses user or CSV input to cents. Accepts `$1,204.5`, `(12.00)`,
-  /// `-12`, `12-`, `1.204,50` (EU) and `USD 12`. Returns null when there is
-  /// no number in it.
+  /// Parses user or CSV input to cents, with integer arithmetic only.
+  ///
+  /// Accepts `$1,204.5`, `(12.00)`, `-12`, `12-`, `12 DR`/`12 CR`,
+  /// `1.204,50` and `150.000` (dot thousands, as LBP is often written),
+  /// `1 234,56`, `1'234.56`, `USD 12`. A lone separator followed by exactly
+  /// three digits is a thousands separator (`1.005` = 1,005), unless the
+  /// whole part is 0 (`0.285`). Returns null when it isn't a number — text
+  /// such as `Address Line 1` included.
   static int? parse(String raw) {
     var s = raw.trim();
     if (s.isEmpty) return null;
     var negative = false;
     if (s.startsWith('(') && s.endsWith(')')) {
       negative = true;
-      s = s.substring(1, s.length - 1);
+      s = s.substring(1, s.length - 1).trim();
     }
-    s = s.replaceAll(RegExp(r'[^\d,.\-−]'), '');
-    if (s.contains('-') || s.contains('−')) {
-      negative = true;
-      s = s.replaceAll(RegExp('[-−]'), '');
+    // Currency codes/symbols and debit/credit markers around the number.
+    final marker = RegExp(r'^(?:[A-Za-z]{2,3}|[$€£₺¥])\s*|\s*(?:[A-Za-z]{2,3}|[$€£₺¥])$');
+    for (var i = 0; i < 2; i++) {
+      final m = marker.firstMatch(s);
+      if (m == null) break;
+      final token = m.group(0)!.trim().toUpperCase();
+      if (token == 'DR') negative = true;
+      s = s.replaceRange(m.start, m.end, '').trim();
     }
-    if (s.isEmpty) return null;
+    if (s.startsWith('-') || s.startsWith('−')) {
+      negative = !negative;
+      s = s.substring(1).trim();
+    } else if (s.endsWith('-') || s.endsWith('−')) {
+      negative = !negative;
+      s = s.substring(0, s.length - 1).trim();
+    } else if (s.startsWith('+')) {
+      s = s.substring(1).trim();
+    }
+    if (s.startsWith(r'$') || s.startsWith('€') || s.startsWith('£')) s = s.substring(1).trim();
+    if (!RegExp(r"^\d[\d.,'  ]*$|^[.,]\d+$").hasMatch(s)) return null;
+    s = s.replaceAll(RegExp(r"['  ]"), '');
 
-    final lastComma = s.lastIndexOf(',');
     final lastDot = s.lastIndexOf('.');
-    if (lastComma > lastDot) {
-      // Comma is the decimal separator only when it has 1–2 digits after it.
-      final tail = s.length - lastComma - 1;
-      s = tail <= 2 ? s.replaceAll('.', '').replaceAll(',', '.') : s.replaceAll(',', '');
-    } else {
-      s = s.replaceAll(',', '');
+    final lastComma = s.lastIndexOf(',');
+    var whole = s;
+    var frac = '';
+    final sepAt = lastDot > lastComma ? lastDot : lastComma;
+    if (sepAt >= 0) {
+      final sep = s[sepAt];
+      final other = sep == '.' ? ',' : '.';
+      final tail = s.substring(sepAt + 1);
+      final head = s.substring(0, sepAt);
+      final sepCount = sep.allMatches(s).length;
+      final bothKinds = s.contains(other);
+      final isDecimal =
+          bothKinds ||
+          (sepCount == 1 && (tail.length != 3 || head.replaceAll(RegExp('[.,]'), '').replaceAll('0', '').isEmpty));
+      if (isDecimal) {
+        whole = head.replaceAll(RegExp('[.,]'), '');
+        frac = tail;
+      } else {
+        whole = s.replaceAll(RegExp('[.,]'), '');
+      }
     }
-    final value = double.tryParse(s);
-    if (value == null) return null;
-    final cents = (value * 100).round();
+    if (whole.isEmpty) whole = '0';
+    if (!RegExp(r'^\d+$').hasMatch(whole) || (frac.isNotEmpty && !RegExp(r'^\d+$').hasMatch(frac))) return null;
+    final padded = frac.padRight(3, '0');
+    var cents = int.parse(whole) * 100 + int.parse(padded.substring(0, 2));
+    if (padded.codeUnitAt(2) - 48 >= 5) cents += 1; // half-up on the 3rd digit
     return negative ? -cents : cents;
   }
 }

@@ -100,7 +100,9 @@ class QuickAdd {
 T? fuzzyMatch<T>(String? query, Iterable<T> items, String Function(T) name) {
   if (query == null || query.trim().isEmpty) return null;
   final q = _norm(query);
-  final list = items.toList();
+  if (q.isEmpty) return null;
+  // Names that normalise to nothing (emoji only) would prefix-match anything.
+  final list = items.where((i) => _norm(name(i)).isNotEmpty).toList();
   for (final pass in [
     (String n) => n == q,
     (String n) => n.startsWith(q) || q.startsWith(n),
@@ -124,7 +126,7 @@ T? fuzzyMatch<T>(String? query, Iterable<T> items, String Function(T) name) {
 /// Lowercase, alphanumerics only, naive singular ("groceries" → "grocery",
 /// "subscriptions" → "subscription") so plurals match what people type.
 String _norm(String s) {
-  final w = s.toLowerCase().replaceAll(RegExp('[^a-z0-9]'), '');
+  final w = s.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
   if (w.length > 4 && w.endsWith('ies')) return '${w.substring(0, w.length - 3)}y';
   if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.substring(0, w.length - 1);
   return w;

@@ -289,8 +289,12 @@ List<(DateTime, int)> netWorthSeries({
   final bal = {for (final a in accounts) a.id: a.openingBalanceCents};
   final out = <(DateTime, int)>[];
   var i = 0;
+  final today = Day.today();
   for (final m in ends) {
-    final end = Day.lastOfMonth(m);
+    // A month's point is its last day — or today for the current month, so
+    // it matches the balances shown on Home (which exclude future entries).
+    final monthEnd = Day.lastOfMonth(m);
+    final end = monthEnd.compareTo(today) > 0 ? today : monthEnd;
     while (i < sorted.length && sorted[i].occurredOn.compareTo(end) <= 0) {
       final t = sorted[i++];
       switch (t.type) {

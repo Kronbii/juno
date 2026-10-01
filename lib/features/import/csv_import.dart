@@ -188,15 +188,17 @@ abstract final class DateFormats {
   static const candidates = [
     'yyyy-MM-dd',
     'yyyy/MM/dd',
-    'MM/dd/yyyy',
+    // Day-first before month-first: Lebanese and most non-US banks write
+    // dd/MM. Ambiguous files are flagged in the UI (isAmbiguous).
     'dd/MM/yyyy',
-    'M/d/yyyy',
+    'MM/dd/yyyy',
     'd/M/yyyy',
+    'M/d/yyyy',
     'dd.MM.yyyy',
     'dd-MM-yyyy',
     'MM-dd-yyyy',
-    'MM/dd/yy',
     'dd/MM/yy',
+    'MM/dd/yy',
     'd MMM yyyy',
     'dd MMM yyyy',
     'MMM d, yyyy',
@@ -223,12 +225,33 @@ abstract final class DateFormats {
   /// order is settled by the samples themselves: a 13+ in the first field
   /// rules out month-first.
   static String? detect(Iterable<String> values) {
-    final sample = values.where((v) => v.trim().isNotEmpty).take(50).toList();
+    // Every row, not a sample: one "25/04" late in the file settles the order.
+    final sample = values.where((v) => v.trim().isNotEmpty).toList();
     if (sample.isEmpty) return null;
     for (final f in candidates) {
       if (sample.every((v) => tryParse(v, f) != null)) return f;
     }
     return null;
+  }
+
+  static const _swaps = {
+    'dd/MM/yyyy': 'MM/dd/yyyy',
+    'MM/dd/yyyy': 'dd/MM/yyyy',
+    'd/M/yyyy': 'M/d/yyyy',
+    'M/d/yyyy': 'd/M/yyyy',
+    'dd-MM-yyyy': 'MM-dd-yyyy',
+    'MM-dd-yyyy': 'dd-MM-yyyy',
+    'dd/MM/yy': 'MM/dd/yy',
+    'MM/dd/yy': 'dd/MM/yy',
+  };
+
+  /// True when [values] read just as well with day and month swapped — the
+  /// UI then asks the user to confirm the order.
+  static bool isAmbiguous(Iterable<String> values, String format) {
+    final swap = _swaps[format];
+    if (swap == null) return false;
+    final v = values.where((x) => x.trim().isNotEmpty).toList();
+    return v.isNotEmpty && v.every((x) => tryParse(x, swap) != null);
   }
 }
 
@@ -265,9 +288,9 @@ class ImportRow {
 /// Stable fingerprint for a bank row. The occurrence count makes two genuine
 /// identical rows on one day (two $4.50 coffees) distinct, while re-importing
 /// the same file reproduces the same hashes.
-String dedupeHash(String day, int cents, String description, int occurrence) {
+String dedupeHash(String day, int cents, String description, int occurrence, {String account = ''}) {
   final norm = description.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
-  return sha1.convert(utf8.encode('$day|$cents|$norm|$occurrence')).toString().substring(0, 20);
+  return sha1.convert(utf8.encode('$account|$day|$cents|$norm|$occurrence')).toString().substring(0, 20);
 }
 
 /// Built-in keyword → category-name hints for first-time imports, before
@@ -340,6 +363,7 @@ List<ImportRow> buildRows({
   required Set<String> existingHashes,
   required Map<String, String> memory,
   required List<Category> categories,
+  String accountId = '',
 }) {
   final byName = {for (final k in categories) k.name.toLowerCase(): k};
   final seen = <String, int>{};
@@ -379,7 +403,7 @@ List<ImportRow> buildRows({
     final day = date == null ? null : Day.of(date);
     final baseKey = '$day|$cents|${desc.toLowerCase().trim()}';
     final occurrence = seen[baseKey] = (seen[baseKey] ?? 0) + 1;
-    final hash = dedupeHash(day ?? '', cents ?? 0, desc, occurrence);
+    final hash = dedupeHash(day ?? '', cents ?? 0, desc, occurrence, account: accountId);
 
     final row = ImportRow(
       index: i,

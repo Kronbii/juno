@@ -113,13 +113,18 @@ class AttachmentStore {
       );
       await ledger.markUploaded(a.id);
     }
-    for (final a in await ledger.attachmentsWhere(uploaded: true)) {
-      final f = await fileFor(a);
-      if (f.existsSync()) continue;
-      try {
-        await f.writeAsBytes(await storage.download('$uid/${a.id}${_ext(a.fileName)}'), flush: true);
-      } on StorageException {
-        // Not there yet (the other device may still be uploading); next sync.
+    // Any live receipt without a local file: fetch it (it may not be up yet
+    // if the other device is still uploading — then next sync).
+    for (final uploaded in [true, false]) {
+      for (final a in await ledger.attachmentsWhere(uploaded: uploaded)) {
+        final f = await fileFor(a);
+        if (f.existsSync()) continue;
+        try {
+          await f.writeAsBytes(await storage.download('$uid/${a.id}${_ext(a.fileName)}'), flush: true);
+          await ledger.markUploaded(a.id);
+        } on StorageException {
+          // Not there yet; retry next sync.
+        }
       }
     }
   }

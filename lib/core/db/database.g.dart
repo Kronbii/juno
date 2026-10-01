@@ -7297,9 +7297,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'tx_day',
     'CREATE INDEX tx_day ON transactions (occurred_on)',
   );
-  late final Index txRecurringDay = Index(
-    'tx_recurring_day',
-    'CREATE UNIQUE INDEX tx_recurring_day ON transactions (recurring_id, occurred_on)',
+  late final Index txRecurring = Index(
+    'tx_recurring',
+    'CREATE INDEX tx_recurring ON transactions (recurring_id)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7317,7 +7317,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     attachments,
     localMeta,
     txDay,
-    txRecurringDay,
+    txRecurring,
   ];
   @override
   DriftDatabaseOptions get options => const DriftDatabaseOptions(storeDateTimeAsText: true);
