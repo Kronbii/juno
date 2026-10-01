@@ -812,7 +812,8 @@ class _CategoryCell extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: JMotion.fast,
-            height: 78,
+            // Grows with large text instead of clipping the label.
+            constraints: const BoxConstraints(minHeight: 78),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(JRadius.chip),
@@ -849,7 +850,7 @@ class _MoreCell extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Container(
-          height: 78,
+          constraints: const BoxConstraints(minHeight: 78),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(JRadius.chip),
             border: Border.all(color: c.hairline),

@@ -48,7 +48,7 @@ void main() {
   setUpAll(_loadFonts);
 
   const sizes = {'phone': Size(393, 852), 'desktop': Size(1440, 920)};
-  const routes = ['/home', '/activity', '/insights', '/plan', '/settings'];
+  const routes = ['/home', '/activity', '/insights', '/plan', '/settings', '/insights/review', '/settings/backups'];
 
   for (final s in sizes.entries) {
     for (final mode in [ThemeMode.light, ThemeMode.dark]) {
@@ -57,7 +57,7 @@ void main() {
         tester.view.devicePixelRatio = 2;
         addTearDown(tester.view.reset);
 
-        SharedPreferences.setMockInitialValues({'themeMode': mode.name});
+        SharedPreferences.setMockInitialValues({'themeMode': mode.name, 'onboarded': true});
         final prefs = await SharedPreferences.getInstance();
         final db = AppDatabase.memory(NativeDatabase.memory());
         await tester.runAsync(() async {

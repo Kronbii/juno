@@ -90,7 +90,12 @@ class JCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      ?trailing,
+                      if (trailing != null) ...[
+                        const SizedBox(width: JSpace.sm),
+                        // Flexible: a long trailing value wraps (large text)
+                        // instead of overflowing the header.
+                        Flexible(child: Align(alignment: Alignment.centerRight, child: trailing)),
+                      ],
                       if (trailing == null && onTap != null)
                         Icon(Icons.arrow_outward_rounded, size: 14, color: c.inkFaint),
                     ],

@@ -39,7 +39,19 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final from = yearly ? '${m.year}-01-01' : Day.firstOfMonth(m);
     final to = yearly ? '${m.year}-12-31' : Day.lastOfMonth(m);
     final prevFrom = yearly ? '${m.year - 1}-01-01' : Day.firstOfMonth(DateTime(m.year, m.month - 1));
-    final prevTo = yearly ? '${m.year - 1}-12-31' : Day.lastOfMonth(DateTime(m.year, m.month - 1));
+    // A period still running is compared with the same point of the one
+    // before ("this point in September"), never with all of it.
+    final today = DateTime.now();
+    final ongoing = Day.today().compareTo(from) >= 0 && Day.today().compareTo(to) <= 0;
+    final String prevTo;
+    if (!ongoing) {
+      prevTo = yearly ? '${m.year - 1}-12-31' : Day.lastOfMonth(DateTime(m.year, m.month - 1));
+    } else if (yearly) {
+      prevTo = Day.of(DateTime(today.year - 1, today.month, today.day));
+    } else {
+      final pm = DateTime(m.year, m.month - 1);
+      prevTo = Day.of(DateTime(pm.year, pm.month, today.day.clamp(1, Day.daysInMonth(pm))));
+    }
     final current = ref.watch(txQueryProvider(TxQuery(from: from, to: to, scope: lens))).value;
     final previous = ref.watch(txQueryProvider(TxQuery(from: prevFrom, to: prevTo, scope: lens))).value;
     final budgets = ref.watch(budgetsProvider).value ?? const <Budget>[];
@@ -47,7 +59,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final names = {for (final k in ref.watch(categoryMapProvider).values) k.id: k.name};
 
     final label = yearly ? '${m.year}' : Day.monthYear(m);
-    final prevLabel = yearly ? '${m.year - 1}' : Day.month(DateTime(m.year, m.month - 1));
+    final prevName = yearly ? '${m.year - 1}' : Day.month(DateTime(m.year, m.month - 1));
+    final prevLabel = ongoing ? 'this point in $prevName' : prevName;
     final review = current == null || previous == null
         ? null
         : buildReview(
@@ -57,7 +70,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             previous: previous,
             budgets: budgets,
             contributions: contribs,
-            months: yearly ? [for (var i = 1; i <= 12; i++) DateTime(m.year, i)] : [m],
+            months: yearly ? [for (var i = 1; i <= (ongoing ? today.month : 12); i++) DateTime(m.year, i)] : [m],
           );
 
     Widget stat(String l, String v, {Color? color}) => Expanded(
@@ -168,7 +181,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                     Expanded(
                       child: JMetricTile(
                         accent: review.budgetsMissed > 0 ? JAccent.warn : JAccent.income,
-                        label: 'Budgets kept',
+                        label: ongoing ? 'Budgets on track' : 'Budgets kept',
                         value: '${review.budgetsMet}/${review.budgetsMet + review.budgetsMissed}',
                         compact: true,
                       ),

@@ -130,6 +130,21 @@ void main() {
     }
   });
 
+  testWidgets('large text (160%): every screen and the entry sheet without overflow', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final h = await boot(tester);
+    for (final r in const ['/home', '/activity', '/insights', '/plan', '/settings', '/insights/review', '/settings/backups']) {
+      await h.go(r);
+      final e = tester.takeException();
+      expect(e, isNull, reason: '$r at 160% text');
+    }
+    unawaitedFuture(showEntrySheet(h.ctx));
+    await h.settle();
+    expect(tester.takeException(), isNull, reason: 'entry sheet at 160% text');
+    await h.dispose();
+  });
+
   testWidgets('entry sheet: double tap on Log saves once and never throws', (tester) async {
     final h = await boot(tester, demo: false);
     unawaitedFuture(showEntrySheet(h.ctx));

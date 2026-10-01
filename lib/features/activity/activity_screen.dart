@@ -239,16 +239,28 @@ class _Totals extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: JSpace.sm),
       child: Row(
         children: [
-          Text(
-            shown < totals.count ? '${totals.count} ENTRIES · $shown SHOWN' : '${totals.count} ENTRIES',
-            style: JType.microLabel.copyWith(color: c.inkFaint),
+          Expanded(
+            child: Text(
+              shown < totals.count ? '${totals.count} ENTRIES · $shown SHOWN' : '${totals.count} ENTRIES',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: JType.microLabel.copyWith(color: c.inkFaint),
+            ),
           ),
-          const Spacer(),
-          Text('IN ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-          Text(Money.whole(totals.income), style: JType.chipLabel.copyWith(color: c.income)),
-          const SizedBox(width: JSpace.md),
-          Text('OUT ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-          Text(Money.whole(totals.expense), style: JType.chipLabel.copyWith(color: c.ink)),
+          const SizedBox(width: JSpace.sm),
+          // Large text: the figures shrink before anything overflows.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              children: [
+                Text('IN ', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                Text(Money.whole(totals.income), style: JType.chipLabel.copyWith(color: c.income)),
+                const SizedBox(width: JSpace.md),
+                Text('OUT ', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                Text(Money.whole(totals.expense), style: JType.chipLabel.copyWith(color: c.ink)),
+              ],
+            ),
+          ),
         ],
       ),
     );

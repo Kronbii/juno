@@ -40,7 +40,7 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Category drill-down: trend, entries and the budget.
 - [x] A calendar heatmap of spending.
 - [x] Monthly and yearly reports (Month in review, with Copy summary).
-- [ ] A design-critique pass over every screen, plus accessibility (dynamic type, VoiceOver labels, contrast).
+- [x] Accessibility: every screen passes at 160% text (a CI test); icon buttons carry labels; contrast-validated palettes. A visual review fixed misleading partial-month comparisons.
 
 ## Milestone 5: safety
 - [x] Automatic local backups (daily snapshot, 14 kept, export) and a merge-restore that never overwrites newer data.
