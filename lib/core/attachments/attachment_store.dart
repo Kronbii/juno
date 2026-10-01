@@ -35,6 +35,7 @@ class AttachmentStore {
 
   /// Points the store at a folder (tests).
   @visibleForTesting
+  // ignore: avoid_setters_without_getters, test-only override; read via dir().
   static set directory(Directory d) => _dir = d;
 
   static Future<Directory> dir() async {

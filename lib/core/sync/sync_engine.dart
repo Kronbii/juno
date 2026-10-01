@@ -268,6 +268,10 @@ class SyncEngine extends Notifier<SyncStatus> {
       return null;
     } on AuthException catch (e) {
       return e.message;
+    } on Object catch (e) {
+      // Network or platform failures must reach the screen too, not leave
+      // the button spinning.
+      return 'Couldn’t reach the sync server: $e';
     }
   }
 
@@ -277,6 +281,10 @@ class SyncEngine extends Notifier<SyncStatus> {
       return r.session == null ? 'Check your inbox to confirm, then sign in.' : null;
     } on AuthException catch (e) {
       return e.message;
+    } on Object catch (e) {
+      // Network or platform failures must reach the screen too, not leave
+      // the button spinning.
+      return 'Couldn’t reach the sync server: $e';
     }
   }
 

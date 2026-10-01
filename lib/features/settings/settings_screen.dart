@@ -24,7 +24,7 @@ class SettingsScreen extends ConsumerWidget {
 
     final syncValue = switch (sync.phase) {
       SyncPhase.disabled => 'Local only',
-      SyncPhase.signedOut => 'Signed out',
+      SyncPhase.signedOut => 'Sign in',
       SyncPhase.idle => 'On',
       SyncPhase.syncing => 'Syncing…',
       SyncPhase.error => 'Error',

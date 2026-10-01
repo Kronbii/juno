@@ -17,7 +17,7 @@ class SyncBadge extends ConsumerWidget {
     final s = ref.watch(syncEngineProvider);
     final (label, color) = switch (s.phase) {
       SyncPhase.disabled => ('Local only', c.inkFaint),
-      SyncPhase.signedOut => ('Not syncing', c.inkFaint),
+      SyncPhase.signedOut => ('Sign in to sync', c.warn),
       SyncPhase.idle => ('Synced', c.income),
       SyncPhase.syncing => ('Syncing', c.warn),
       SyncPhase.error => ('Sync error', c.expense),
