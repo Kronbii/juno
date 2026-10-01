@@ -324,6 +324,17 @@ class InsightsScreen extends ConsumerWidget {
           const ScopeLens(),
           const SizedBox(height: JSpace.lg),
           _MonthPicker(month: month),
+          const SizedBox(height: JSpace.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: JButton(
+              label: 'Month in review',
+              icon: Icons.auto_stories_outlined,
+              kind: JButtonKind.secondary,
+              dense: true,
+              onPressed: () => context.push('/insights/review'),
+            ),
+          ),
           const SizedBox(height: JSpace.lg),
           kpis,
         ],

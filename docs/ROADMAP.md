@@ -36,10 +36,10 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 
 ## Milestone 4: UI
 - [x] First-launch onboarding: accounts, opening balances, LBP rate, first budget, sync.
-- [ ] A transaction detail screen, with history, receipts and splits.
+- [x] A transaction detail screen, with history, receipts and splits. These live in the edit sheet: History, Split and the Receipt strip.
 - [x] Category drill-down: trend, entries and the budget.
 - [x] A calendar heatmap of spending.
-- [ ] Monthly and yearly reports.
+- [x] Monthly and yearly reports (Month in review, with Copy summary).
 - [ ] A design-critique pass over every screen, plus accessibility (dynamic type, VoiceOver labels, contrast).
 
 ## Milestone 5: safety

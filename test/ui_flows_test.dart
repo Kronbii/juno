@@ -120,6 +120,8 @@ void main() {
         '/settings/import',
         '/settings/back-tap',
         '/settings/sync',
+        '/settings/backups',
+        '/insights/review',
       ]) {
         await h.go(r);
         expect(tester.takeException(), isNull, reason: '$r at $size');
