@@ -20,7 +20,10 @@ jobs:
       - name: Generated code is up to date
         run: |
           dart run build_runner build
+          dart format lib/core/db/database.g.dart
           git diff --exit-code -- '*.g.dart'
+      - name: Formatted
+        run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - name: Tests (unit, reconciliation, sync fuzz, widget)
         run: flutter test
