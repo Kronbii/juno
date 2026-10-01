@@ -1,0 +1,20 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+  errors:
+    # The app is not a published library; docs live where they explain intent.
+    public_member_api_docs: ignore
+    lines_longer_than_80_chars: ignore
+
+linter:
+  rules:
+    sort_pub_dependencies: false
+    avoid_positional_boolean_parameters: false
+    flutter_style_todos: false
+    # Fire-and-forget writes from UI callbacks are intentional (drift streams
+    # update the UI); awaiting them would only add noise.
+    discarded_futures: false
+    comment_references: false
+    specify_nonobvious_property_types: false

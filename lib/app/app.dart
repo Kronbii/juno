@@ -1,0 +1,63 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:juno/app/router.dart';
+import 'package:juno/core/deeplink/deep_link_handler.dart';
+import 'package:juno/core/providers.dart';
+import 'package:juno/core/sync/sync_engine.dart';
+import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/plan/recurrence.dart';
+
+class JunoApp extends ConsumerStatefulWidget {
+  const JunoApp({super.key});
+
+  @override
+  ConsumerState<JunoApp> createState() => _JunoAppState();
+}
+
+class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _onForeground();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _onForeground();
+  }
+
+  /// Launch and resume: post due recurring entries, then sync.
+  Future<void> _onForeground() async {
+    await materializeRecurring(ref.read(databaseProvider));
+    await ref.read(syncEngineProvider.notifier).syncNow();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mode = ref.watch(themeModeProvider);
+    return MaterialApp.router(
+      title: 'Juno',
+      debugShowCheckedModeBanner: false,
+      theme: JTheme.light(),
+      darkTheme: JTheme.dark(),
+      themeMode: mode,
+      routerConfig: router,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      builder: (context, child) {
+        final c = context.jc;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: JTheme.overlay(c),
+          child: DeepLinkHandler(child: child!),
+        );
+      },
+    );
+  }
+}

@@ -1,0 +1,3 @@
+tags:
+  shots:
+    skip: "Visual snapshots; run with --tags shots --update-goldens"

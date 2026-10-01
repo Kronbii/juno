@@ -1,0 +1,464 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:go_router/go_router.dart';
+import 'package:juno/core/db/database.dart';
+import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/money.dart';
+import 'package:juno/core/providers.dart';
+import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/activity/tx_row.dart';
+import 'package:juno/features/add/entry_sheet.dart';
+import 'package:juno/features/insights/analytics.dart';
+import 'package:juno/features/plan/budget_widgets.dart';
+
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
+
+    final main = [
+      const JReveal(child: _HeroTile()),
+      const SizedBox(height: JSpace.gap),
+      JReveal(index: 1, child: _ScopeSplitTile(month: month)),
+    ];
+    final side = [
+      JReveal(index: 2, child: _BudgetsCard(month: month)),
+      const SizedBox(height: JSpace.gap),
+      const JReveal(index: 3, child: _UpcomingCard()),
+    ];
+
+    return JScreen(
+      eyebrow: '01 — Overview · ${Day.monthYear(month)}',
+      title: _greeting(now),
+      header: const ScopeLens(),
+      slivers: [
+        if (wide)
+          SliverToBoxAdapter(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    children: [
+                      ...main,
+                      const SizedBox(height: JSpace.gap),
+                      const _RecentCard(),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: JSpace.gap),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    children: [
+                      ...side,
+                      const SizedBox(height: JSpace.gap),
+                      const _AccountsCard(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          SliverList.list(
+            children: [
+              ...main,
+              const SizedBox(height: JSpace.gap),
+              ...side,
+              const SizedBox(height: JSpace.gap),
+              const JReveal(index: 4, child: _RecentCard()),
+              const SizedBox(height: JSpace.gap),
+              const _AccountsCard(),
+            ],
+          ),
+      ],
+    );
+  }
+
+  static String _greeting(DateTime now) {
+    final h = now.hour;
+    final part = h < 5
+        ? 'Late night'
+        : h < 12
+        ? 'Good morning'
+        : h < 18
+        ? 'Good afternoon'
+        : 'Good evening';
+    return '$part, *here’s* the month';
+  }
+}
+
+/// All / Personal / Household — the lens every screen reads.
+class ScopeLens extends ConsumerWidget {
+  const ScopeLens({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scope = ref.watch(scopeFilterProvider);
+    final options = <Scope?>[null, Scope.personal, Scope.household];
+    return JChipBar(
+      labels: const ['All', 'Personal', 'Household'],
+      accents: const [JAccent.brand, JAccent.brand, JAccent.household],
+      selectedIndex: options.indexOf(scope),
+      onSelected: (i) => ref.read(scopeFilterProvider.notifier).set(options[i]),
+    );
+  }
+}
+
+class _HeroTile extends ConsumerWidget {
+  const _HeroTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final now = DateTime.now();
+    final month = DateTime(now.year, now.month);
+    final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
+    final s = PeriodSummary.of(txs);
+    final pace = MonthPace(month: month, expense: s.expense);
+    final scope = ref.watch(scopeFilterProvider);
+    final rate = s.savingsRate;
+
+    return JCard(
+      accent: scope == Scope.household ? JAccent.household : JAccent.brand,
+      padding: const EdgeInsets.all(JSpace.tile),
+      title: scope == null ? 'Spent this month' : 'Spent this month · ${scope.label}',
+      trailing: JPill('Day ${pace.daysElapsed}/${pace.daysInMonth}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: CountUpMoney(
+              s.expense,
+              style: JType.heroMetric.copyWith(fontSize: 52, color: c.ink),
+            ),
+          ),
+          const SizedBox(height: JSpace.sm),
+          Text(
+            s.expense == 0
+                ? 'Nothing logged yet this month.'
+                : '${Money.format(pace.avgDaily)} a day · on pace for ${Money.whole(pace.projected)}',
+            style: JType.body.copyWith(color: c.inkMuted),
+          ),
+          const SizedBox(height: JSpace.xl),
+          Divider(color: c.hairline),
+          const SizedBox(height: JSpace.lg),
+          Row(
+            children: [
+              Expanded(
+                child: JMicroStat(value: Money.whole(s.income), label: 'Income', valueColor: c.income),
+              ),
+              Expanded(
+                child: JMicroStat(
+                  value: s.net < 0 ? '−${Money.whole(-s.net)}' : Money.whole(s.net),
+                  label: 'Net',
+                  valueColor: s.net < 0 ? c.expense : c.ink,
+                ),
+              ),
+              Expanded(
+                child: JMicroStat(
+                  value: rate == null ? '—' : '${(rate * 100).round()}%',
+                  label: 'Kept',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Personal vs household this month — always across both scopes, since the
+/// comparison is the point. Tapping a side focuses the app on that scope.
+class _ScopeSplitTile extends ConsumerWidget {
+  const _ScopeSplitTile({required this.month});
+
+  final DateTime month;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final txs = ref.watch(monthTxAllScopesProvider(month)).value ?? const <Transaction>[];
+    final s = PeriodSummary.of(txs);
+    final p = s.byScope[Scope.personal]!;
+    final h = s.byScope[Scope.household]!;
+    final total = p + h;
+    final lens = ref.watch(scopeFilterProvider);
+
+    Widget side(Scope scope, int cents, Color color, CrossAxisAlignment align) => Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => ref.read(scopeFilterProvider.notifier).set(lens == scope ? null : scope),
+        child: Column(
+          crossAxisAlignment: align,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                JDot(color),
+                const SizedBox(width: 6),
+                Text(scope.label.toUpperCase(), style: JType.microLabel.copyWith(color: c.inkMuted)),
+              ],
+            ),
+            const SizedBox(height: JSpace.sm),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(Money.whole(cents), style: JType.panelMetric.copyWith(color: c.ink)),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              total == 0 ? '—' : '${(cents / total * 100).round()}% of spend',
+              style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return JCard(
+      title: 'Personal vs household',
+      child: Column(
+        children: [
+          Row(
+            children: [
+              side(Scope.personal, p, c.brand, CrossAxisAlignment.start),
+              side(Scope.household, h, c.household, CrossAxisAlignment.end),
+            ],
+          ),
+          const SizedBox(height: JSpace.lg),
+          _SplitBar(a: p, b: h, aColor: c.brand, bColor: c.household),
+        ],
+      ),
+    );
+  }
+}
+
+class _SplitBar extends StatelessWidget {
+  const _SplitBar({required this.a, required this.b, required this.aColor, required this.bColor});
+
+  final int a;
+  final int b;
+  final Color aColor;
+  final Color bColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    final total = a + b;
+    return SizedBox(
+      height: 8,
+      child: total == 0
+          ? Container(
+              decoration: BoxDecoration(color: c.hairline, borderRadius: BorderRadius.circular(4)),
+            )
+          : TweenAnimationBuilder<double>(
+              tween: Tween(end: a / total),
+              duration: JMotion.reduced(context) ? Duration.zero : JMotion.reveal,
+              curve: JMotion.ease,
+              builder: (_, t, _) => Row(
+                children: [
+                  if (t > 0)
+                    Expanded(
+                      flex: (t * 1000).round().clamp(1, 1000),
+                      child: Container(
+                        decoration: BoxDecoration(color: aColor, borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                  // 2px surface gap between fills (dataviz spacer rule).
+                  if (t > 0 && t < 1) const SizedBox(width: 2),
+                  if (t < 1)
+                    Expanded(
+                      flex: ((1 - t) * 1000).round().clamp(1, 1000),
+                      child: Container(
+                        decoration: BoxDecoration(color: bColor, borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _BudgetsCard extends ConsumerWidget {
+  const _BudgetsCard({required this.month});
+
+  final DateTime month;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final budgets = ref.watch(budgetsProvider).value ?? const <Budget>[];
+    final txs = ref.watch(monthTxAllScopesProvider(month)).value ?? const <Transaction>[];
+    final statuses = budgetStatuses(budgets, txs);
+    return JCard(
+      title: 'Budgets',
+      onTap: () => context.go('/plan'),
+      child: statuses.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: JSpace.sm),
+              child: Text(
+                'Set a monthly limit for a category or scope to see how close you are.',
+                style: JType.body.copyWith(color: context.jc.inkMuted),
+              ),
+            )
+          : Column(
+              children: [
+                for (final s in statuses.take(3)) ...[
+                  BudgetLine(status: s),
+                  if (s != statuses.take(3).last) const SizedBox(height: JSpace.lg),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _UpcomingCard extends ConsumerWidget {
+  const _UpcomingCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final cats = ref.watch(categoryMapProvider);
+    final horizon = Day.of(DateTime.now().add(const Duration(days: 7)));
+    final soon = rules.where((r) => r.active && r.nextDue.compareTo(horizon) <= 0).toList();
+
+    return JCard(
+      title: 'Next 7 days',
+      onTap: () => context.go('/plan'),
+      child: soon.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: JSpace.sm),
+              child: Text('No recurring entries due.', style: JType.body.copyWith(color: c.inkMuted)),
+            )
+          : Column(
+              children: [
+                for (final r in soon.take(4))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 64,
+                          child: Text(
+                            Day.short(r.nextDue).toUpperCase(),
+                            style: JType.microLabel.copyWith(color: c.inkFaint),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            r.note.isNotEmpty ? r.note : cats[r.categoryId]?.name ?? 'Recurring',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: JType.bodyStrong.copyWith(color: c.ink),
+                          ),
+                        ),
+                        Text(
+                          '${r.type == TxType.income ? '+' : '−'}${Money.format(r.amountCents)}',
+                          style: JType.rowMetric.copyWith(
+                            fontSize: 13,
+                            color: r.type == TxType.income ? c.income : c.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _RecentCard extends ConsumerWidget {
+  const _RecentCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scope = ref.watch(scopeFilterProvider);
+    final txs = ref.watch(txQueryProvider(TxQuery(scope: scope, limit: 8))).value;
+    return JCard(
+      title: 'Recent',
+      onTap: () => context.go('/activity'),
+      padding: const EdgeInsets.fromLTRB(JSpace.card, JSpace.card, JSpace.card, JSpace.sm),
+      child: txs == null
+          ? const SizedBox(height: 80)
+          : txs.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: JSpace.sm),
+              child: JEmpty(
+                icon: Icons.receipt_long_outlined,
+                title: 'No entries yet',
+                message: 'Log your first expense — it takes three taps.',
+                action: JButton(
+                  label: 'New entry',
+                  icon: Icons.add_rounded,
+                  dense: true,
+                  onPressed: () => showEntrySheet(context),
+                ),
+              ),
+            )
+          : SlidableAutoCloseBehavior(
+              child: Column(children: [for (final t in txs) TxRow(tx: t, showDate: true)]),
+            ),
+    );
+  }
+}
+
+class _AccountsCard extends ConsumerWidget {
+  const _AccountsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final accounts = ref.watch(accountsProvider).value ?? const <Account>[];
+    final balances = ref.watch(balancesProvider).value ?? const <String, int>{};
+    final total = accounts.fold(0, (s, a) => s + (balances[a.id] ?? a.openingBalanceCents));
+    return JCard(
+      title: 'Accounts',
+      onTap: () => context.go('/settings/accounts'),
+      child: Column(
+        children: [
+          for (final a in accounts)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(a.name, style: JType.bodyStrong.copyWith(color: c.ink, fontSize: 14)),
+                  ),
+                  Text(
+                    Money.format(balances[a.id] ?? a.openingBalanceCents),
+                    style: JType.rowMetric.copyWith(
+                      color: (balances[a.id] ?? 0) < 0 ? c.expense : c.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: JSpace.sm),
+          Divider(color: c.hairline),
+          const SizedBox(height: JSpace.sm),
+          Row(
+            children: [
+              Expanded(
+                child: Text('NET WORTH', style: JType.microLabel.copyWith(color: c.inkFaint)),
+              ),
+              Text(Money.format(total), style: JType.cardMetric.copyWith(color: c.ink)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
