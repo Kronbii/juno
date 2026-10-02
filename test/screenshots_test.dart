@@ -151,6 +151,12 @@ void main() {
           );
         }
 
+        router.go('/plan');
+        await settle();
+        await tester.tap(find.text('CASH FLOW'));
+        await settle();
+        await expectLater(find.byType(JunoApp), matchesGoldenFile('goldens/${s.key}-${mode.name}-cashflow.png'));
+
         router.go('/assistant');
         await settle();
         await tester.tap(find.text('What can I still spend this month?'));

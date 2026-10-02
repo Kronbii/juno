@@ -439,6 +439,44 @@ void main() {
     expect(tester.takeException(), isNull);
     await h.dispose();
   });
+
+  testWidgets('plan: cash flow tab renders at every size and at 160% text', (tester) async {
+    for (final (size, scale) in const [(Size(320, 640), 1.0), (Size(393, 852), 1.6), (Size(1440, 920), 1.0)]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      final h = await boot(tester, size: size);
+      await h.go('/plan');
+      await tester.tap(find.text('CASH FLOW'));
+      await h.settle();
+      expect(find.text('SPENDABLE MONEY'), findsOneWidget, reason: '$size');
+      expect(find.text('COMING UP'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: '$size at ${scale}x');
+      await h.dispose();
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+  });
+
+  testWidgets('accounts: a balance check logs the difference and the balance then matches', (tester) async {
+    final h = await boot(tester);
+    await h.go('/settings/accounts');
+    await tester.tap(find.text('Demo Cash'));
+    await h.settle();
+    await tester.tap(find.text('Check balance'));
+    await h.settle();
+    await tester.enterText(find.byType(TextField).last, '1.50');
+    await h.settle(2);
+    expect(find.textContaining('less than Juno expects'), findsOneWidget);
+    await tester.tap(find.text('Fix the balance'));
+    await h.settle();
+    final after = (await tester.runAsync(() => h.ledger.watchBalances().first))!;
+    final cash = (await tester.runAsync(
+      () => (h.db.select(h.db.accounts)..where((a) => a.name.equals('Demo Cash'))).getSingle(),
+    ))!;
+    expect(after[cash.id], 150);
+    expect(await count(h, "SELECT COUNT(*) n FROM transactions WHERE note = 'Balance check'"), 1);
+    expect(find.textContaining('checked'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await h.dispose();
+  });
 }
 
 /// Scripted assistant: a tool call for a fresh question (a request offering

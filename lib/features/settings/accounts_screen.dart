@@ -7,6 +7,7 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/plan/editors.dart' show MoneyField;
+import 'package:juno/features/settings/balance_check.dart';
 
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
@@ -38,7 +39,11 @@ class AccountsScreen extends ConsumerWidget {
                 JSettingRow(
                   icon: iconFor(a.kind),
                   title: a.archived ? '${a.name} (archived)' : a.name,
-                  subtitle: '${a.kind.name[0].toUpperCase()}${a.kind.name.substring(1)} · ${a.currency}',
+                  subtitle: [
+                    '${a.kind.name[0].toUpperCase()}${a.kind.name.substring(1)} · ${a.currency}',
+                    if (BalanceChecks.last(ref.watch(prefsProvider), a.id) case final at?)
+                      'checked ${Day.short(Day.of(at))}',
+                  ].join(' · '),
                   trailing: Text(
                     Fx.format(balances[a.id] ?? a.openingBalanceCents, a.currency),
                     style: JType.rowMetric.copyWith(color: (balances[a.id] ?? 0) < 0 ? c.expense : c.ink),
@@ -109,9 +114,26 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
   @override
   Widget build(BuildContext context) {
     final ledger = ref.read(ledgerProvider);
+    final account = widget.account;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (account != null && !account.archived) ...[
+          JButton(
+            label: 'Check balance',
+            icon: Icons.fact_check_outlined,
+            kind: JButtonKind.secondary,
+            expand: true,
+            onPressed: () {
+              // This sheet closes first: the check opens on the same navigator.
+              final nav = Navigator.of(context);
+              final root = nav.context;
+              nav.pop();
+              showBalanceCheck(root, account);
+            },
+          ),
+          const SizedBox(height: JSpace.lg),
+        ],
         JField(
           label: 'Name',
           child: TextField(controller: _name, autofocus: widget.account == null),

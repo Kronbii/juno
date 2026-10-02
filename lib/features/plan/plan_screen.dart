@@ -11,10 +11,11 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
+import 'package:juno/features/plan/cash_flow_tab.dart';
 import 'package:juno/features/plan/editors.dart';
 import 'package:juno/features/plan/recurrence.dart';
 
-enum PlanTab { budgets, goals, recurring }
+enum PlanTab { budgets, goals, recurring, cashFlow }
 
 class PlanScreen extends ConsumerStatefulWidget {
   const PlanScreen({super.key});
@@ -31,19 +32,25 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     final (label, onAdd) = switch (_tab) {
       PlanTab.budgets => ('New budget', () => editBudget(context)),
       PlanTab.goals => ('New goal', () => editGoal(context)),
-      PlanTab.recurring => ('New recurring', () => editRecurring(context)),
+      PlanTab.recurring || PlanTab.cashFlow => ('New recurring', () => editRecurring(context)),
     };
     return JScreen(
       eyebrow: '04 — Plan',
       title: 'Spend on *purpose*',
       actions: [JIconButton(icon: Icons.add_rounded, tooltip: label, onPressed: onAdd)],
       header: JSegmentBar<PlanTab>(
-        segments: const {PlanTab.budgets: 'Budgets', PlanTab.goals: 'Goals', PlanTab.recurring: 'Recurring'},
+        segments: const {
+          PlanTab.budgets: 'Budgets',
+          PlanTab.goals: 'Goals',
+          PlanTab.recurring: 'Recurring',
+          PlanTab.cashFlow: 'Cash flow',
+        },
         selected: _tab,
         accentOf: (t) => switch (t) {
           PlanTab.budgets => JAccent.warn,
           PlanTab.goals => JAccent.income,
           PlanTab.recurring => JAccent.household,
+          PlanTab.cashFlow => JAccent.brand,
         },
         onChanged: (t) => setState(() => _tab = t),
       ),
@@ -58,6 +65,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 PlanTab.budgets => const _BudgetsTab(),
                 PlanTab.goals => const _GoalsTab(),
                 PlanTab.recurring => const _RecurringTab(),
+                PlanTab.cashFlow => const CashFlowTab(),
               },
             ),
           ),

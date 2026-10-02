@@ -106,6 +106,20 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
     final first = DateTime(today.year, today.month - m);
     final days = Day.daysInMonth(first);
     add(first, 'Salary', 520000, Scope.personal, 'Monthly payroll', type: TxType.income);
+    // Dollars changed into pounds for the month's cash spending, as a
+    // cross-currency transfer, so the LBP wallet doesn't run dry.
+    rows.add(
+      TransactionsCompanion.insert(
+        type: TxType.transfer,
+        scope: Scope.personal,
+        amountCents: 3000,
+        accountId: checking,
+        toAccountId: Value(lbp),
+        toAmountCents: const Value(3000 * 89500),
+        occurredOn: Day.of(first),
+        note: const Value('Changed dollars'),
+      ),
+    );
     if (m.isEven) {
       add(
         DateTime(first.year, first.month, 18),

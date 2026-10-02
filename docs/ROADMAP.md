@@ -46,6 +46,11 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Automatic local backups (daily snapshot, 14 kept, export) and a merge-restore that never overwrites newer data.
 - [x] Edit history per entry, with restore.
 
+## Milestone 6: money you can trust
+- [x] **Balance check:** enter what an account really holds; Juno shows the difference and fixes it either as an entry dated today (cash spent without logging, tagged #balance-check) or by correcting the starting balance (spending untouched). Each account shows when it was last checked.
+- [x] **Cash flow, next 60 days** (Plan → Cash flow): spendable money (cash, current accounts, cards; savings left out) projected day by day from recurring income and bills, entries already dated ahead, and your usual everyday spending (90-day average, bills excluded). Shows the lowest point and warns before it goes below zero. Missing exchange rates are flagged, never guessed.
+- [x] Sample data changes dollars into pounds each month, so the demo LBP wallet stays realistic.
+
 ## AI (Juno cloud, or your own key)
 - [x] Juno cloud: a Supabase edge function holds the OpenAI key as a secret, accepts only signed-in users, and enforces the monthly cap on the server. AI works on every signed-in device with no setup. See [ai-cloud.md](ai-cloud.md).
 - [x] Your own key, set on one device, overrides the relay there. Any of six providers (OpenAI, Gemini, Anthropic, DeepSeek, Qwen, Kimi) through one OpenAI-style client. The default is OpenAI gpt-5-mini; the model can be changed. The key stays on the device.
