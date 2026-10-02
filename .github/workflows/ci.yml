@@ -27,3 +27,8 @@ jobs:
       - run: flutter analyze
       - name: Tests (unit, reconciliation, sync fuzz, widget)
         run: flutter test
+      - name: Date tests where clocks change (Beirut, Auckland)
+        run: |
+          for tz in Asia/Beirut Pacific/Auckland; do
+            TZ=$tz flutter test test/recheck_test.dart test/recheck_edges_test.dart test/forecast_test.dart test/money_health_test.dart test/weekly_read_test.dart test/advisor_test.dart test/logic_test.dart test/money_fixes_test.dart test/entry_parser_test.dart
+          done

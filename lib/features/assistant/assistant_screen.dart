@@ -10,6 +10,7 @@ import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
+import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_sheet.dart';
 import 'package:juno/features/assistant/assistant.dart';
@@ -390,8 +391,12 @@ class _DraftCardState extends ConsumerState<_DraftCard> {
                           onPressed: _busy
                               ? null
                               : () => _run(() async {
-                                  await a.log(d);
-                                  unawaited(HapticFeedback.lightImpact());
+                                  try {
+                                    await a.log(d);
+                                    unawaited(HapticFeedback.lightImpact());
+                                  } on DraftStale catch (e) {
+                                    showToast(e.message);
+                                  }
                                 }),
                         ),
                         JButton(

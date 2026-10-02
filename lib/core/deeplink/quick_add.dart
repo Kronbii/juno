@@ -83,7 +83,7 @@ class QuickAdd {
       // local calendar day.
       if (d != null) day = Day.of(d.isUtc ? d.toLocal() : d);
       if (dateRaw.toLowerCase() == 'yesterday') {
-        day = Day.of(DateTime.now().subtract(const Duration(days: 1)));
+        day = Day.of(Day.shift(DateTime.now(), -1));
       }
     }
 

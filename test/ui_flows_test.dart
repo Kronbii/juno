@@ -530,6 +530,62 @@ void main() {
     }
     tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
+
+  const everyRoute = [
+    '/home',
+    '/activity',
+    '/insights',
+    '/plan',
+    '/settings',
+    '/settings/accounts',
+    '/settings/categories',
+    '/settings/currencies',
+    '/settings/import',
+    '/settings/back-tap',
+    '/settings/sync',
+    '/settings/backups',
+    '/settings/ai',
+    '/insights/review',
+    '/assistant',
+  ];
+
+  // Every screen, every Plan tab and the entry sheet, under conditions the
+  // main sweep doesn't cover: dark theme, a brand-new empty app, no accounts
+  // at all, and LBP accounts whose rate is missing.
+  for (final (name, demo, prefs, setup) in <(String, bool, Map<String, Object>, Future<void> Function(AppDatabase)?)>[
+    ('dark theme', true, {'themeMode': 'dark'}, null),
+    ('empty app', false, {}, null),
+    (
+      'no accounts',
+      false,
+      {},
+      (db) => db.update(db.accounts).write(AccountsCompanion(deletedAt: Value(DateTime.now().toUtc()))),
+    ),
+    ('LBP rate missing', true, {}, (db) => db.customStatement("DELETE FROM currency_rates WHERE code = 'LBP'")),
+  ]) {
+    testWidgets('sweep: $name — every screen, tab and the entry sheet at every size', (tester) async {
+      for (final (size, scale) in const [(Size(320, 640), 1.0), (Size(393, 852), 1.6), (Size(1440, 920), 1.0)]) {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        final h = await boot(tester, size: size, demo: demo, prefs: prefs, setup: setup);
+        for (final r in everyRoute) {
+          await h.go(r);
+          expect(tester.takeException(), isNull, reason: '$name: $r at $size ×$scale');
+        }
+        await h.go('/plan');
+        for (final tab in ['GOALS', 'RECURRING', 'CASH FLOW', 'BUDGETS']) {
+          await tester.tap(find.text(tab));
+          await h.settle(2);
+          expect(tester.takeException(), isNull, reason: '$name: plan $tab at $size ×$scale');
+        }
+        await h.go('/home');
+        unawaitedFuture(showEntrySheet(h.ctx));
+        await h.settle();
+        expect(tester.takeException(), isNull, reason: '$name: entry sheet at $size ×$scale');
+        await h.dispose();
+      }
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+  }
 }
 
 /// Scripted assistant: a tool call for a fresh question (a request offering

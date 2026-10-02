@@ -398,7 +398,7 @@ class _UpcomingCard extends ConsumerWidget {
     final c = context.jc;
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
     final cats = ref.watch(categoryMapProvider);
-    final horizon = Day.of(DateTime.now().add(const Duration(days: 7)));
+    final horizon = Day.of(Day.shift(DateTime.now(), 7));
     final lens = ref.watch(scopeFilterProvider);
     final soon = rules
         .where((r) => r.isLive && (lens == null || r.scope == lens) && r.nextDue.compareTo(horizon) <= 0)

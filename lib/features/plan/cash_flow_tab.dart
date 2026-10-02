@@ -23,13 +23,13 @@ class CashFlowTab extends ConsumerWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final recent = ref.watch(
-      txQueryProvider(TxQuery(from: Day.of(today.subtract(const Duration(days: 90))), to: Day.of(today))),
+      txQueryProvider(TxQuery(from: Day.of(Day.shift(today, -90)), to: Day.of(today))),
     );
     final ahead = ref.watch(
       txQueryProvider(
         TxQuery(
-          from: Day.of(today.add(const Duration(days: 1))),
-          to: Day.of(today.add(const Duration(days: days))),
+          from: Day.of(Day.shift(today, 1)),
+          to: Day.of(Day.shift(today, days)),
         ),
       ),
     );

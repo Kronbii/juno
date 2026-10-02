@@ -92,6 +92,54 @@ void main() {
     expect(digits.contains(whole) || digits.contains((truth['spent'] as num).toStringAsFixed(2)), isTrue);
   });
 
+  test('the assistant drafts entries from plain words (LBP, household, yesterday) without saving', () async {
+    final db = AppDatabase.memory(NativeDatabase.memory());
+    addTearDown(db.close);
+    await seedDemo(db, now: now);
+    final ledger = Ledger(db);
+    final before = (await db.customSelect('SELECT COUNT(*) AS n FROM transactions').getSingle()).read<int>('n');
+    final a = Assistant(ai, ledger, clock: () => now);
+    final line = await a.ask('log 12 dollars coffee, and 450k taxi yesterday, and 40 groceries for the house');
+    // ignore: avoid_print, the output is the point of a live run
+    print(
+      'drafts: ${line.text}\n${[for (final d in line.drafts) '${d.type.name} ${d.amountCents} ${d.currency} ${d.scope.name} ${d.day} ${d.note}'].join('\n')}',
+    );
+    expect(line.failed, isFalse, reason: line.text);
+    expect(line.drafts.length, 3);
+    final lbp = line.drafts.where((d) => d.currency == 'LBP').single;
+    expect(lbp.amountCents, 45000000);
+    expect(lbp.day, '2026-09-17');
+    // "…and 40 groceries for the house" is its own item: today. (The coffee
+    // before "taxi yesterday" is ambiguous; the card shows its date.)
+    expect(line.drafts.firstWhere((d) => d.amountCents == 4000).day, '2026-09-18', reason: '"yesterday" was the taxi');
+    expect(line.drafts.where((d) => d.currency == 'USD').map((d) => d.amountCents).toSet(), {1200, 4000});
+    expect(line.drafts.firstWhere((d) => d.amountCents == 4000).scope, Scope.household);
+    final after = (await db.customSelect('SELECT COUNT(*) AS n FROM transactions').getSingle()).read<int>('n');
+    expect(after, before, reason: 'nothing is saved until Log');
+  });
+
+  test('import categories from descriptions alone', () async {
+    final out = await ai.categorize(
+      [
+        ('SPINNEYS ACHRAFIEH', false),
+        ('TOTAL LIBAN STATION', false),
+        ('NETFLIX.COM', false),
+        ('PAYROLL ACME SAL', true),
+        ('PHARMACIE MAZLOUM', false),
+        ('XQZ 7781', false),
+      ],
+      expenseCategories: const ['Groceries', 'Fuel', 'Subscriptions', 'Health', 'Dining', 'Transport', 'Other'],
+      incomeCategories: const ['Salary', 'Freelance', 'Other income'],
+    );
+    // ignore: avoid_print, the output is the point of a live run
+    print('categorize: $out · spent \$${(ai.spentMicros / 1e6).toStringAsFixed(5)}');
+    expect(out['SPINNEYS ACHRAFIEH'], 'Groceries');
+    expect(out['TOTAL LIBAN STATION'], 'Fuel');
+    expect(out['NETFLIX.COM'], 'Subscriptions');
+    expect(out['PAYROLL ACME SAL'], 'Salary');
+    expect(out['PHARMACIE MAZLOUM'], 'Health');
+  });
+
   test('relay: signed in, no key on the device, answers and reports spend', () async {
     final env = Platform.environment;
     final url = env['SUPABASE_URL'] ?? '';

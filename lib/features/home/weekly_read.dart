@@ -65,12 +65,12 @@ class WeekFacts {
 
 WeekFacts weekFacts(Iterable<Transaction> txs, Map<String, Category> categories, DateTime now) {
   final today = DateTime(now.year, now.month, now.day);
-  final monday = today.subtract(Duration(days: today.weekday - 1));
+  final monday = Day.shift(today, -(today.weekday - 1));
   final daysIn = today.weekday;
   final from = Day.of(monday);
   final to = Day.of(today);
-  final lastFrom = Day.of(monday.subtract(const Duration(days: 7)));
-  final lastTo = Day.of(monday.subtract(Duration(days: 7 - daysIn + 1)));
+  final lastFrom = Day.of(Day.shift(monday, -7));
+  final lastTo = Day.of(Day.shift(monday, -(7 - daysIn + 1)));
   var spent = 0;
   var last = 0;
   var entries = 0;
@@ -136,7 +136,7 @@ class _WeeklyCardState extends ConsumerState<WeeklyCard> {
     final c = context.jc;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final from = Day.of(today.subtract(Duration(days: today.weekday - 1 + 7)));
+    final from = Day.of(Day.shift(today, -(today.weekday - 1 + 7)));
     final lens = ref.watch(scopeFilterProvider);
     final txs = ref.watch(txQueryProvider(TxQuery(from: from, to: Day.of(today), scope: lens)));
     final list = txs.value;

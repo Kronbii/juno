@@ -8,6 +8,16 @@ import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/features/assistant/assistant_tools.dart';
 
+/// A draft that can't be logged as it is any more.
+class DraftStale implements Exception {
+  const DraftStale(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// One line of the visible conversation.
 class ChatLine {
   const ChatLine.user(this.text) : fromUser = true, looked = const [], failed = false, drafts = const [];
@@ -115,15 +125,29 @@ class Assistant {
   }
 
   /// Saves [d] as a real entry. Returns its id; logging twice is a no-op.
+  ///
+  /// Drafts can sit in the chat for days: if the account was archived or
+  /// deleted since, this throws [DraftStale] rather than saving into it (a
+  /// deleted account's money would vanish from every balance); a category
+  /// deleted since is dropped.
   Future<String> log(EntryDraft d) async {
     if (d.loggedId != null) return d.loggedId!;
+    final account = await (ledger.db.select(
+      ledger.db.accounts,
+    )..where((a) => a.id.equals(d.accountId))).getSingleOrNull();
+    if (account == null || account.deletedAt != null || account.archived) {
+      throw const DraftStale('That account is gone or archived — tap Edit to pick another.');
+    }
+    final category = d.categoryId == null
+        ? null
+        : await (ledger.db.select(ledger.db.categories)..where((c) => c.id.equals(d.categoryId!))).getSingleOrNull();
     d.loggedId = await ledger.addTransaction(
       TransactionsCompanion.insert(
         type: d.type,
         scope: d.scope,
         amountCents: d.amountCents,
         accountId: d.accountId,
-        categoryId: Value(d.categoryId),
+        categoryId: Value(category == null || category.deletedAt != null ? null : category.id),
         occurredOn: d.day,
         note: Value(d.note),
       ),
@@ -172,7 +196,7 @@ Rules:
 - Every figure you give must come from a tool result in this conversation. Never guess or invent numbers. If the tools can't answer, say so.
 - Amounts are US dollars unless marked otherwise. Write them like \$1,240 or \$12.50.
 - Be brief: a few sentences, or a short list when the user asks for one. No greetings, no filler.
-- To log, add or record something, call draft_entry once per entry. It shows the user a card with a Log button; nothing is saved until they tap it, so don't ask for confirmation in words — say briefly what you prepared. Pick the closest category; leave the date out for today.
+- To log, add or record something, call draft_entry once per entry. It shows the user a card with a Log button; nothing is saved until they tap it, so don't ask for confirmation in words — say briefly what you prepared. Pick the closest category. A date word ("yesterday", "on Monday") belongs only to the item it's next to; leave the date out for the others, which means today.
 - You cannot edit or delete entries. If asked, tell the user to swipe the entry in Activity.
 - When a question is vague about time, use this month and say so.
 - Reply in the language the user writes in.

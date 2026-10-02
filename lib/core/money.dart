@@ -105,6 +105,18 @@ abstract final class Day {
     return DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
   }
 
+  /// Whole calendar days from [a] to [b] (negative if [b] is earlier).
+  /// Counted on the dates, not the clock: `b.difference(a).inDays` loses a
+  /// day across a spring DST change (Lebanon moves its clocks at midnight,
+  /// so "yesterday" is only 23 hours ago and would read as today).
+  static int between(DateTime a, DateTime b) =>
+      DateTime.utc(b.year, b.month, b.day).difference(DateTime.utc(a.year, a.month, a.day)).inDays;
+
+  /// The date [days] after [d] (before, if negative), on the calendar.
+  /// `d.add(Duration(days: n))` adds 24-hour blocks, which lands on the
+  /// wrong date across a DST change when [d] is near midnight.
+  static DateTime shift(DateTime d, int days) => DateTime(d.year, d.month, d.day + days);
+
   static String firstOfMonth(DateTime m) => of(DateTime(m.year, m.month));
 
   static String lastOfMonth(DateTime m) => of(DateTime(m.year, m.month + 1, 0));
@@ -119,11 +131,10 @@ abstract final class Day {
   static final _monthShort = DateFormat('MMM');
 
   /// `Today`, `Yesterday`, `Tue 30 Sep`.
-  static String relative(String day) {
+  static String relative(String day, {DateTime? now}) {
     final d = parse(day);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final diff = today.difference(d).inDays;
+    now ??= DateTime.now();
+    final diff = between(d, now);
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
     if (diff == -1) return 'Tomorrow';

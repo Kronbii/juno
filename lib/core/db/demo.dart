@@ -158,9 +158,9 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
     if (m == 1) {
       final trip = DateTime(first.year, first.month, 5);
       add(trip, 'Travel', 38000, Scope.personal, 'Flight to Istanbul', tags: ['trip-istanbul']);
-      add(trip.add(const Duration(days: 1)), 'Travel', 54000, Scope.personal, 'Hotel Galata', tags: ['trip-istanbul']);
+      add(Day.shift(trip, 1), 'Travel', 54000, Scope.personal, 'Hotel Galata', tags: ['trip-istanbul']);
       add(
-        trip.add(const Duration(days: 2)),
+        Day.shift(trip, 2),
         'Dining',
         6200,
         Scope.personal,
@@ -266,19 +266,19 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
           id: Value(_demo('goalcontributions:1')),
           goalId: g1,
           amountCents: 1100000,
-          occurredOn: Day.of(today.subtract(const Duration(days: 90))),
+          occurredOn: Day.of(Day.shift(today, -90)),
         ),
         GoalContributionsCompanion.insert(
           id: Value(_demo('goalcontributions:2')),
           goalId: g1,
           amountCents: 150000,
-          occurredOn: Day.of(today.subtract(const Duration(days: 30))),
+          occurredOn: Day.of(Day.shift(today, -30)),
         ),
         GoalContributionsCompanion.insert(
           id: Value(_demo('goalcontributions:3')),
           goalId: g2,
           amountCents: 95000,
-          occurredOn: Day.of(today.subtract(const Duration(days: 20))),
+          occurredOn: Day.of(Day.shift(today, -20)),
         ),
       ]);
     final nextMonth = DateTime(today.year, today.month + 1);
@@ -304,8 +304,8 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
         categoryId: Value(cat('Subscriptions')),
         note: const Value('Netflix'),
         frequency: Frequency.monthly,
-        anchorDate: Day.of(today.add(const Duration(days: 3))),
-        nextDue: Day.of(today.add(const Duration(days: 3))),
+        anchorDate: Day.of(Day.shift(today, 3)),
+        nextDue: Day.of(Day.shift(today, 3)),
       ),
       RecurringRulesCompanion.insert(
         id: Value(_demo('recurringrules:6')),

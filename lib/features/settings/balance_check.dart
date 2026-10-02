@@ -64,15 +64,9 @@ Future<int> applyBalanceCheck(
         ),
       );
     case BalanceFix.opening:
-      await ledger.upsertAccount(
-        AccountsCompanion(
-          id: Value(account.id),
-          name: Value(account.name),
-          kind: Value(account.kind),
-          currency: Value(account.currency),
-          openingBalanceCents: Value(account.openingBalanceCents + diff),
-        ),
-      );
+      // Only the opening balance, against the row as it is now — the sheet's
+      // copy of [account] may be stale if sync brought changes meanwhile.
+      await ledger.adjustOpeningBalance(account.id, diff);
   }
   return diff;
 }

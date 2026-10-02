@@ -56,7 +56,7 @@ GoalPace goalPace({
   final first = live.isEmpty ? null : live.map((c) => c.occurredOn).reduce((a, b) => a.compareTo(b) < 0 ? a : b);
   final since = first != null && first.compareTo(from) > 0 ? first : from;
   // Months covered, at least one so a first deposit isn't divided by zero.
-  final months = math.max(1, (n.difference(Day.parse(since)).inDays / 30.44).round());
+  final months = math.max(1, (Day.between(Day.parse(since), n) / 30.44).round());
   final net = live.where((c) => c.occurredOn.compareTo(since) >= 0).fold(0, (s, c) => s + c.amountCents);
   // Unrounded for the arrival date: rounding to cents first can push it a
   // month late ($800 at $133.33/mo is 6 months, not 6.0002).

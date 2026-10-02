@@ -111,7 +111,7 @@ CashForecast forecastCash({
       : recent.map((t) => t.occurredOn).reduce((a, b) => a.compareTo(b) < 0 ? a : b);
   // A newer user has less history: average over the days actually covered.
   final from = firstEntry != null && firstEntry.compareTo(paceFrom) > 0 ? firstEntry : paceFrom;
-  final paceDays = firstEntry == null ? 0 : today.difference(Day.parse(from)).inDays;
+  final paceDays = firstEntry == null ? 0 : Day.between(Day.parse(from), today);
   var unplanned = 0;
   for (final t in recent) {
     if (t.type != TxType.expense || t.recurringId != null) continue;

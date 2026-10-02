@@ -14,6 +14,7 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 
 import 'support/fake_remote.dart';
+import 'support/world.dart' show seeds;
 
 /// Canonical content of every synced table (minus local-only columns).
 Future<Map<String, Map<String, Map<String, Object?>>>> dump(AppDatabase db) async {
@@ -43,7 +44,7 @@ Future<void> trySync(AppDatabase db, FakeRemote remote) async {
 }
 
 void main() {
-  for (final seed in [11, 23, 57, 101]) {
+  for (final seed in seeds([11, 23, 57, 101])) {
     test('three devices converge under random edits and outages (seed $seed)', () async {
       final rnd = Random(seed);
       final remote = FakeRemote();

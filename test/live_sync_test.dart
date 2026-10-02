@@ -7,19 +7,26 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNull;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/sync/sync_engine.dart';
+import 'package:juno/features/assistant/assistant.dart';
+import 'package:juno/features/assistant/assistant_tools.dart';
+import 'package:juno/features/settings/balance_check.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   test('two local databases converge through Supabase', () async {
+    SharedPreferences.setMockInitialValues({});
     final cfg = jsonDecode(File('supabase.json').readAsStringSync()) as Map<String, dynamic>;
     final email = Platform.environment['JUNO_LIVE_EMAIL']!;
     final password = Platform.environment['JUNO_LIVE_PASSWORD']!;
@@ -121,6 +128,48 @@ void main() {
     await SyncCore(a, SupabaseRemote(ca)).run();
     await SyncCore(b, SupabaseRemote(cb)).run();
     expect(await lb.transactions(const TxQuery()), isEmpty);
+
+    // v4–v6 write paths through the real server: a "For" entry with person
+    // tags, both balance-check fixes, and an assistant draft logged then
+    // undone.
+    final forKids = await la.addTransaction(
+      TransactionsCompanion.insert(
+        type: TxType.expense,
+        scope: Scope.household,
+        amountCents: 4801,
+        accountId: seedId('acct:checking'),
+        occurredOn: Day.today(),
+        tags: Value(EntryTags.store(['@karim', '@lea'])),
+      ),
+    );
+    final cash = await (a.select(a.accounts)..where((x) => x.id.equals(seedId('acct:cash')))).getSingle();
+    final chk = await (a.select(a.accounts)..where((x) => x.id.equals(seedId('acct:checking')))).getSingle();
+    final balA = await la.watchBalances().first;
+    await applyBalanceCheck(la, cash, actual: balA[cash.id]! - 750, current: balA[cash.id]!, fix: BalanceFix.entry);
+    await applyBalanceCheck(la, chk, actual: balA[chk.id]! + 10000, current: balA[chk.id]!, fix: BalanceFix.opening);
+    final tools = AssistantTools(la);
+    await tools.run('draft_entry', {'amount': 3, 'note': 'live draft'});
+    final draft = tools.takeDrafts().single;
+    final chat = Assistant(AiAssist(await SharedPreferences.getInstance()), la);
+    final drafted = await chat.log(draft);
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    await chat.unlog(draft);
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    final rowsB = {for (final t in await b.select(b.transactions).get()) t.id: t};
+    expect(EntryTags.parse(rowsB[forKids]!.tags), ['@karim', '@lea']);
+    expect(rowsB[drafted]!.deletedAt, isNotNull, reason: 'Undo reached the other device');
+    expect(rowsB.values.where((t) => t.note == 'Balance check' && t.deletedAt == null).length, 1);
+    expect(await lb.watchBalances().first, await la.watchBalances().first, reason: 'balances agree after the checks');
+
+    // Leave nothing behind in Storage: the test user's rows go with the
+    // user, but files don't.
+    final mine = ca.auth.currentUser!.id;
+    final left = await ca.storage.from(AttachmentStore.bucket).list(path: mine);
+    if (left.isNotEmpty) {
+      await ca.storage.from(AttachmentStore.bucket).remove([for (final o in left) '$mine/${o.name}']);
+    }
 
     await a.close();
     await b.close();

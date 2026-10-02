@@ -233,7 +233,7 @@ class Ledger {
   /// Category ids ordered by how often they were used in the last 90 days —
   /// the add sheet puts these first.
   Future<List<String>> recentCategoryIds() async {
-    final since = Day.of(DateTime.now().subtract(const Duration(days: 90)));
+    final since = Day.of(Day.shift(DateTime.now(), -90));
     final rows = await db
         .customSelect(
           '''
@@ -467,6 +467,24 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
         );
     _wrote();
     return id;
+  }
+
+  /// Moves an account's opening balance by [deltaCents], reading the row
+  /// fresh inside one transaction and touching nothing else, so a rename or
+  /// balance change that synced in meanwhile is kept, not overwritten.
+  Future<void> adjustOpeningBalance(String accountId, int deltaCents) async {
+    if (deltaCents == 0) return;
+    await db.transaction(() async {
+      final a = await (db.select(db.accounts)..where((x) => x.id.equals(accountId))).getSingle();
+      await (db.update(db.accounts)..where((x) => x.id.equals(accountId))).write(
+        AccountsCompanion(
+          openingBalanceCents: Value(a.openingBalanceCents + deltaCents),
+          updatedAt: Value(_now),
+          dirty: const Value(true),
+        ),
+      );
+    });
+    _wrote();
   }
 
   Future<String> upsertCategory(CategoriesCompanion c) async {

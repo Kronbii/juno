@@ -18,4 +18,12 @@ flutter analyze
 echo "› tests"
 flutter test
 
+# Date maths only goes wrong where clocks change: Lebanon moves its clocks
+# at midnight, Auckland's DST runs opposite to ours. CI machines run in UTC.
+DATED="test/recheck_test.dart test/recheck_edges_test.dart test/forecast_test.dart test/money_health_test.dart test/weekly_read_test.dart test/advisor_test.dart test/logic_test.dart test/money_fixes_test.dart test/entry_parser_test.dart"
+for tz in Asia/Beirut Pacific/Auckland; do
+  echo "› date tests in $tz"
+  TZ=$tz flutter test $DATED
+done
+
 echo "✓ all CI checks pass"

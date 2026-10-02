@@ -194,7 +194,7 @@ List<SubscriptionSuggestion> detectSubscriptions(
     if (similar.length < 3) continue;
     var monthly = true;
     for (var i = 1; i < similar.length; i++) {
-      final gap = Day.parse(similar[i].occurredOn).difference(Day.parse(similar[i - 1].occurredOn)).inDays;
+      final gap = Day.between(Day.parse(similar[i - 1].occurredOn), Day.parse(similar[i].occurredOn));
       if (gap < 25 || gap > 35) {
         monthly = false;
         break;
@@ -202,7 +202,7 @@ List<SubscriptionSuggestion> detectSubscriptions(
     }
     if (!monthly) continue;
     final latest = similar.last;
-    if (today.difference(Day.parse(latest.occurredOn)).inDays > 45) continue;
+    if (Day.between(Day.parse(latest.occurredOn), today) > 45) continue;
     final days = [for (final t in similar) Day.parse(t.occurredOn).day]..sort();
     out.add(
       SubscriptionSuggestion(

@@ -117,7 +117,7 @@ class Reminders {
 
     // Linux: post what is due today or tomorrow, once per due date.
     if (!billsOn) return;
-    final tomorrow = Day.of(DateTime.now().add(const Duration(days: 1)));
+    final tomorrow = Day.of(Day.shift(DateTime.now(), 1));
     var id = _billIdBase;
     for (final r in bills.where((r) => r.nextDue.compareTo(tomorrow) <= 0)) {
       final key = 'notified.bill.${r.id}.${r.nextDue}';

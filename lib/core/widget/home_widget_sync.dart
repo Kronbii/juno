@@ -33,7 +33,7 @@ abstract final class HomeWidgetSync {
     final accounts = {for (final a in await db.select(db.accounts).get()) a.id: a};
     final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull())).get();
     final plan = planMonth(monthTxs: txs, rules: rules, accounts: accounts, rates: {'USD': 1, ...await ledger.rates()});
-    final recent = await ledger.transactions(TxQuery(from: Day.of(now.subtract(const Duration(days: 60)))));
+    final recent = await ledger.transactions(TxQuery(from: Day.of(Day.shift(now, -60))));
     final presets = quickPresets(recent, cats);
 
     await HomeWidget.setAppGroupId(appGroup);
