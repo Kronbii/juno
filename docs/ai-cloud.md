@@ -24,6 +24,9 @@ device only.
 
 ## Setup (once)
 
+Done on 2 October 2026; verified live (see docs/testing.md).
+
+
 ```bash
 npx supabase db push                                    # creates ai_usage + ai_charge
 npx supabase functions deploy ai                        # deploys the relay

@@ -30,6 +30,11 @@ JUNO_SEEDS=40 flutter test test/reconcile_test.dart test/recheck_test.dart test/
 # The real model: receipts, an assistant question, logging by chat, import categories
 JUNO_AI_KEY="$(sed -n 's/^openAI= *//p' .env)" flutter test test/ai_live_test.dart --run-skipped --name '^(?!relay)'
 
+# Juno cloud (the deployed `ai` function), as a signed-in user with no key on the device:
+# answers, the assistant through tools, bad requests refused, the monthly cap enforced
+SUPABASE_URL=… SUPABASE_ANON_KEY=… JUNO_SERVICE_KEY=… JUNO_LIVE_EMAIL=… JUNO_LIVE_PASSWORD=… \
+  flutter test test/ai_live_test.dart --run-skipped --plain-name relay
+
 # The real Supabase project: two devices, receipts through Storage, LWW, paging, new write paths
 JUNO_LIVE_EMAIL=… JUNO_LIVE_PASSWORD=… flutter test test/live_sync_test.dart --run-skipped
 
@@ -37,4 +42,6 @@ JUNO_LIVE_EMAIL=… JUNO_LIVE_PASSWORD=… flutter test test/live_sync_test.dart
 flutter test test/screenshots_test.dart --update-goldens --run-skipped --tags shots
 ```
 
-The live sync test removes its own Storage files. Use a throwaway account for it, not your real one.
+The live sync test removes its own Storage files.
+
+Use a throwaway account for both live Supabase runs, never your real one: the relay test puts its user at the monthly cap.

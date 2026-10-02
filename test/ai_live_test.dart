@@ -167,4 +167,118 @@ void main() {
     final anonymous = await http.post(Uri.parse('$url/functions/v1/ai'), headers: {'apikey': anon}, body: '{}');
     expect(anonymous.statusCode, 401, reason: 'the relay must refuse callers who are not signed in');
   });
+
+  group('relay, deeper', () {
+    final env = Platform.environment;
+    final url = env['SUPABASE_URL'] ?? '';
+    final anon = env['SUPABASE_ANON_KEY'] ?? '';
+    late String token;
+    late String userId;
+
+    setUpAll(() async {
+      final r = await http.post(
+        Uri.parse('$url/auth/v1/token?grant_type=password'),
+        headers: {'apikey': anon, 'Content-Type': 'application/json'},
+        body: jsonEncode({'email': env['JUNO_LIVE_EMAIL'], 'password': env['JUNO_LIVE_PASSWORD']}),
+      );
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      token = j['access_token'] as String;
+      userId = (j['user'] as Map<String, dynamic>)['id'] as String;
+    });
+
+    Future<AiAssist> cloudAi() async {
+      SharedPreferences.setMockInitialValues({});
+      return AiAssist(await SharedPreferences.getInstance(), cloud: _EnvCloud(url, anon, token), clock: () => now);
+    }
+
+    test('relay: the assistant answers through the tools, to the cent', () async {
+      final db = AppDatabase.memory(NativeDatabase.memory());
+      addTearDown(db.close);
+      await seedDemo(db, now: now);
+      final ledger = Ledger(db);
+      final truth = await AssistantTools(ledger, clock: () => now).run('category_spending', {
+        'category': 'groceries',
+        'from': '2026-08-01',
+        'to': '2026-08-31',
+      });
+      final ai = await cloudAi();
+      final line = await Assistant(ai, ledger, clock: () => now).ask('How much did I spend on groceries in August?');
+      // ignore: avoid_print, the output is the point of a live run
+      print(
+        'relay assistant: ${line.text} · looked ${line.looked} · truth ${truth['spent']} · '
+        '\$${(ai.spentMicros / 1e6).toStringAsFixed(5)} this month on the server',
+      );
+      expect(line.failed, isFalse, reason: line.text);
+      expect(line.looked, isNotEmpty);
+      expect(line.text.replaceAll(',', ''), contains((truth['spent'] as num).toStringAsFixed(2)));
+    });
+
+    test('relay: malformed and oversized requests are refused', () async {
+      Future<int> post(String body) async => (await http.post(
+        Uri.parse('$url/functions/v1/ai'),
+        headers: {'Authorization': 'Bearer $token', 'apikey': anon, 'Content-Type': 'application/json'},
+        body: body,
+      )).statusCode;
+      expect(await post('{not json'), 400);
+      expect(await post(jsonEncode({'messages': <Object>[]})), 400);
+      expect(
+        await post(
+          jsonEncode({
+            'messages': [
+              {'role': 'hacker', 'content': 'x'},
+            ],
+          }),
+        ),
+        400,
+      );
+      expect(
+        await post(
+          jsonEncode({
+            'messages': [
+              {'role': 'user', 'content': 'x' * 250000},
+            ],
+          }),
+        ),
+        413,
+      );
+      final forged = await http.post(
+        Uri.parse('$url/functions/v1/ai'),
+        headers: {'Authorization': 'Bearer not-a-real-token', 'apikey': anon},
+        body: jsonEncode({
+          'messages': [
+            {'role': 'user', 'content': 'hi'},
+          ],
+        }),
+      );
+      expect(forged.statusCode, 401);
+    });
+
+    test('relay: at the monthly cap the server says no and the app falls back', () async {
+      final service = env['JUNO_SERVICE_KEY'] ?? '';
+      final month = DateTime.now().toUtc().toIso8601String().substring(0, 7);
+      // Put this test user at the cap, as the server would after a heavy month.
+      final up = await http.post(
+        Uri.parse('$url/rest/v1/ai_usage'),
+        headers: {
+          'apikey': service,
+          'Authorization': 'Bearer $service',
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: jsonEncode({'user_id': userId, 'month': month, 'spent_micros': 2000000, 'calls': 999}),
+      );
+      expect(up.statusCode, anyOf(200, 201, 204), reason: up.body);
+      final ai = await cloudAi();
+      expect(await ai.summarize(r'Spent $10.'), isNull);
+      expect(ai.capped, isTrue, reason: 'the cap the server reported is mirrored');
+      expect(ai.spentMicros, 2000000);
+      // A user can read their own usage, never write it.
+      final self = await http.post(
+        Uri.parse('$url/rest/v1/ai_usage'),
+        headers: {'apikey': anon, 'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'month': month, 'spent_micros': 0}),
+      );
+      expect(self.statusCode, anyOf(401, 403), reason: 'users must not reset their own spend');
+    });
+  });
 }
