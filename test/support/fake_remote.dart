@@ -32,7 +32,7 @@ class FakeRemote implements SyncRemote {
   static DateTime _at(Object? v) => DateTime.parse(v! as String).toUtc();
 
   @override
-  Future<void> upsert(String table, List<Map<String, dynamic>> rows) async {
+  Future<void> upsert(String table, List<Map<String, dynamic>> rows, {bool keepExisting = false}) async {
     if (down) throw Exception('network down');
     final t = tables.putIfAbsent(table, () => {});
     // Postgres now() is the transaction start: a whole batch shares one
@@ -44,6 +44,8 @@ class FakeRemote implements SyncRemote {
     for (final r in rows) {
       final id = r['id'] as String;
       final old = t[id];
+      // Insert-only (ON CONFLICT DO NOTHING): an existing row is untouched.
+      if (keepExisting && old != null) continue;
       final keepOld = old != null && _at(r['updated_at']).isBefore(_at(old['updated_at']));
       t[id] = {
         ...(keepOld ? old : r),

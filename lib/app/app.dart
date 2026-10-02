@@ -41,9 +41,11 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Back after a while: the date may have moved on.
+      // Back after a while: the date may have moved on — if it did, the
+      // new-day listener below does the foreground work.
+      final before = ref.read(todayProvider);
       ref.read(todayProvider.notifier).refresh();
-      _onForeground();
+      if (ref.read(todayProvider) == before) _onForeground();
     }
   }
 
@@ -62,8 +64,32 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
     await nav.push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => const OnboardingScreen()));
   }
 
-  /// Launch and resume: post due recurring entries, then sync.
+  bool _foregroundRunning = false;
+  bool _foregroundAgain = false;
+
+  /// Launch, resume and a new day: one run at a time — a resume that also
+  /// changes the date asks twice, and two inbox drains would collide. A
+  /// request while running queues one more run.
   Future<void> _onForeground() async {
+    if (_foregroundRunning) {
+      _foregroundAgain = true;
+      return;
+    }
+    _foregroundRunning = true;
+    try {
+      do {
+        _foregroundAgain = false;
+        await _foregroundOnce();
+      } while (_foregroundAgain && mounted);
+    } finally {
+      _foregroundRunning = false;
+    }
+  }
+
+  /// Catch up with other devices, then post due recurring entries — from the
+  /// latest copy of each rule, so a phone opened after weeks doesn't post
+  /// bills deleted or changed elsewhere — then share them.
+  Future<void> _foregroundOnce() async {
     final db = ref.read(databaseProvider);
     // Entries logged from Siri/Shortcuts/widgets while Juno was closed.
     final imported = await IntentInbox.drain(db);
@@ -76,8 +102,9 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
         // A failed backup must never block opening the app.
       }
     }
-    await materializeRecurring(db);
-    await ref.read(syncEngineProvider.notifier).syncNow();
+    final sync = ref.read(syncEngineProvider.notifier);
+    await sync.syncNow();
+    if (await materializeRecurring(db) > 0) await sync.syncNow();
     await ref.read(reminderRunnerProvider.notifier).run();
   }
 

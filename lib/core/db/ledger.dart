@@ -118,6 +118,19 @@ class Ledger {
 
   DateTime get _now => clock.now().toUtc();
 
+  /// The stamp for a write to row [id] of [table]: now, but always after the
+  /// version being replaced. Sync keeps the newest stamp, so a device whose
+  /// clock runs behind would otherwise stamp its edit "older" than the copy
+  /// it just pulled, and the edit would silently vanish on the next sync.
+  Future<DateTime> _stamp(String table, String id) async {
+    final now = _now;
+    final r = await db
+        .customSelect('SELECT updated_at FROM $table WHERE id = ?', variables: [Variable.withString(id)])
+        .getSingleOrNull();
+    final prev = r?.read<DateTime>('updated_at').toUtc();
+    return prev != null && !now.isAfter(prev) ? prev.add(const Duration(milliseconds: 1)) : now;
+  }
+
   void _wrote() => onWrite?.call();
 
   // ---------------------------------------------------------------- reads
@@ -378,7 +391,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
       );
     }
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      p.copyWith(updatedAt: Value(_now), dirty: const Value(true)),
+      p.copyWith(updatedAt: Value(await _stamp('transactions', id)), dirty: const Value(true)),
     );
     _wrote();
   }
@@ -396,7 +409,10 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     final sum = parts.fold(0, (a, p) => a + p.$3);
     if (sum != t.amountCents) throw ArgumentError('Parts add up to $sum, not ${t.amountCents}');
 
-    final group = t.splitGroup ?? newId();
+    // The original entry's id names the group, so a stale copy of the
+    // original arriving from another device can be recognised and healed
+    // (SyncCore.healSplits) instead of counting the money twice.
+    final group = t.splitGroup ?? t.id;
     final base = t.baseCents;
     var baseLeft = base ?? 0;
     final ids = <String>[];
@@ -417,7 +433,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
         if (i == 0) {
           await _remember(t, 'edit');
           await (db.update(db.transactions)..where((x) => x.id.equals(id))).write(
-            fields.copyWith(updatedAt: Value(_now), dirty: const Value(true)),
+            fields.copyWith(updatedAt: Value(await _stamp('transactions', id)), dirty: const Value(true)),
           );
           ids.add(id);
         } else {
@@ -433,6 +449,8 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
                   note: Value(t.note),
                   merchant: Value(t.merchant),
                   tags: Value(t.tags),
+                  // Undoing the import must take the parts back too.
+                  importBatchId: Value(t.importBatchId),
                 ),
               );
           ids.add(nid);
@@ -468,7 +486,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db
         .into(db.accounts)
         .insertOnConflictUpdate(
-          a.copyWith(id: Value(id), updatedAt: Value(_now), dirty: const Value(true)),
+          a.copyWith(id: Value(id), updatedAt: Value(await _stamp('accounts', id)), dirty: const Value(true)),
         );
     _wrote();
     return id;
@@ -484,7 +502,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
       await (db.update(db.accounts)..where((x) => x.id.equals(accountId))).write(
         AccountsCompanion(
           openingBalanceCents: Value(a.openingBalanceCents + deltaCents),
-          updatedAt: Value(_now),
+          updatedAt: Value(await _stamp('accounts', accountId)),
           dirty: const Value(true),
         ),
       );
@@ -497,7 +515,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db
         .into(db.categories)
         .insertOnConflictUpdate(
-          c.copyWith(id: Value(id), updatedAt: Value(_now), dirty: const Value(true)),
+          c.copyWith(id: Value(id), updatedAt: Value(await _stamp('categories', id)), dirty: const Value(true)),
         );
     _wrote();
     return id;
@@ -507,7 +525,11 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db.transaction(() async {
       for (var i = 0; i < idsInOrder.length; i++) {
         await (db.update(db.categories)..where((c) => c.id.equals(idsInOrder[i]))).write(
-          CategoriesCompanion(sort: Value(i), updatedAt: Value(_now), dirty: const Value(true)),
+          CategoriesCompanion(
+            sort: Value(i),
+            updatedAt: Value(await _stamp('categories', idsInOrder[i])),
+            dirty: const Value(true),
+          ),
         );
       }
     });
@@ -523,7 +545,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db
         .into(db.budgets)
         .insertOnConflictUpdate(
-          b.copyWith(id: Value(id), updatedAt: Value(_now), dirty: const Value(true)),
+          b.copyWith(id: Value(id), updatedAt: Value(await _stamp('budgets', id)), dirty: const Value(true)),
         );
     _wrote();
     return id;
@@ -531,7 +553,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Future<void> deleteBudget(String id) async {
     await (db.update(db.budgets)..where((b) => b.id.equals(id))).write(
-      BudgetsCompanion(deletedAt: Value(_now), updatedAt: Value(_now), dirty: const Value(true)),
+      BudgetsCompanion(deletedAt: Value(_now), updatedAt: Value(await _stamp('budgets', id)), dirty: const Value(true)),
     );
     _wrote();
   }
@@ -565,7 +587,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db
         .into(db.goals)
         .insertOnConflictUpdate(
-          g.copyWith(id: Value(id), updatedAt: Value(_now), dirty: const Value(true)),
+          g.copyWith(id: Value(id), updatedAt: Value(await _stamp('goals', id)), dirty: const Value(true)),
         );
     _wrote();
     return id;
@@ -573,7 +595,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Future<void> deleteGoal(String id) async {
     await (db.update(db.goals)..where((g) => g.id.equals(id))).write(
-      GoalsCompanion(deletedAt: Value(_now), updatedAt: Value(_now), dirty: const Value(true)),
+      GoalsCompanion(deletedAt: Value(_now), updatedAt: Value(await _stamp('goals', id)), dirty: const Value(true)),
     );
     _wrote();
   }
@@ -596,7 +618,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await (db.update(db.goalContributions)..where((c) => c.id.equals(id))).write(
       GoalContributionsCompanion(
         deletedAt: Value(_now),
-        updatedAt: Value(_now),
+        updatedAt: Value(await _stamp('goal_contributions', id)),
         dirty: const Value(true),
       ),
     );
@@ -616,7 +638,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await db
         .into(db.recurringRules)
         .insertOnConflictUpdate(
-          r.copyWith(id: Value(id), updatedAt: Value(_now), dirty: const Value(true)),
+          r.copyWith(id: Value(id), updatedAt: Value(await _stamp('recurring_rules', id)), dirty: const Value(true)),
         );
     _wrote();
     return id;
@@ -624,7 +646,11 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Future<void> deleteRecurring(String id) async {
     await (db.update(db.recurringRules)..where((r) => r.id.equals(id))).write(
-      RecurringRulesCompanion(deletedAt: Value(_now), updatedAt: Value(_now), dirty: const Value(true)),
+      RecurringRulesCompanion(
+        deletedAt: Value(_now),
+        updatedAt: Value(await _stamp('recurring_rules', id)),
+        dirty: const Value(true),
+      ),
     );
     _wrote();
   }
@@ -646,7 +672,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
             id: Value(seedId('fx:$code')),
             code: code,
             perUsd: perUsd,
-            updatedAt: Value(_now),
+            updatedAt: Value(await _stamp('currency_rates', seedId('fx:$code'))),
             dirty: const Value(true),
             deletedAt: const Value(null),
           ),
@@ -699,7 +725,11 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Future<void> deleteAttachment(String id) async {
     await (db.update(db.attachments)..where((a) => a.id.equals(id))).write(
-      AttachmentsCompanion(deletedAt: Value(_now), updatedAt: Value(_now), dirty: const Value(true)),
+      AttachmentsCompanion(
+        deletedAt: Value(_now),
+        updatedAt: Value(await _stamp('attachments', id)),
+        dirty: const Value(true),
+      ),
     );
     _wrote();
   }
@@ -743,9 +773,18 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
   Future<void> undoImport(String batchId) async {
     final now = _now;
     await db.transaction(() async {
-      await (db.update(db.transactions)..where((t) => t.importBatchId.equals(batchId))).write(
-        TransactionsCompanion(deletedAt: Value(now), updatedAt: Value(now), dirty: const Value(true)),
-      );
+      // The batch's rows, and the parts of any of them split since (split
+      // before parts carried their batch).
+      final groups =
+          await (db.selectOnly(db.transactions)
+                ..addColumns([db.transactions.splitGroup])
+                ..where(db.transactions.importBatchId.equals(batchId) & db.transactions.splitGroup.isNotNull()))
+              .map((r) => r.read(db.transactions.splitGroup)!)
+              .get();
+      await (db.update(db.transactions)..where(
+            (t) => (t.importBatchId.equals(batchId) | t.splitGroup.isIn(groups)) & t.deletedAt.isNull(),
+          ))
+          .write(TransactionsCompanion(deletedAt: Value(now), updatedAt: Value(now), dirty: const Value(true)));
       await (db.update(db.importBatches)..where((b) => b.id.equals(batchId))).write(
         ImportBatchesCompanion(deletedAt: Value(now), updatedAt: Value(now), dirty: const Value(true)),
       );

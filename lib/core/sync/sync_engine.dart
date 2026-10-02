@@ -8,6 +8,7 @@ import 'package:juno/core/attachments/attachment_store.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -64,7 +65,9 @@ class SyncStatus {
 abstract class SyncRemote {
   String? get userId;
 
-  Future<void> upsert(String table, List<Map<String, dynamic>> rows);
+  /// Writes [rows]. With [keepExisting], a row the server already has is
+  /// left as it is (insert-only), whatever its timestamps.
+  Future<void> upsert(String table, List<Map<String, dynamic>> rows, {bool keepExisting = false});
 
   /// Rows changed on the server after [cursor], ordered by
   /// (server_updated_at, id), at most [limit]. Keyset paging on the pair:
@@ -113,8 +116,8 @@ class SupabaseRemote implements SyncRemote {
   String? get userId => _c.auth.currentUser?.id;
 
   @override
-  Future<void> upsert(String table, List<Map<String, dynamic>> rows) =>
-      _c.from(table).upsert(rows, onConflict: 'user_id,id');
+  Future<void> upsert(String table, List<Map<String, dynamic>> rows, {bool keepExisting = false}) =>
+      _c.from(table).upsert(rows, onConflict: 'user_id,id', ignoreDuplicates: keepExisting);
 
   @override
   Future<List<Map<String, dynamic>>> changedSince(String table, SyncCursor? cursor, int limit) async {
@@ -171,6 +174,9 @@ class SyncCore {
   /// their cursor, so the next run retries them; everything else proceeds.
   int failures = 0;
 
+  /// Rows this run repaired locally (phantom bills, healed splits).
+  int repaired = 0;
+
   /// How far each pull re-reads behind its cursor. server_updated_at is the
   /// *start* of the writing transaction, so a long push can commit rows
   /// stamped earlier than ones another device already pulled. Re-reading a
@@ -202,6 +208,75 @@ class SyncCore {
         failures++;
       }
     }
+    // Repairs made while pulling (phantom bills withdrawn, splits healed)
+    // go out now, so the other device doesn't pull the broken copy first.
+    await healSplits();
+    if (repaired > 0) {
+      try {
+        await push('transactions', uid);
+      } on Object {
+        failures++;
+      }
+    }
+  }
+
+  /// Whether [v] is the stamp automatic postings carry (`seedStamp`, 2000).
+  static bool _autoStamp(Object? v) => v != null && DateTime.parse(v.toString()).toUtc().isBefore(DateTime.utc(2001));
+
+  /// A bill stopped on another device (deleted, paused or ended) while this
+  /// one was offline and kept posting it from its old copy: those postings
+  /// never happened. Only untouched automatic postings (still carrying the
+  /// posting stamp) dated after the stop are taken back; anything the user
+  /// edited stays.
+  Future<void> _withdrawPhantoms(Map<String, dynamic> rule) async {
+    final deleted = rule['deleted_at'] != null;
+    final paused = rule['active'] == false || rule['active'] == 0;
+    final end = rule['end_date'] as String?;
+    if (!deleted && !paused && end == null) return;
+    final stoppedOn = Day.of(DateTime.parse(rule['updated_at'].toString()).toLocal());
+    final cutoff = deleted || paused ? stoppedOn : end!;
+    final now = clock.now().toUtc().toIso8601String();
+    await db.customStatement(
+      'UPDATE transactions SET deleted_at = ?, updated_at = ?, dirty = 1 '
+      'WHERE recurring_id = ? AND deleted_at IS NULL AND occurred_on > ? '
+      "AND julianday(updated_at) < julianday('2001-01-01')",
+      [now, now, rule['id'], cutoff],
+    );
+    repaired += (await db.customSelect('SELECT changes() AS n').getSingle()).read<int>('n');
+  }
+
+  /// Splits whose original entry came back from a device that hadn't seen
+  /// the split (its full old row replaced the first part): the money would
+  /// count twice. The first part is restored as the rest of that entry — its
+  /// latest amount less the other parts — so the total is what was last
+  /// entered and the split holds. (A split's group is its original's id.)
+  Future<void> healSplits() async {
+    final broken = await db.customSelect('''
+      SELECT r.id AS id, r.amount_cents AS amount, r.base_cents AS base, r.updated_at AS at,
+        (SELECT SUM(o.amount_cents) FROM transactions o
+          WHERE o.split_group = r.id AND o.id <> r.id AND o.deleted_at IS NULL) AS others,
+        (SELECT SUM(o.base_cents) FROM transactions o
+          WHERE o.split_group = r.id AND o.id <> r.id AND o.deleted_at IS NULL) AS other_base
+      FROM transactions r
+      WHERE r.deleted_at IS NULL AND (r.split_group IS NULL OR r.split_group <> r.id)
+        AND EXISTS (SELECT 1 FROM transactions o WHERE o.split_group = r.id AND o.id <> r.id AND o.deleted_at IS NULL)
+    ''').get();
+    for (final b in broken) {
+      final rest = b.read<int>('amount') - (b.readNullable<int>('others') ?? 0);
+      if (rest <= 0) continue;
+      final base = b.readNullable<int>('base');
+      final restBase = base == null ? null : base - (b.readNullable<int>('other_base') ?? 0);
+      // Stamped after the copy it fixes, whatever this device's clock says.
+      final prev = DateTime.parse(b.read<String>('at')).toUtc();
+      final now = clock.now().toUtc();
+      final at = now.isAfter(prev) ? now : prev.add(const Duration(milliseconds: 1));
+      await db.customStatement(
+        'UPDATE transactions SET split_group = id, amount_cents = ?, base_cents = ?, updated_at = ?, dirty = 1 '
+        'WHERE id = ?',
+        [rest, restBase, at.toIso8601String(), b.read<String>('id')],
+      );
+      repaired++;
+    }
   }
 
   Future<void> push(String name, String uid) async {
@@ -223,15 +298,34 @@ class SyncCore {
         'user_id': uid,
       };
 
+      // An untouched automatic posting of a recurring bill is insert-only: if
+      // the server already has that occurrence (posted by another device,
+      // perhaps from a newer version of the rule), this device's copy —
+      // maybe made offline from an old copy of the rule — mustn't replace it.
+      bool auto(QueryRow r) =>
+          name == 'transactions' && r.data['recurring_id'] != null && _autoStamp(r.data['updated_at']);
+      Future<void> send(List<QueryRow> batch) async {
+        final plain = [
+          for (final r in batch)
+            if (!auto(r)) toRemote(r),
+        ];
+        final posted = [
+          for (final r in batch)
+            if (auto(r)) toRemote(r),
+        ];
+        if (plain.isNotEmpty) await remote.upsert(name, plain);
+        if (posted.isNotEmpty) await remote.upsert(name, posted, keepExisting: true);
+      }
+
       var sent = rows;
       try {
-        await remote.upsert(name, [for (final r in rows) toRemote(r)]);
+        await send(rows);
       } on Object {
         // Find the bad row(s): retry one by one, keep going with the rest.
         sent = [];
         for (final r in rows) {
           try {
-            await remote.upsert(name, [toRemote(r)]);
+            await send([r]);
             sent.add(r);
           } on Object {
             failed.add(r.data['id'] as String);
@@ -272,6 +366,11 @@ class SyncCore {
             await mergeRow(name, cols, r);
           } on Object {
             failures++;
+          }
+        }
+        if (name == 'recurring_rules') {
+          for (final r in rows) {
+            await _withdrawPhantoms(r);
           }
         }
       });
