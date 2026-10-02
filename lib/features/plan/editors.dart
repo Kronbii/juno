@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
@@ -18,6 +19,7 @@ class MoneyField extends StatelessWidget {
     this.hint = '0.00',
     this.autofocus = false,
     this.allowNegative = false,
+    this.currency = baseCurrency,
     super.key,
   });
 
@@ -26,6 +28,10 @@ class MoneyField extends StatelessWidget {
   final bool autofocus;
   final bool allowNegative;
 
+  /// The currency the amount is in — shown, so an amount for an LBP
+  /// account isn't typed as dollars (LBP 1,200 is about one cent).
+  final String currency;
+
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
@@ -33,7 +39,10 @@ class MoneyField extends StatelessWidget {
     keyboardType: TextInputType.numberWithOptions(decimal: true, signed: allowNegative),
     inputFormatters: [FilteringTextInputFormatter.allow(RegExp(allowNegative ? r'[0-9.,\-]' : '[0-9.,]'))],
     style: JType.cardMetric.copyWith(color: context.jc.ink),
-    decoration: InputDecoration(prefixText: r'$ ', hintText: hint),
+    decoration: InputDecoration(
+      prefixText: '${currencyInfo(currency).symbol ?? currency} ',
+      hintText: currencyInfo(currency).decimals == 0 ? hint.replaceAll('.00', '') : hint,
+    ),
   );
 }
 
@@ -519,7 +528,10 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
         ),
         JField(
           label: 'Amount',
-          child: MoneyField(controller: _amount),
+          child: MoneyField(
+            controller: _amount,
+            currency: ref.watch(accountMapProvider)[_account]?.currency ?? baseCurrency,
+          ),
         ),
         JField(
           label: 'Category',

@@ -20,6 +20,7 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/features/assistant/assistant.dart';
 import 'package:juno/features/assistant/assistant_tools.dart';
+import 'package:juno/features/plan/recurrence.dart' show occurrenceId;
 import 'package:juno/features/settings/balance_check.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -162,6 +163,31 @@ void main() {
     expect(rowsB[drafted]!.deletedAt, isNotNull, reason: 'Undo reached the other device');
     expect(rowsB.values.where((t) => t.note == 'Balance check' && t.deletedAt == null).length, 1);
     expect(await lb.watchBalances().first, await la.watchBalances().first, reason: 'balances agree after the checks');
+
+    // A bill posting the server already has is never replaced by another
+    // device's stale copy (insert-only push).
+    final ruleId = newId(); // the server's column is a uuid
+    final occ = occurrenceId(ruleId, Day.today());
+    TransactionsCompanion posting(int cents) => TransactionsCompanion.insert(
+      id: Value(occ),
+      type: TxType.expense,
+      scope: Scope.personal,
+      amountCents: cents,
+      accountId: seedId('acct:checking'),
+      occurredOn: Day.today(),
+      recurringId: Value(ruleId),
+      createdAt: Value(seedStamp),
+      updatedAt: Value(seedStamp),
+    );
+    await a.into(a.transactions).insert(posting(110000));
+    await SyncCore(a, SupabaseRemote(ca)).run();
+    await b.into(b.transactions).insert(posting(100000), mode: InsertMode.insertOrReplace);
+    await SyncCore(b, SupabaseRemote(cb)).run();
+    for (final db in [a, b]) {
+      await SyncCore(db, SupabaseRemote(db == a ? ca : cb)).run();
+      final t = await (db.select(db.transactions)..where((x) => x.id.equals(occ))).getSingle();
+      expect(t.amountCents, 110000, reason: 'the server’s first copy wins');
+    }
 
     // Leave nothing behind in Storage: the test user's rows go with the
     // user, but files don't.

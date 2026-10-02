@@ -52,6 +52,25 @@ DateTime _monthAt(DateTime anchor, int year, int month) {
   return (due, Day.of(cursor));
 }
 
+/// The rule's due dates from [from] to [to] (inclusive, `YYYY-MM-DD`), on
+/// its schedule — today's included even once it has been posted (posting
+/// moves `nextDue` on, but a 9:00 reminder for today still belongs to
+/// today). Respects the end date; nothing for a rule that won't post.
+List<String> scheduleBetween(RecurringRule rule, String from, String to) {
+  if (!rule.active || rule.deletedAt != null) return const [];
+  final anchor = Day.parse(rule.anchorDate);
+  final out = <String>[];
+  var d = anchor;
+  for (var i = 0; i < 5000; i++) {
+    final s = Day.of(d);
+    if (s.compareTo(to) > 0) break;
+    if (rule.endDate != null && s.compareTo(rule.endDate!) > 0) break;
+    if (s.compareTo(from) >= 0) out.add(s);
+    d = nextOccurrence(anchor: anchor, from: d, frequency: rule.frequency, interval: rule.interval);
+  }
+  return out;
+}
+
 /// Occurrence ids derive from (rule, day), so two devices that both post the
 /// same due date produce the same row and sync merges them instead of
 /// duplicating it.

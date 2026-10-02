@@ -41,6 +41,19 @@ class Reminders {
       (Platform.isIOS || Platform.isMacOS || Platform.isLinux);
   static bool get canSchedule => supported && (Platform.isIOS || Platform.isMacOS);
 
+  /// The device's timezone, looked up on every plan: iOS keeps an app alive
+  /// for days, and after a flight a 9:00 reminder would ring at the old
+  /// zone's 9:00.
+  Future<void> _followTimezone() async {
+    if (!canSchedule) return;
+    try {
+      final zone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(zone.identifier));
+    } on Object {
+      // Keep the last known zone.
+    }
+  }
+
   Future<void> init() async {
     if (_ready || !supported) return;
     await _plugin.initialize(
@@ -86,29 +99,39 @@ class Reminders {
     return '$name · $amount';
   }
 
+  /// Bill reminders to schedule: every due date in the next five weeks
+  /// (today's too, until 9:00), soonest first, at most [max] — iOS keeps 64
+  /// pending. A weekly bill gets each week, not just its next one.
+  static List<(String day, RecurringRule rule)> billDates(List<RecurringRule> rules, DateTime now, {int max = 60}) {
+    final today = Day.of(now);
+    final until = Day.of(Day.shift(now, 35));
+    final out = [
+      for (final r in rules.where((r) => r.isLive && r.type == TxType.expense))
+        for (final d in scheduleBetween(r, today, until))
+          if (d != today || now.hour < 9) (d, r),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    return out.take(max).toList();
+  }
+
   /// Re-plans every bill reminder from the current rules.
   Future<void> planBills(List<RecurringRule> rules, Map<String, Account> accounts, Map<String, Category> cats) async {
     await init();
     if (!supported) return;
-    final bills = rules.where((r) => r.isLive && r.type == TxType.expense).toList();
 
     if (canSchedule) {
+      await _followTimezone();
       for (var i = 0; i < 64; i++) {
         await _plugin.cancel(_billIdBase + i);
       }
       if (!billsOn) return;
-      final now = tz.TZDateTime.now(tz.local);
       var i = 0;
-      // iOS keeps at most 64 pending; the soonest bills go first.
-      for (final r in bills..sort((a, b) => a.nextDue.compareTo(b.nextDue))) {
-        final d = Day.parse(r.nextDue);
-        final at = tz.TZDateTime(tz.local, d.year, d.month, d.day, 9);
-        if (at.isBefore(now) || i >= 60) continue;
+      for (final (day, r) in billDates(rules, clock.now())) {
+        final d = Day.parse(day);
         await _plugin.zonedSchedule(
           _billIdBase + i++,
           'Due today',
           _billText(r, accounts, cats),
-          at,
+          tz.TZDateTime(tz.local, d.year, d.month, d.day, 9),
           _details,
           androidScheduleMode: AndroidScheduleMode.inexact,
         );
@@ -116,20 +139,20 @@ class Reminders {
       return;
     }
 
-    // Linux: post what is due today or tomorrow, once per due date.
+    // Linux: post what is due today or tomorrow, once per due date — from
+    // the schedule, since today's bill moves nextDue on as soon as it posts.
     if (!billsOn) return;
-    final tomorrow = Day.of(Day.shift(clock.now(), 1));
+    final now = clock.now();
+    final today = Day.of(now);
+    final tomorrow = Day.of(Day.shift(now, 1));
     var id = _billIdBase;
-    for (final r in bills.where((r) => r.nextDue.compareTo(tomorrow) <= 0)) {
-      final key = 'notified.bill.${r.id}.${r.nextDue}';
-      if (prefs.getBool(key) ?? false) continue;
-      await _plugin.show(
-        id++,
-        r.nextDue == Day.today() ? 'Due today' : 'Due tomorrow',
-        _billText(r, accounts, cats),
-        _details,
-      );
-      await prefs.setBool(key, true);
+    for (final r in rules.where((r) => r.isLive && r.type == TxType.expense)) {
+      for (final day in scheduleBetween(r, today, tomorrow)) {
+        final key = 'notified.bill.${r.id}.$day';
+        if (prefs.getBool(key) ?? false) continue;
+        await _plugin.show(id++, day == today ? 'Due today' : 'Due tomorrow', _billText(r, accounts, cats), _details);
+        await prefs.setBool(key, true);
+      }
     }
   }
 

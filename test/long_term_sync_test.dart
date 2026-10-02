@@ -227,4 +227,22 @@ void main() {
     await ld.undoImport(batch);
     expect(await ld.transactions(const TxQuery()), isEmpty);
   });
+
+  test('an old LBP statement is priced at the rate given for it, not today’s', () async {
+    final lbp = await ld.upsertAccount(
+      AccountsCompanion.insert(name: 'Cash LBP', kind: AccountKind.cash, currency: const Value('LBP')),
+    );
+    TransactionsCompanion rent(String day) => TransactionsCompanion.insert(
+      type: TxType.expense,
+      scope: Scope.household,
+      amountCents: 150000000, // LBP 1,500,000
+      accountId: lbp,
+      occurredOn: day,
+    );
+    await ld.commitImport('2021.csv', [rent('2021-03-01')], perUsd: 1507);
+    await ld.commitImport('today.csv', [rent('2026-09-01')]);
+    final rows = await ld.transactions(const TxQuery());
+    expect(rows.firstWhere((t) => t.occurredOn == '2021-03-01').baseCents, 99536, reason: r'≈ $995, not $16.76');
+    expect(rows.firstWhere((t) => t.occurredOn == '2026-09-01').baseCents, (150000000 / 89500).round());
+  });
 }

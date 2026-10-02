@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -89,17 +92,30 @@ class _BalanceCheckSheetState extends ConsumerState<BalanceCheckSheet> {
   bool _busy = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Catch up with your other devices first: a payment logged on the
+    // laptop but not yet here would otherwise be "found" again as a
+    // difference and counted twice. (Offline, this compares with what this
+    // device knows.)
+    unawaited(ref.read(syncEngineProvider.notifier).syncNow());
+  }
+
+  @override
   void dispose() {
     _actual.dispose();
     super.dispose();
   }
 
-  Future<void> _apply(int current) async {
+  Future<void> _apply() async {
     final actual = Money.parse(_actual.text);
     if (actual == null || _busy) return;
     setState(() => _busy = true);
     final a = widget.account;
-    final diff = await applyBalanceCheck(ref.read(ledgerProvider), a, actual: actual, current: current, fix: _fix);
+    final ledger = ref.read(ledgerProvider);
+    // The balance as it is at the moment of fixing, after any sync landed.
+    final current = (await ledger.watchBalances().first)[a.id] ?? a.openingBalanceCents;
+    final diff = await applyBalanceCheck(ledger, a, actual: actual, current: current, fix: _fix);
     await BalanceChecks.mark(ref.read(prefsProvider), a.id, clock.now());
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -177,7 +193,7 @@ class _BalanceCheckSheetState extends ConsumerState<BalanceCheckSheet> {
             JButton(
               label: diff == null || diff == 0 ? 'Mark as checked' : 'Fix the balance',
               expand: true,
-              onPressed: actual == null || _busy ? null : () => _apply(current),
+              onPressed: actual == null || _busy ? null : _apply,
             ),
           ],
         );

@@ -47,6 +47,9 @@ abstract final class HomeWidgetSync {
         ]),
       ),
       HomeWidget.saveWidgetData<String>('month', Day.month(month).toUpperCase()),
+      // The day these figures are for: the widget stops showing a past
+      // month's spend or a past day's safe-to-spend once the date moves on.
+      HomeWidget.saveWidgetData<String>('asOfDay', Day.of(now)),
       HomeWidget.saveWidgetData<String>('spent', Money.whole(s.expense)),
       HomeWidget.saveWidgetData<String>('personal', Money.whole(s.byScope[Scope.personal]!)),
       HomeWidget.saveWidgetData<String>('household', Money.whole(s.byScope[Scope.household]!)),

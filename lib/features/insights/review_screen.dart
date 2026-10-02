@@ -50,7 +50,14 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     if (!ongoing) {
       prevTo = yearly ? '${m.year - 1}-12-31' : Day.lastOfMonth(DateTime(m.year, m.month - 1));
     } else if (yearly) {
-      prevTo = Day.of(DateTime(today.year - 1, today.month, today.day));
+      // 29 February: last year's same point is the 28th, not 1 March.
+      prevTo = Day.of(
+        DateTime(
+          today.year - 1,
+          today.month,
+          today.day.clamp(1, Day.daysInMonth(DateTime(today.year - 1, today.month))),
+        ),
+      );
     } else {
       final pm = DateTime(m.year, m.month - 1);
       prevTo = Day.of(DateTime(pm.year, pm.month, today.day.clamp(1, Day.daysInMonth(pm))));

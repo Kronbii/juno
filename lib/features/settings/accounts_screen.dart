@@ -180,7 +180,12 @@ class _AccountFormState extends ConsumerState<_AccountForm> {
           ),
         JField(
           label: 'Opening balance',
-          child: MoneyField(controller: _opening, hint: '0.00 — negative for card debt', allowNegative: true),
+          child: MoneyField(
+            controller: _opening,
+            hint: '0.00 — negative for card debt',
+            allowNegative: true,
+            currency: _currency,
+          ),
         ),
         if (widget.account != null)
           SwitchListTile(

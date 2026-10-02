@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
@@ -32,6 +33,17 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   List<ImportRow> _rows = const [];
   bool _categorizing = false;
   String? _accountId;
+
+  /// The rate to price this file's rows at, for a non-dollar account (blank:
+  /// today's rate).
+  final _rate = TextEditingController();
+
+  @override
+  void dispose() {
+    _rate.dispose();
+    super.dispose();
+  }
+
   Scope _scope = Scope.personal;
   bool _busy = false;
   Uint8List? _xlsx;
@@ -139,7 +151,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     setState(() => _busy = true);
     try {
       final cats = ref.read(categoryMapProvider);
-      final batch = await ledger.commitImport(_filename ?? 'import.csv', [
+      final rate = double.tryParse(_rate.text.replaceAll(',', '').trim());
+      final batch = await ledger.commitImport(_filename ?? 'import.csv', perUsd: rate, [
         for (final r in chosen)
           TransactionsCompanion.insert(
             type: r.type,
@@ -266,6 +279,23 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                           },
                         ),
                       ),
+                      if (ref
+                              .watch(accountMapProvider)[_accountId ??
+                                  ref.watch(accountsProvider).value?.firstOrNull?.id]
+                              ?.currency
+                          case final code? when code != baseCurrency)
+                        JField(
+                          label: '$code per dollar for these entries',
+                          child: TextField(
+                            controller: _rate,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(
+                              hintText: 'Today’s rate (${ref.watch(ratesProvider)[code]?.round() ?? '—'})',
+                              helperText: 'For older statements: the rate back then (e.g. 1,507 or 15,000)',
+                              helperMaxLines: 2,
+                            ),
+                          ),
+                        ),
                       JField(
                         label: 'Default scope',
                         child: Align(

@@ -39,8 +39,26 @@ struct Provider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<JunoEntry>) -> Void) {
-        // The app pushes on every change; hourly just rolls the month over.
-        completion(Timeline(entries: [read()], policy: .after(.now.addingTimeInterval(3600))))
+        // The app pushes on every change. Between pushes, refresh hourly and
+        // right after midnight, so a new day or month never shows old figures.
+        let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
+        let next = min(Date.now.addingTimeInterval(3600), midnight.addingTimeInterval(60))
+        completion(Timeline(entries: [read()], policy: .after(next)))
+    }
+
+    private static func day(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    private static func monthName(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMMM"
+        return f.string(from: date).uppercased()
     }
 
     private func read() -> JunoEntry {
@@ -49,16 +67,23 @@ struct Provider: TimelineProvider {
         if let raw = d?.string(forKey: "presets"), let data = raw.data(using: .utf8) {
             presets = (try? JSONDecoder().decode([Preset].self, from: data)) ?? []
         }
+        // Figures written for an earlier day: a past month's spend isn't this
+        // month's, and yesterday's safe-to-spend isn't today's. Show the
+        // current month with "Open Juno" rather than old numbers.
+        let today = Provider.day(.now)
+        let asOf = d?.string(forKey: "asOfDay") ?? today
+        let sameMonth = asOf.prefix(7) == today.prefix(7)
+        let sameDay = asOf == today
         return JunoEntry(
             date: .now,
-            month: d?.string(forKey: "month") ?? "",
-            spent: d?.string(forKey: "spent") ?? "$0",
-            personal: d?.string(forKey: "personal") ?? "$0",
-            household: d?.string(forKey: "household") ?? "$0",
-            pace: d?.string(forKey: "pace") ?? "",
-            safe: d?.string(forKey: "safe") ?? "",
-            budgetRatio: d?.double(forKey: "budgetRatio") ?? 0,
-            budgetText: d?.string(forKey: "budgetText") ?? "",
+            month: sameMonth ? (d?.string(forKey: "month") ?? "") : Provider.monthName(.now),
+            spent: sameMonth ? (d?.string(forKey: "spent") ?? "$0") : "Open Juno",
+            personal: sameMonth ? (d?.string(forKey: "personal") ?? "$0") : "—",
+            household: sameMonth ? (d?.string(forKey: "household") ?? "$0") : "—",
+            pace: sameMonth ? (d?.string(forKey: "pace") ?? "") : "",
+            safe: sameDay ? (d?.string(forKey: "safe") ?? "") : "",
+            budgetRatio: sameMonth ? (d?.double(forKey: "budgetRatio") ?? 0) : 0,
+            budgetText: sameMonth ? (d?.string(forKey: "budgetText") ?? "") : "",
             presets: presets)
     }
 }

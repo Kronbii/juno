@@ -791,7 +791,11 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
             ..orderBy([(b) => OrderingTerm.desc(b.createdAt)]))
           .watch();
 
-  Future<String> commitImport(String filename, List<TransactionsCompanion> rows) async {
+  /// Imports [rows] as one undoable batch. With [perUsd], rows in a
+  /// non-dollar account are priced at that rate instead of today's: an old
+  /// LBP statement (1,507, then 15,000…) at 89,500 would shrink years of
+  /// spending 60-fold.
+  Future<String> commitImport(String filename, List<TransactionsCompanion> rows, {double? perUsd}) async {
     final batchId = newId();
     await db.transaction(() async {
       await db
@@ -799,7 +803,14 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
           .insert(
             ImportBatchesCompanion.insert(id: Value(batchId), filename: filename, rowCount: rows.length),
           );
-      final priced = [for (final r in rows) await price(db, r.copyWith(importBatchId: Value(batchId)))];
+      final priced = [
+        for (final r in rows)
+          await price(db, r.copyWith(importBatchId: Value(batchId))).then(
+            (p) => perUsd == null || perUsd <= 0 || !p.currency.present || p.currency.value == baseCurrency
+                ? p
+                : p.copyWith(baseCents: Value((p.amountCents.value / perUsd).round())),
+          ),
+      ];
       await db.batch((b) => b.insertAll(db.transactions, priced));
     });
     _wrote();
