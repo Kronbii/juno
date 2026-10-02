@@ -362,11 +362,11 @@ class AiAssist {
   static int _estimateTokens(List<Map<String, dynamic>> messages, List<Map<String, dynamic>>? tools) =>
       (jsonEncode(messages).length + (tools == null ? 0 : jsonEncode(tools).length)) ~/ 4;
 
-  Future<String?> _ask(String system, String user) async {
+  Future<String?> _ask(String system, String user, {int maxOutput = 300}) async {
     final r = await chat([
       {'role': 'system', 'content': system},
       {'role': 'user', 'content': user},
-    ]);
+    ], maxOutput: maxOutput);
     return r?.text;
   }
 
@@ -395,6 +395,60 @@ class AiAssist {
       return null;
     }
   }
+
+  /// Picks a category for each description from [categories] (names). Only
+  /// the descriptions, whether each is money in or out, and the names are
+  /// sent. Returns description → category name, for the ones it could place;
+  /// names not in the list are dropped. Up to [maxRows] descriptions.
+  Future<Map<String, String>> categorize(
+    List<(String description, bool income)> rows, {
+    required List<String> expenseCategories,
+    required List<String> incomeCategories,
+    int maxRows = 120,
+  }) async {
+    final out = <String, String>{};
+    final allowed = {...expenseCategories, ...incomeCategories};
+    final unique = {for (final r in rows.take(maxRows)) r.$1.trim(): r.$2}..remove('');
+    final list = unique.entries.toList();
+    for (var i = 0; i < list.length; i += 60) {
+      final chunk = list.sublist(i, i + 60 > list.length ? list.length : i + 60);
+      final answer = await _ask(
+        'You sort bank and card transactions into categories for a household in Lebanon. '
+        'Expense categories: ${expenseCategories.join(', ')}. Income categories: ${incomeCategories.join(', ')}. '
+        'For each numbered line, pick the best category from the right list, or null if none fits or you are '
+        'unsure. Reply with only compact JSON: {"1": "Category", "2": null, …}.',
+        [
+          for (var j = 0; j < chunk.length; j++) '${j + 1}. ${chunk[j].value ? 'IN' : 'OUT'} ${chunk[j].key}',
+        ].join('\n'),
+        maxOutput: 40 + chunk.length * 12,
+      );
+      if (answer == null) break;
+      try {
+        final j = jsonDecode(answer.substring(answer.indexOf('{'), answer.lastIndexOf('}') + 1));
+        if (j is! Map) continue;
+        for (final e in j.entries) {
+          final n = int.tryParse('${e.key}');
+          final name = e.value;
+          if (n == null || n < 1 || n > chunk.length || name is! String || !allowed.contains(name)) continue;
+          final (desc, income) = (chunk[n - 1].key, chunk[n - 1].value);
+          // Never an income category for money out, or the other way round.
+          if ((income ? incomeCategories : expenseCategories).contains(name)) out[desc] = name;
+        }
+      } on Object {
+        continue;
+      }
+    }
+    return out;
+  }
+
+  /// Two sentences on the week so far, from aggregated [facts] only.
+  Future<String?> weekly(String facts) => _ask(
+    'You are a calm, practical personal-finance assistant. In at most two short sentences, say how this week is '
+    'going from these figures and one thing to keep in mind for the rest of it. No greetings, no bullet points, '
+    'no invented numbers.',
+    facts,
+    maxOutput: 120,
+  );
 
   /// A short, plain-language read of a month. [facts] are aggregated lines
   /// like "Spent $1,850 (+$200 vs August)" — no individual entries.

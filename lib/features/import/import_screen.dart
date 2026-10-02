@@ -15,6 +15,7 @@ import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_sheet.dart' show ScopeToggle;
 import 'package:juno/features/import/csv_import.dart';
 import 'package:juno/features/plan/editors.dart' show AccountPicker;
+import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
 
 /// Import a bank CSV: pick → map columns → review → commit (undoable).
 class ImportScreen extends ConsumerStatefulWidget {
@@ -29,6 +30,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   CsvTable? _table;
   ColumnMapping _mapping = const ColumnMapping();
   List<ImportRow> _rows = const [];
+  bool _categorizing = false;
   String? _accountId;
   Scope _scope = Scope.personal;
   bool _busy = false;
@@ -96,6 +98,32 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   void _remap(ColumnMapping m) {
     setState(() => _mapping = m);
     _rebuild();
+  }
+
+  /// Rows still without a category, which the AI can try to place.
+  List<ImportRow> get _uncategorised =>
+      _rows.where((r) => r.include && r.error == null && r.categoryId == null).toList();
+
+  Future<void> _suggest() async {
+    final todo = _uncategorised;
+    if (todo.isEmpty || _categorizing) return;
+    final cats = ref.read(categoriesProvider).value ?? const <Category>[];
+    setState(() => _categorizing = true);
+    final names = await ref
+        .read(aiAssistProvider)
+        .categorize(
+          [for (final r in todo) (r.description, r.type == TxType.income)],
+          expenseCategories: [for (final k in cats.where((k) => k.kind == CategoryKind.expense)) k.name],
+          incomeCategories: [for (final k in cats.where((k) => k.kind == CategoryKind.income)) k.name],
+        );
+    if (!mounted) return;
+    final placed = applyCategorySuggestions(todo, names, cats);
+    setState(() => _categorizing = false);
+    showToast(
+      placed == 0
+          ? 'AI couldn’t place these — pick them below'
+          : 'AI suggested categories for $placed ${placed == 1 ? 'entry' : 'entries'} — check them below',
+    );
   }
 
   Future<void> _commit() async {
@@ -282,6 +310,30 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     expand: true,
                     onPressed: included == 0 || _busy ? null : _commit,
                   ),
+                  if (_uncategorised.isNotEmpty && ref.watch(aiAssistProvider).enabled) ...[
+                    const SizedBox(height: JSpace.lg),
+                    JCard(
+                      accent: JAccent.household,
+                      title: '${_uncategorised.length} without a category',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Juno didn’t recognise these. AI can suggest categories from the descriptions alone — '
+                            'nothing else is sent, and you can change any of them before importing.',
+                            style: JType.body.copyWith(fontSize: 13.5, color: c.ink),
+                          ),
+                          const SizedBox(height: JSpace.md),
+                          JButton(
+                            label: _categorizing ? 'Suggesting…' : 'Suggest with AI',
+                            icon: Icons.auto_awesome_outlined,
+                            dense: true,
+                            onPressed: _categorizing ? null : _suggest,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const JSectionLabel('Review'),
                   _PreviewList(rows: _rows, onChanged: () => setState(() {})),
                 ],
@@ -464,7 +516,11 @@ class _PreviewList extends ConsumerWidget {
         // merchant, not per line.
         final key = r.description.toLowerCase().trim();
         for (final o in rows) {
-          if (o.description.toLowerCase().trim() == key && o.type == r.type) o.categoryId = picked;
+          if (o.description.toLowerCase().trim() == key && o.type == r.type) {
+            o
+              ..categoryId = picked
+              ..aiSuggested = false;
+          }
         }
         onChanged();
       }
@@ -510,7 +566,11 @@ class _PreviewList extends ConsumerWidget {
                               JPill(r.error!, color: c.expense)
                             else if (r.duplicate)
                               JPill('Already imported', color: c.warn)
-                            else
+                            else if (r.aiSuggested) ...[
+                              JPill('AI', color: c.household),
+                              const SizedBox(width: 6),
+                            ],
+                            if (r.error == null && !r.duplicate)
                               InkWell(
                                 onTap: () => pickCategory(r),
                                 child: Text(

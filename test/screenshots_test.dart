@@ -49,41 +49,59 @@ Future<void> _loadFonts() async {
   if (icons.existsSync()) await family('MaterialIcons', [icons.path]);
 }
 
-/// Plays one tool call, then a canned answer.
-MockClient _scripted() {
-  var n = 0;
-  return MockClient((_) async {
-    final message = (n++).isEven
-        ? {
-            'role': 'assistant',
-            'content': null,
-            'tool_calls': [
-              {
-                'id': 'c$n',
-                'type': 'function',
-                'function': {'name': 'safe_to_spend', 'arguments': '{}'},
-              },
-            ],
-          }
-        : {
-            'role': 'assistant',
-            'content':
-                r'You have about $1,480 left for the rest of September — roughly $114 a day over 13 days, once '
-                r'the $320 of bills still due are paid. At your current pace you would finish the month around '
-                r'$2,900, a little under what came in.',
-          };
-    return http.Response.bytes(
-      utf8.encode(
-        jsonEncode({
-          'choices': [
-            {'message': message},
-          ],
-        }),
-      ),
-      200,
-    );
-  });
-}
+/// Scripted AI: the weekly read, a month-plan answer, and a logging answer
+/// with two drafts — chosen from what each request contains.
+MockClient _scripted() => MockClient((req) async {
+  final body = jsonDecode(req.body) as Map<String, dynamic>;
+  final msgs = (body['messages'] as List).cast<Map<String, dynamic>>();
+  final last = msgs.last;
+  final question = msgs.lastWhere((m) => m['role'] == 'user')['content'] as String;
+  final logging = question.startsWith('Log');
+  Map<String, dynamic> call(String id, String name, Map<String, Object> args) => {
+    'id': id,
+    'type': 'function',
+    'function': {'name': name, 'arguments': jsonEncode(args)},
+  };
+  final Map<String, Object?> message;
+  if (body['tools'] == null) {
+    message = {
+      'role': 'assistant',
+      'content':
+          r'A steady start: $210 so far, a little under last week, mostly groceries. Dining is the one to '
+          'watch — two more evenings out would put you above last week.',
+    };
+  } else if (last['role'] == 'user') {
+    message = {
+      'role': 'assistant',
+      'content': null,
+      'tool_calls': logging
+          ? [
+              call('c1', 'draft_entry', {'amount': 12, 'category': 'dining', 'note': 'Coffee'}),
+              call('c2', 'draft_entry', {'amount': 40, 'category': 'groceries', 'note': 'Spinneys'}),
+            ]
+          : [call('c1', 'safe_to_spend', {})],
+    };
+  } else {
+    message = {
+      'role': 'assistant',
+      'content': logging
+          ? 'Prepared both — groceries go to the household. Tap Log on each to save them.'
+          : r'You have about $1,480 left for the rest of the month — roughly $114 a day, once the $320 of bills '
+                r'still due are paid. At your current pace you would finish around $2,900, a little under what '
+                'came in.',
+    };
+  }
+  return http.Response.bytes(
+    utf8.encode(
+      jsonEncode({
+        'choices': [
+          {'message': message},
+        ],
+      }),
+    ),
+    200,
+  );
+});
 
 void main() {
   setUpAll(_loadFonts);
@@ -138,6 +156,12 @@ void main() {
         await tester.tap(find.text('What can I still spend this month?'));
         await settle();
         await expectLater(find.byType(JunoApp), matchesGoldenFile('goldens/${s.key}-${mode.name}-assistant.png'));
+        await tester.tap(find.byTooltip('New conversation'));
+        await settle();
+        await tester.tap(find.text('Log 12 coffee and 40 groceries for the house'));
+        await settle();
+        await settle();
+        await expectLater(find.byType(JunoApp), matchesGoldenFile('goldens/${s.key}-${mode.name}-assistant-log.png'));
 
         router.go('/home');
         await settle();

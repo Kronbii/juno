@@ -338,7 +338,7 @@ void main() {
           sp,
           client: MockClient((req) async {
             final body = jsonEncode(
-              call++ == 0
+              _wantsTool(req, call++)
                   ? {
                       'choices': [
                         {
@@ -376,12 +376,78 @@ void main() {
       await h.settle(10);
       expect(find.textContaining('You can spend about'), findsOneWidget, reason: '$size');
       expect(find.textContaining('MONTH PLAN'), findsOneWidget);
-      expect(call, 2);
       expect(tester.takeException(), isNull, reason: '$size at ${scale}x');
       await h.dispose();
     }
     tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
+
+  testWidgets('assistant: a drafted entry is saved only on Log, and Undo takes it back', (tester) async {
+    var call = 0;
+    http.Response send(Map<String, Object?> message) => http.Response.bytes(
+      utf8.encode(
+        jsonEncode({
+          'choices': [
+            {'message': message},
+          ],
+        }),
+      ),
+      200,
+    );
+    final h = await boot(
+      tester,
+      prefs: {'ai.key': 'sk-test'},
+      ai: (sp) => AiAssist(
+        sp,
+        client: MockClient(
+          (req) async => _wantsTool(req, call++)
+              ? send({
+                  'role': 'assistant',
+                  'content': null,
+                  'tool_calls': [
+                    {
+                      'id': 'c1',
+                      'type': 'function',
+                      'function': {
+                        'name': 'draft_entry',
+                        'arguments': jsonEncode({'amount': 23.5, 'category': 'groceries', 'note': 'Flow test bakery'}),
+                      },
+                    },
+                  ],
+                })
+              : send({'role': 'assistant', 'content': 'Prepared it. Tap Log to save.'}),
+        ),
+      ),
+    );
+    Future<int> saved() =>
+        count(h, "SELECT COUNT(*) n FROM transactions WHERE note = 'Flow test bakery' AND deleted_at IS NULL");
+    await h.go('/assistant');
+    await tester.enterText(find.byType(TextField), 'log 23.50 bakery for the house');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await h.settle(10);
+    expect(find.textContaining('NOT SAVED YET'), findsOneWidget);
+    expect(await saved(), 0);
+
+    await tester.tap(find.text('Log'));
+    await h.settle();
+    expect(await saved(), 1);
+    expect(find.text('LOGGED'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await h.settle();
+    expect(await saved(), 0);
+    expect(tester.takeException(), isNull);
+    await h.dispose();
+  });
+}
+
+/// Scripted assistant: a tool call for a fresh question (a request offering
+/// tools whose last message is the user's), plain text for everything else —
+/// the follow-up, and other AI cards such as Home's weekly read.
+bool _wantsTool(http.Request req, int _) {
+  final body = jsonDecode(req.body) as Map<String, dynamic>;
+  final last = (body['messages'] as List).last as Map<String, dynamic>;
+  return body['tools'] != null && last['role'] == 'user';
 }
 
 /// Fire-and-forget without the unawaited lint noise in tests.

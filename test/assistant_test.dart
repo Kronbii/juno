@@ -8,6 +8,7 @@ import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/db/ledger.dart';
+import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/features/assistant/assistant.dart';
 import 'package:juno/features/assistant/assistant_tools.dart';
@@ -15,27 +16,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 final now = DateTime(2026, 9, 18, 14);
 
-http.Response msg({String? text, List<(String, String, Object)> calls = const []}) => http.Response(
-  jsonEncode({
-    'choices': [
-      {
-        'message': {
-          'role': 'assistant',
-          'content': text,
-          if (calls.isNotEmpty)
-            'tool_calls': [
-              for (final (id, name, args) in calls)
-                {
-                  'id': id,
-                  'type': 'function',
-                  'function': {'name': name, 'arguments': args is String ? args : jsonEncode(args)},
-                },
-            ],
+http.Response msg({String? text, List<(String, String, Object)> calls = const []}) => http.Response.bytes(
+  utf8.encode(
+    jsonEncode({
+      'choices': [
+        {
+          'message': {
+            'role': 'assistant',
+            'content': text,
+            if (calls.isNotEmpty)
+              'tool_calls': [
+                for (final (id, name, args) in calls)
+                  {
+                    'id': id,
+                    'type': 'function',
+                    'function': {'name': name, 'arguments': args is String ? args : jsonEncode(args)},
+                  },
+              ],
+          },
         },
-      },
-    ],
-    'usage': {'prompt_tokens': 1500, 'completion_tokens': 80},
-  }),
+      ],
+      'usage': {'prompt_tokens': 1500, 'completion_tokens': 80},
+    }),
+  ),
   200,
 );
 
@@ -291,6 +294,185 @@ void main() {
       expect(last.length, 1 + Assistant.keepTurns * 2 + 1);
       expect(last[1]['content'], 'q${9 - Assistant.keepTurns}');
       expect(Day.of(now), '2026-09-18');
+    });
+  });
+
+  group('drafts', () {
+    test('draft_entry prepares, resolves names and defaults, and writes nothing', () async {
+      final before = await sql('SELECT COUNT(*) n FROM transactions');
+      final r = await tools.run('draft_entry', {'amount': 40, 'category': 'groceries', 'note': 'Spinneys'});
+      expect(r['saved'], isFalse);
+      final d = tools.takeDrafts().single;
+      expect(d.amountCents, 4000);
+      expect(d.currency, 'USD');
+      expect(d.accountId, seedId('acct:checking'), reason: 'first USD account');
+      expect(d.categoryId, seedId('cat:Groceries'));
+      expect(d.scope, Scope.household, reason: "the category's default scope");
+      expect(d.day, '2026-09-18');
+      expect(await sql('SELECT COUNT(*) n FROM transactions'), before);
+      expect(tools.takeDrafts(), isEmpty, reason: 'taken once');
+    });
+
+    test('LBP goes to an LBP account; explicit scope and date win', () async {
+      await tools.run('draft_entry', {
+        'amount': 450000,
+        'currency': 'lbp',
+        'category': 'transport',
+        'scope': 'personal',
+        'date': '2026-09-17',
+      });
+      final d = tools.takeDrafts().single;
+      expect(d.currency, 'LBP');
+      expect(d.amountCents, 45000000);
+      expect(d.scope, Scope.personal);
+      expect(d.day, '2026-09-17');
+      final acct = await (db.select(db.accounts)..where((a) => a.id.equals(d.accountId))).getSingle();
+      expect(acct.currency, 'LBP');
+    });
+
+    test('bad drafts come back as errors and prepare nothing', () async {
+      for (final args in <Map<String, dynamic>>[
+        {},
+        {'amount': -5},
+        {'amount': '12'},
+        {'amount': 5, 'type': 'transfer'},
+        {'amount': 5, 'currency': 'JPY'},
+        {'amount': 5, 'account': 'nope'},
+        {'amount': 5, 'account': 'Demo Cash LBP', 'currency': 'USD'},
+        {'amount': 5, 'date': '2026-02-30'},
+      ]) {
+        expect((await tools.run('draft_entry', args))['error'], isA<String>(), reason: '$args');
+      }
+      expect(tools.takeDrafts(), isEmpty);
+    });
+
+    test('an income category is not used for an expense', () async {
+      await tools.run('draft_entry', {'amount': 10, 'category': 'salary'});
+      expect(tools.takeDrafts().single.categoryId, isNull);
+    });
+  });
+
+  group('logging from chat', () {
+    Future<(Assistant, List<Map<String, dynamic>>)> chat(List<http.Response> script) async {
+      SharedPreferences.setMockInitialValues({'ai.key': 'sk'});
+      final sent = <Map<String, dynamic>>[];
+      var i = 0;
+      final ai = AiAssist(
+        await SharedPreferences.getInstance(),
+        clock: () => now,
+        client: MockClient((r) async {
+          sent.add(jsonDecode(r.body) as Map<String, dynamic>);
+          return script[i++];
+        }),
+      );
+      return (Assistant(ai, ledger, clock: () => now), sent);
+    }
+
+    test('drafts ride on the answer; Log saves once, priced; Undo takes it back', () async {
+      final (a, _) = await chat([
+        msg(
+          calls: [
+            ('c1', 'draft_entry', {'amount': 12, 'category': 'dining', 'note': 'Assistant test cafe'}),
+            ('c2', 'draft_entry', {'amount': 900000, 'currency': 'LBP', 'category': 'transport'}),
+          ],
+        ),
+        msg(text: 'Prepared two entries — tap Log on each.'),
+      ]);
+      final line = await a.ask('log 12 coffee at kalei and 900k taxi');
+      expect(line.drafts.length, 2);
+      expect(
+        await sql("SELECT COUNT(*) n FROM transactions WHERE note = 'Assistant test cafe'"),
+        0,
+        reason: 'nothing saved yet',
+      );
+
+      final id = await a.log(line.drafts.first);
+      expect(await a.log(line.drafts.first), id, reason: 'a second tap is a no-op');
+      expect(
+        await sql("SELECT COUNT(*) n FROM transactions WHERE note = 'Assistant test cafe' AND deleted_at IS NULL"),
+        1,
+      );
+
+      await a.log(line.drafts.last);
+      final lbp = await (db.select(db.transactions)..where((t) => t.id.equals(line.drafts.last.loggedId!))).getSingle();
+      expect(lbp.currency, 'LBP');
+      expect(lbp.baseCents, (90000000 / 89500).round(), reason: 'priced to USD like any entry');
+
+      await a.unlog(line.drafts.first);
+      expect(line.drafts.first.loggedId, isNull);
+      expect(
+        await sql("SELECT COUNT(*) n FROM transactions WHERE note = 'Assistant test cafe' AND deleted_at IS NULL"),
+        0,
+      );
+    });
+
+    test('a failed turn shows no drafts, and the next turn does not inherit them', () async {
+      final (a, _) = await chat([
+        msg(
+          calls: [
+            ('c1', 'draft_entry', {'amount': 5}),
+          ],
+        ),
+        http.Response('', 500),
+        msg(text: 'Nothing to log.'),
+      ]);
+      expect((await a.ask('log 5')).drafts, isEmpty);
+      expect((await a.ask('never mind')).drafts, isEmpty);
+    });
+
+    test('the conversation and logged state survive a restart', () async {
+      final (a, _) = await chat([
+        msg(
+          calls: [
+            ('c1', 'draft_entry', {'amount': 7, 'note': 'Bread'}),
+          ],
+        ),
+        msg(text: 'Ready to log.'),
+      ]);
+      final line = await a.ask('log 7 bread');
+      await a.log(line.drafts.single);
+
+      final again = Assistant(a.ai, ledger, clock: () => now);
+      expect(again.lines.map((l) => l.text), ['log 7 bread', 'Ready to log.']);
+      final d = again.lines.last.drafts.single;
+      expect(d.note, 'Bread');
+      expect(d.loggedId, line.drafts.single.loggedId);
+
+      again.reset();
+      expect(Assistant(a.ai, ledger, clock: () => now).lines, isEmpty);
+    });
+
+    test('a corrupt store starts a fresh conversation', () async {
+      SharedPreferences.setMockInitialValues({'ai.key': 'sk', Assistant.storeKey: '{"lines": [{"oops": 1}]'});
+      final ai = AiAssist(await SharedPreferences.getInstance());
+      expect(Assistant(ai, ledger).lines, isEmpty);
+    });
+
+    test('an entry saved from the editor is adopted, so Log cannot duplicate it', () async {
+      final (a, _) = await chat([
+        msg(
+          calls: [
+            ('c1', 'draft_entry', {'amount': 3}),
+          ],
+        ),
+        msg(text: 'ok'),
+      ]);
+      final d = (await a.ask('log 3')).drafts.single;
+      final since = DateTime.now().toUtc();
+      await a.adoptEdited(d, since);
+      expect(d.loggedId, isNull, reason: 'nothing was saved in the editor');
+      final id = await ledger.addTransaction(
+        TransactionsCompanion.insert(
+          type: TxType.expense,
+          scope: Scope.personal,
+          amountCents: 350,
+          accountId: seedId('acct:cash'),
+          occurredOn: '2026-09-18',
+        ),
+      );
+      await a.adoptEdited(d, since);
+      expect(d.loggedId, id);
+      expect(await a.log(d), id);
     });
   });
 }

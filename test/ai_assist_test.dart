@@ -215,6 +215,48 @@ void main() {
     expect(await ai.summarize('x'), text);
   });
 
+  group('categorize', () {
+    const exp = ['Groceries', 'Dining', 'Transport'];
+    const inc = ['Salary'];
+
+    test('maps descriptions to real category names only, and never across income/expense', () async {
+      late String sentUser;
+      final ai = await make({'ai.key': 'sk'}, (r) async {
+        final msgs = (jsonDecode(r.body) as Map<String, dynamic>)['messages'] as List;
+        sentUser = (msgs.last as Map)['content'] as String;
+        return reply('{"1": "Groceries", "2": "Salary", "3": "Pets", "4": null, "5": "Dining", "9": "Dining"}');
+      });
+      final out = await ai.categorize(
+        [('SPINNEYS', false), ('ACME PAYROLL', true), ('PET SHOP', false), ('???', false), ('ACME PAYROLL 2', true)],
+        expenseCategories: exp,
+        incomeCategories: inc,
+      );
+      expect(out, {'SPINNEYS': 'Groceries', 'ACME PAYROLL': 'Salary'});
+      expect(sentUser, contains('1. OUT SPINNEYS'));
+      expect(sentUser, contains('2. IN ACME PAYROLL'));
+    });
+
+    test('duplicates are sent once; big lists go in chunks of 60', () async {
+      final sizes = <int>[];
+      final ai = await make({'ai.key': 'sk'}, (r) async {
+        final msgs = (jsonDecode(r.body) as Map<String, dynamic>)['messages'] as List;
+        sizes.add(((msgs.last as Map)['content'] as String).split('\n').length);
+        return reply('{"1": "Dining"}');
+      });
+      final rows = [for (var i = 0; i < 100; i++) ('SHOP ${i % 70}', false)];
+      final out = await ai.categorize(rows, expenseCategories: exp, incomeCategories: inc);
+      expect(sizes, [60, 10]);
+      expect(out, {'SHOP 0': 'Dining', 'SHOP 60': 'Dining'});
+    });
+
+    test('garbage or failure gives an empty result, never a throw', () async {
+      final junk = await make({'ai.key': 'sk'}, (_) async => reply('I think groceries?'));
+      expect(await junk.categorize([('X', false)], expenseCategories: exp, incomeCategories: inc), isEmpty);
+      final off = await make({}, (_) async => reply('{"1":"Dining"}'));
+      expect(await off.categorize([('X', false)], expenseCategories: exp, incomeCategories: inc), isEmpty);
+    });
+  });
+
   test('the month rolls over', () async {
     SharedPreferences.setMockInitialValues({'ai.key': 'sk'});
     final prefs = await SharedPreferences.getInstance();

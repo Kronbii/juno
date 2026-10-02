@@ -1,12 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:juno/core/category_style.dart';
+import 'package:juno/core/db/database.dart';
+import 'package:juno/core/fx.dart';
+import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/sync/sync_engine.dart';
 import 'package:juno/core/ui/ui.dart';
+import 'package:juno/features/add/entry_sheet.dart';
 import 'package:juno/features/assistant/assistant.dart';
+import 'package:juno/features/assistant/assistant_tools.dart';
 import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
 
 /// Lives as long as the app, so leaving the screen keeps the conversation.
@@ -16,6 +23,7 @@ final assistantProvider = Provider<Assistant>(
 
 const _starters = [
   'How am I doing this month?',
+  'Log 12 coffee and 40 groceries for the house',
   'What can I still spend this month?',
   'Where did most of my money go last month?',
   'Personal vs household so far this year',
@@ -32,6 +40,7 @@ const _lookupLabels = {
   'goals': 'goals',
   'recurring': 'recurring',
   'safe_to_spend': 'month plan',
+  'draft_entry': 'new entry',
 };
 
 class AssistantScreen extends ConsumerStatefulWidget {
@@ -250,6 +259,7 @@ class _Bubble extends StatelessWidget {
             alignment: user ? Alignment.centerRight : Alignment.centerLeft,
             child: Align(alignment: user ? Alignment.centerRight : Alignment.centerLeft, child: bubble),
           ),
+          for (final d in line.drafts) _DraftCard(draft: d),
           if (line.looked.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 4),
@@ -278,6 +288,140 @@ class _Thinking extends StatelessWidget {
           const SizedBox(width: 10),
           Text('LOOKING IT UP', style: JType.microLabel.copyWith(color: c.inkMuted)),
         ],
+      ),
+    );
+  }
+}
+
+/// An entry the assistant prepared. Nothing is saved until Log is tapped.
+class _DraftCard extends ConsumerStatefulWidget {
+  const _DraftCard({required this.draft});
+
+  final EntryDraft draft;
+
+  @override
+  ConsumerState<_DraftCard> createState() => _DraftCardState();
+}
+
+class _DraftCardState extends ConsumerState<_DraftCard> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() f) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await f();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    final d = widget.draft;
+    final a = ref.read(assistantProvider);
+    final cat = ref.watch(categoryMapProvider)[d.categoryId];
+    final account = ref.watch(accountMapProvider)[d.accountId];
+    final logged = d.loggedId != null;
+    final income = d.type == TxType.income;
+    return Padding(
+      padding: const EdgeInsets.only(top: JSpace.sm),
+      child: FractionallySizedBox(
+        widthFactor: 0.86,
+        alignment: Alignment.centerLeft,
+        child: JCard(
+          accent: logged ? JAccent.income : JAccent.brand,
+          title: logged ? 'Logged' : 'New ${income ? 'income' : 'expense'} · not saved yet',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    categoryIcon(cat?.icon),
+                    size: 18,
+                    color: cat == null ? c.inkFaint : seriesColor(c, cat.colorIndex),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      d.note.isNotEmpty ? d.note : cat?.name ?? 'No category',
+                      style: JType.rowTitle.copyWith(color: c.ink),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: JSpace.sm),
+                  Text(
+                    '${income ? '+' : ''}${Fx.format(d.amountCents, d.currency)}',
+                    style: JType.rowMetric.copyWith(color: income ? c.income : c.ink),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                [
+                  if (d.note.isNotEmpty) cat?.name ?? 'No category',
+                  d.scope.label,
+                  account?.name ?? 'Account',
+                  Day.relative(d.day),
+                ].join(' · '),
+                style: JType.body.copyWith(fontSize: 13, color: c.inkMuted),
+              ),
+              const SizedBox(height: JSpace.md),
+              Wrap(
+                spacing: JSpace.sm,
+                runSpacing: JSpace.sm,
+                children: logged
+                    ? [
+                        JButton(
+                          label: 'Undo',
+                          kind: JButtonKind.ghost,
+                          dense: true,
+                          onPressed: _busy ? null : () => _run(() => a.unlog(d)),
+                        ),
+                      ]
+                    : [
+                        JButton(
+                          label: 'Log',
+                          icon: Icons.check_rounded,
+                          dense: true,
+                          onPressed: _busy
+                              ? null
+                              : () => _run(() async {
+                                  await a.log(d);
+                                  unawaited(HapticFeedback.lightImpact());
+                                }),
+                        ),
+                        JButton(
+                          label: 'Edit',
+                          kind: JButtonKind.ghost,
+                          dense: true,
+                          onPressed: _busy
+                              ? null
+                              : () => _run(() async {
+                                  final since = DateTime.now().toUtc();
+                                  await showEntrySheet(
+                                    context,
+                                    prefill: EntryPrefill(
+                                      type: d.type,
+                                      amountCents: d.amountCents,
+                                      categoryId: d.categoryId,
+                                      accountId: d.accountId,
+                                      scope: d.scope,
+                                      note: d.note,
+                                      day: d.day,
+                                    ),
+                                  );
+                                  await a.adoptEdited(d, since);
+                                }),
+                        ),
+                      ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

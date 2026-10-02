@@ -291,6 +291,9 @@ class ImportRow {
   String? categoryId;
   bool duplicate;
 
+  /// The category came from the AI and hasn't been confirmed by a person.
+  bool aiSuggested = false;
+
   /// Whether the row will be imported. Duplicates and errors start off.
   late bool include = error == null && !duplicate;
   final String? error;
@@ -510,4 +513,24 @@ String exportCsv(
       ],
   ];
   return Csv(lineDelimiter: '\n').encode(rows);
+}
+
+/// Applies AI suggestions (description → category name) to rows that have
+/// no category yet, matching the category's kind to money in or out. Rows a
+/// person already categorised are left alone. Returns how many were placed.
+int applyCategorySuggestions(List<ImportRow> rows, Map<String, String> names, List<Category> categories) {
+  var placed = 0;
+  for (final r in rows) {
+    if (r.categoryId != null) continue;
+    final name = names[r.description.trim()];
+    if (name == null) continue;
+    final kind = r.type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+    final k = categories.where((k) => k.name == name && k.kind == kind && !k.archived).firstOrNull;
+    if (k == null) continue;
+    r
+      ..categoryId = k.id
+      ..aiSuggested = true;
+    placed++;
+  }
+  return placed;
 }

@@ -50,6 +50,10 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] Juno cloud: a Supabase edge function holds the OpenAI key as a secret, accepts only signed-in users, and enforces the monthly cap on the server. AI works on every signed-in device with no setup. See [ai-cloud.md](ai-cloud.md).
 - [x] Your own key, set on one device, overrides the relay there. Any of six providers (OpenAI, Gemini, Anthropic, DeepSeek, Qwen, Kimi) through one OpenAI-style client. The default is OpenAI gpt-5-mini; the model can be changed. The key stays on the device.
 - [x] Assistant: a chat about your money. It answers by calling read-only tools that query the local database (totals, categories, entries, merchants, budgets, accounts, goals, recurring, safe to spend). Only the tool results are sent, never the database. It cannot change anything.
+- [x] Log by chatting: "40 groceries for the house yesterday" becomes a draft card. Nothing is saved until you tap Log (Undo takes it back; Edit opens the normal entry sheet and is recognised, so it can't be logged twice).
+- [x] The conversation is kept on the device across restarts (never synced); "New conversation" clears it.
+- [x] This week on Home: an on-device read of the week so far against the same days last week, rewritten by AI at most once a day from totals only.
+- [x] Import: entries Juno can't categorise get AI suggestions from their descriptions alone, marked "AI" until you confirm or change them.
 - [x] Receipt fallback and a monthly read, as before.
 - [x] Cost controls:
   - a monthly dollar cap (default $2), measured from the token counts each reply reports

@@ -6,15 +6,77 @@ import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/recurrence.dart';
 import 'package:juno/features/smart/advisor.dart';
 
+/// An entry the assistant prepared. Nothing is saved until the person taps
+/// Log on it in the chat.
+class EntryDraft {
+  EntryDraft({
+    required this.type,
+    required this.amountCents,
+    required this.currency,
+    required this.accountId,
+    required this.categoryId,
+    required this.scope,
+    required this.day,
+    required this.note,
+    this.loggedId,
+  });
+
+  factory EntryDraft.fromJson(Map<String, dynamic> j) => EntryDraft(
+    type: TxType.values.byName(j['type'] as String),
+    amountCents: j['amountCents'] as int,
+    currency: j['currency'] as String,
+    accountId: j['accountId'] as String,
+    categoryId: j['categoryId'] as String?,
+    scope: Scope.values.byName(j['scope'] as String),
+    day: j['day'] as String,
+    note: j['note'] as String,
+    loggedId: j['loggedId'] as String?,
+  );
+
+  final TxType type;
+  final int amountCents;
+  final String currency;
+  final String accountId;
+  final String? categoryId;
+  final Scope scope;
+  final String day;
+  final String note;
+
+  /// The saved entry's id once logged (and null again if undone).
+  String? loggedId;
+
+  Map<String, dynamic> toJson() => {
+    'type': type.name,
+    'amountCents': amountCents,
+    'currency': currency,
+    'accountId': accountId,
+    'categoryId': categoryId,
+    'scope': scope.name,
+    'day': day,
+    'note': note,
+    'loggedId': loggedId,
+  };
+}
+
 /// What the assistant may look up. Every tool runs here, on the device,
-/// against the local database, and is read-only; only its small JSON result
-/// is sent to the model. Amounts are US dollars unless a field says
-/// otherwise.
+/// against the local database; only its small JSON result is sent to the
+/// model. All are read-only except `draft_entry`, which only *prepares* an
+/// entry for the person to confirm. Amounts are US dollars unless a field
+/// says otherwise.
 class AssistantTools {
   AssistantTools(this.ledger, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   final Ledger ledger;
   final DateTime Function() _clock;
+
+  final List<EntryDraft> _drafts = [];
+
+  /// Drafts prepared since the last call, handed to the chat to show.
+  List<EntryDraft> takeDrafts() {
+    final out = List.of(_drafts);
+    _drafts.clear();
+    return out;
+  }
 
   static Map<String, dynamic> _fn(
     String name,
@@ -80,6 +142,28 @@ class AssistantTools {
     _fn('goals', 'Savings goals with target, saved so far and target date.', {}),
     _fn('recurring', 'Recurring bills, subscriptions and income with amount, frequency and next due date.', {}),
     _fn(
+      'draft_entry',
+      'Prepare a new expense, income or transfer for the user to confirm with a button. Nothing is saved until '
+          'they tap Log. Use it when they ask to log, add or record something.',
+      {
+        'amount': {'type': 'number', 'description': 'In the currency given, e.g. 12.5 or 450000.'},
+        'currency': {
+          'type': 'string',
+          'description': 'USD, LBP or another code. Default USD; amounts of 10,000 or more are usually LBP.',
+        },
+        'type': {
+          'type': 'string',
+          'enum': ['expense', 'income'],
+        },
+        'category': {'type': 'string', 'description': 'Category name, from the list in your instructions.'},
+        'scope': _scope,
+        'date': {'type': 'string', 'description': 'YYYY-MM-DD. Default: today.'},
+        'note': {'type': 'string', 'description': 'Short description, e.g. the shop.'},
+        'account': {'type': 'string', 'description': 'Account name. Default: the first account in that currency.'},
+      },
+      ['amount'],
+    ),
+    _fn(
       'safe_to_spend',
       'This month: income expected, spent, bills still due, what is left to spend per day, and a month-end forecast.',
       {},
@@ -100,6 +184,7 @@ class AssistantTools {
         'goals' => await _goals(),
         'recurring' => await _recurring(),
         'safe_to_spend' => await _safeToSpend(),
+        'draft_entry' => await _draftEntry(args),
         _ => {'error': 'Unknown tool $name'},
       };
     } on _BadArg catch (e) {
@@ -413,6 +498,62 @@ class AssistantTools {
       'days_left': p.daysLeft,
       'forecast_month_spend': _usd(p.forecastSpend),
       if (!p.meaningful) 'note': 'No income recorded or expected this month, so there is nothing to plan against.',
+    };
+  }
+}
+
+extension on AssistantTools {
+  Future<Map<String, dynamic>> _draftEntry(Map<String, dynamic> a) async {
+    final amount = a['amount'];
+    if (amount is! num || amount <= 0 || amount > 1e12) throw _BadArg('amount must be a positive number');
+    final currency = (a['currency'] as String? ?? baseCurrency).trim().toUpperCase();
+    final type = switch (a['type']) {
+      null || 'expense' => TxType.expense,
+      'income' => TxType.income,
+      _ => throw _BadArg('type must be expense or income'),
+    };
+    final accounts = (await ledger.watchAccounts().first).where((x) => !x.archived).toList();
+    final wanted = (a['account'] as String?)?.trim().toLowerCase();
+    final account = wanted != null && wanted.isNotEmpty
+        ? accounts.where((x) => x.name.toLowerCase().contains(wanted)).firstOrNull ??
+              (throw _BadArg(
+                'No account matches "${a['account']}". Accounts: ${accounts.map((x) => x.name).join(', ')}',
+              ))
+        : accounts.where((x) => x.currency == currency).firstOrNull ??
+              (throw _BadArg(
+                'No $currency account. Accounts: ${accounts.map((x) => '${x.name} (${x.currency})').join(', ')}',
+              ));
+    if (account.currency != currency) {
+      throw _BadArg('${account.name} holds ${account.currency}, not $currency');
+    }
+    final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+    Category? category;
+    final catName = (a['category'] as String?)?.trim();
+    if (catName != null && catName.isNotEmpty) {
+      final ids = await _matchCategories(catName);
+      final cats = await _categories();
+      category = ids.map((id) => cats[id]!).where((k) => k.kind == kind && !k.archived).firstOrNull;
+    }
+    final day = _day(a, 'date', Day.of(_clock()));
+    final scope = AssistantTools._scopeOf(a) ?? category?.defaultScope ?? Scope.personal;
+    final draft = EntryDraft(
+      type: type,
+      amountCents: (amount * 100).round(),
+      currency: currency,
+      accountId: account.id,
+      categoryId: category?.id,
+      scope: scope,
+      day: day,
+      note: ((a['note'] as String?) ?? '').trim(),
+    );
+    _drafts.add(draft);
+    return {
+      'prepared': true,
+      'saved': false,
+      'summary':
+          '${type.name} ${Fx.format(draft.amountCents, currency)} · ${category?.name ?? 'no category'} · '
+          '${scope.name} · ${account.name} · $day${draft.note.isEmpty ? '' : ' · ${draft.note}'}',
+      'tell_user': 'Shown as a card with a Log button; ask them to check it and tap Log.',
     };
   }
 }

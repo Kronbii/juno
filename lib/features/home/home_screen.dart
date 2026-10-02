@@ -10,6 +10,7 @@ import 'package:juno/core/providers.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/add/entry_sheet.dart';
+import 'package:juno/features/home/weekly_read.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
 import 'package:juno/features/plan/recurrence.dart';
@@ -31,6 +32,8 @@ class HomeScreen extends ConsumerWidget {
       JReveal(index: 1, child: _ScopeSplitTile(month: month)),
     ];
     final side = [
+      const JReveal(index: 2, child: WeeklyCard()),
+      const SizedBox(height: JSpace.gap),
       JReveal(index: 2, child: _BudgetsCard(month: month)),
       const SizedBox(height: JSpace.gap),
       const JReveal(index: 3, child: _UpcomingCard()),
