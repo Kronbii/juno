@@ -321,3 +321,27 @@ List<(DateTime, int)> netWorthSeries({
   }
   return out;
 }
+
+/// Household spending by family member (`@person` tags). An entry for two
+/// people is split evenly between them, so the rows add up to the total;
+/// household spending tagged with nobody is returned as [unassigned].
+({List<(String tag, int cents)> people, int unassigned}) spendByPerson(Iterable<Transaction> txs) {
+  final by = <String, int>{};
+  var unassigned = 0;
+  for (final t in txs) {
+    if (t.type != TxType.expense) continue;
+    final people = t.tagList.where(EntryTags.isPerson).toList();
+    if (people.isEmpty) {
+      if (t.scope == Scope.household) unassigned += t.usd;
+      continue;
+    }
+    // Split in whole cents; the first people take any remainder.
+    final share = t.usd ~/ people.length;
+    var rest = t.usd - share * people.length;
+    for (final p in people) {
+      by[p] = (by[p] ?? 0) + share + (rest-- > 0 ? 1 : 0);
+    }
+  }
+  final list = [for (final e in by.entries) (e.key, e.value)]..sort((a, b) => b.$2.compareTo(a.$2));
+  return (people: list, unassigned: unassigned);
+}

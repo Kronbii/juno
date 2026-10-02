@@ -50,6 +50,9 @@ The Dart side is built and tested. The native Swift needs one Xcode session on t
 - [x] **Balance check:** enter what an account really holds; Juno shows the difference and fixes it either as an entry dated today (cash spent without logging, tagged #balance-check) or by correcting the starting balance (spending untouched). Each account shows when it was last checked.
 - [x] **Cash flow, next 60 days** (Plan → Cash flow): spendable money (cash, current accounts, cards; savings left out) projected day by day from recurring income and bills, entries already dated ahead, and your usual everyday spending (90-day average, bills excluded). Shows the lowest point and warns before it goes below zero. Missing exchange rates are flagged, never guessed.
 - [x] Sample data changes dollars into pounds each month, so the demo LBP wallet stays realistic.
+- [x] **Who it's for:** a household expense can be marked "For" a family member (stored as `@person` tags, so it syncs with no new schema). Insights → For whom shows spending per person; an entry for two people is split between them to the cent.
+- [x] **Goal pace:** each goal says whether it's on track at your recent saving rate (last three months, withdrawals included), when you'd reach it, and what the target date needs per month.
+- [x] **Money health** (Insights): months your money would cover, share of income you keep, fixed bills as a share of income, and card debt — from the last three full months, each with a verdict in words.
 
 ## AI (Juno cloud, or your own key)
 - [x] Juno cloud: a Supabase edge function holds the OpenAI key as a secret, accepts only signed-in users, and enforces the monthly cap on the server. AI works on every signed-in device with no setup. See [ai-cloud.md](ai-cloud.md).

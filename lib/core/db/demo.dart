@@ -149,8 +149,12 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
       4500 + rnd.nextInt(3000),
       Scope.household,
       'Gift for mom',
-      tags: ['family', 'gift'],
+      tags: ['family', 'gift', '@mom'],
     );
+    // Family members you pay for, marked "For" (person tags).
+    add(DateTime(first.year, first.month, 8), 'Health', 6500, Scope.household, 'Mom’s medication', tags: ['@mom']);
+    add(DateTime(first.year, first.month, 3), 'Education', 22000, Scope.household, 'School fees', tags: ['@karim']);
+    add(DateTime(first.year, first.month, 19), 'Shopping', 4800, Scope.household, 'Shoes', tags: ['@karim', '@lea']);
     if (m == 1) {
       final trip = DateTime(first.year, first.month, 5);
       add(trip, 'Travel', 38000, Scope.personal, 'Flight to Istanbul', tags: ['trip-istanbul']);

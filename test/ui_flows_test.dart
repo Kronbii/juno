@@ -19,6 +19,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/features/add/entry_sheet.dart';
@@ -476,6 +477,58 @@ void main() {
     expect(find.textContaining('checked'), findsWidgets);
     expect(tester.takeException(), isNull);
     await h.dispose();
+  });
+
+  testWidgets('entry sheet: "For" a family member saves a person tag', (tester) async {
+    final h = await boot(tester, demo: false);
+    unawaitedFuture(
+      showEntrySheet(
+        h.ctx,
+        prefill: const EntryPrefill(type: TxType.expense, amountCents: 2500, scope: Scope.household),
+      ),
+    );
+    await h.settle();
+    final person = find.text('Person');
+    await tester.ensureVisible(person);
+    await tester.tap(person);
+    await h.settle(2);
+    await tester.enterText(find.byType(TextField).last, 'Uncle Sami');
+    await tester.tap(find.text('Add'));
+    await h.settle(2);
+    expect(find.text('Uncle Sami'), findsOneWidget);
+    await tester.tap(find.textContaining(r'Log $25.00').first);
+    await h.settle();
+    final t = (await tester.runAsync(() => h.ledger.transactions(const TxQuery())))!.single;
+    expect(EntryTags.parse(t.tags), ['@uncle-sami']);
+    expect(tester.takeException(), isNull);
+    await h.dispose();
+  });
+
+  testWidgets('insights: money health and "for whom" render at every size', (tester) async {
+    for (final (size, scale) in const [(Size(320, 640), 1.0), (Size(393, 852), 1.6), (Size(1440, 920), 1.0)]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      final h = await boot(
+        tester,
+        size: size,
+        setup: (db) => Ledger(db).addTransaction(
+          TransactionsCompanion.insert(
+            type: TxType.expense,
+            scope: Scope.household,
+            amountCents: 3000,
+            accountId: seedId('acct:checking'),
+            occurredOn: Day.today(),
+            tags: Value(EntryTags.store(['@karim'])),
+          ),
+        ),
+      );
+      await h.go('/insights');
+      expect(find.text('MONEY HEALTH'), findsOneWidget, reason: '$size');
+      expect(find.text('FOR WHOM'), findsOneWidget, reason: '$size');
+      expect(find.text('Karim'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: '$size at ${scale}x');
+      await h.dispose();
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
 }
 

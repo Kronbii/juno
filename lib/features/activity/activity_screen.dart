@@ -150,10 +150,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     onSelected: (t) => setState(() => _tag = t.isEmpty ? null : t),
                     itemBuilder: (_) => [
                       const PopupMenuItem(value: '', child: Text('Any tag')),
-                      for (final (t, n) in tags) PopupMenuItem(value: t, child: Text('#$t  ·  $n')),
+                      for (final (t, n) in tags) PopupMenuItem(value: t, child: Text('${EntryTags.label(t)}  ·  $n')),
                     ],
                     child: IgnorePointer(
-                      child: JChip(label: _tag == null ? 'Tag' : '#$_tag', selected: _tag != null, onTap: () {}),
+                      child: JChip(
+                        label: _tag == null ? 'Tag' : EntryTags.label(_tag!),
+                        selected: _tag != null,
+                        onTap: () {},
+                      ),
                     ),
                   ),
                 ],

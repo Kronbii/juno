@@ -113,12 +113,15 @@ class _WeeklyCardState extends ConsumerState<WeeklyCard> {
   final _asked = <String>{};
 
   Future<void> _maybeAsk(WeekFacts f, String key) async {
+    // Read everything up front: the card can leave the screen while the
+    // request is out, and `ref` is unusable after that. The read is still
+    // saved, so it shows next time.
     final ai = ref.read(aiAssistProvider);
-    if (_asked.contains(key) || !ai.enabled || f.spent == 0 || ref.read(prefsProvider).getString(key) != null) return;
+    final prefs = ref.read(prefsProvider);
+    if (_asked.contains(key) || !ai.enabled || f.spent == 0 || prefs.getString(key) != null) return;
     _asked.add(key);
     final text = await ai.weekly(f.facts);
     if (text == null || text.isEmpty) return;
-    final prefs = ref.read(prefsProvider);
     // Keep only today's: yesterday's reads are stale.
     final today = 'weekly.read.${Day.today()}.';
     for (final k in prefs.getKeys().where((k) => k.startsWith('weekly.read.') && !k.startsWith(today)).toList()) {

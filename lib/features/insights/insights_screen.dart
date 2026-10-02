@@ -13,6 +13,7 @@ import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/home/home_screen.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/insights/charts.dart';
+import 'package:juno/features/insights/health_card.dart';
 import 'package:juno/features/insights/suggestions_card.dart';
 import 'package:juno/features/plan/recurrence.dart';
 import 'package:juno/features/smart/advisor.dart';
@@ -295,7 +296,7 @@ class InsightsScreen extends ConsumerWidget {
     // the month's spend.
     final byTag = <String, int>{};
     for (final t in txs.where((t) => t.type == TxType.expense)) {
-      for (final tag in t.tagList) {
+      for (final tag in t.tagList.where((x) => !EntryTags.isPerson(x))) {
         byTag[tag] = (byTag[tag] ?? 0) + t.usd;
       }
     }
@@ -312,6 +313,32 @@ class InsightsScreen extends ConsumerWidget {
             )
           : RankedBars(slices: tagSlices),
     );
+
+    final forWhom = spendByPerson(txs);
+    final peopleCard = forWhom.people.isEmpty
+        ? null
+        : JCard(
+            title: 'For whom',
+            accent: JAccent.household,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RankedBars(
+                  slices: [
+                    for (final (tag, cents) in forWhom.people)
+                      Slice(label: EntryTags.personName(tag), value: cents, color: c.household),
+                    if (forWhom.unassigned > 0)
+                      Slice(label: 'Whole household', value: forWhom.unassigned, color: c.inkFaint),
+                  ],
+                ),
+                const SizedBox(height: JSpace.sm),
+                Text(
+                  'From entries marked “For” someone. An entry for two people is split between them.',
+                  style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                ),
+              ],
+            ),
+          );
 
     Widget gap() => const SizedBox(height: JSpace.gap);
 
@@ -358,12 +385,15 @@ class InsightsScreen extends ConsumerWidget {
                       flex: 2,
                       child: Column(
                         children: [
+                          const MoneyHealthCard(),
+                          gap(),
                           feed,
                           if (suggestions != null) ...[gap(), suggestions],
                           gap(),
                           subs,
                           gap(),
                           scopeTrend,
+                          if (peopleCard != null) ...[gap(), peopleCard],
                           gap(),
                           tagsCard,
                           gap(),
@@ -378,6 +408,8 @@ class InsightsScreen extends ConsumerWidget {
                     feed,
                     if (suggestions != null) ...[gap(), suggestions],
                     gap(),
+                    const MoneyHealthCard(),
+                    gap(),
                     calendar,
                     gap(),
                     breakdown,
@@ -385,6 +417,7 @@ class InsightsScreen extends ConsumerWidget {
                     trend,
                     gap(),
                     scopeTrend,
+                    if (peopleCard != null) ...[gap(), peopleCard],
                     gap(),
                     subs,
                     gap(),

@@ -29,7 +29,7 @@ class TagEditor extends ConsumerWidget {
     final c = context.jc;
     final known = (ref.watch(tagsProvider).value ?? const <(String, int)>[])
         .map((e) => e.$1)
-        .where((t) => !tags.contains(t))
+        .where((t) => !tags.contains(t) && !EntryTags.isPerson(t))
         .take(6)
         .toList();
     return Column(
@@ -68,6 +68,93 @@ class TagEditor extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// "For": the family members an entry was for, as `@person` tags. Known
+/// people (from past entries) are one tap away; "Person" adds a new one.
+class PeoplePicker extends ConsumerWidget {
+  const PeoplePicker({required this.selected, required this.onChanged, super.key});
+
+  /// Selected person tags (`@mom`).
+  final List<String> selected;
+  final ValueChanged<List<String>> onChanged;
+
+  Future<void> _add(BuildContext context) async {
+    final tag = await showDialog<String>(context: context, builder: (_) => const _PersonDialog());
+    if (tag != null && tag.isNotEmpty && !selected.contains(tag)) onChanged([...selected, tag]);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final known = (ref.watch(tagsProvider).value ?? const <(String, int)>[])
+        .map((e) => e.$1)
+        .where(EntryTags.isPerson)
+        .toList();
+    final people = {...known, ...selected}.toList();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Text('FOR', style: JType.microLabel.copyWith(color: c.inkFaint)),
+        ),
+        for (final p in people)
+          JChip(
+            label: EntryTags.personName(p),
+            selected: selected.contains(p),
+            accent: JAccent.household,
+            onTap: () => onChanged(selected.contains(p) ? ([...selected]..remove(p)) : [...selected, p]),
+          ),
+        JChip(
+          label: 'Person',
+          selected: false,
+          leading: Icon(Icons.add_rounded, size: 14, color: c.inkMuted),
+          onTap: () => _add(context),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks for a name and returns its person tag. It owns its controller: the
+/// dialog is still on screen while it animates closed, so the controller
+/// must outlive the `showDialog` future.
+class _PersonDialog extends StatefulWidget {
+  const _PersonDialog();
+
+  @override
+  State<_PersonDialog> createState() => _PersonDialogState();
+}
+
+class _PersonDialogState extends State<_PersonDialog> {
+  final _name = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  void _done() => Navigator.of(context).pop(EntryTags.personTag(_name.text));
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Who is it for?'),
+    content: TextField(
+      controller: _name,
+      autofocus: true,
+      textCapitalization: TextCapitalization.words,
+      decoration: const InputDecoration(hintText: 'Mom, Karim, Grandpa…'),
+      onSubmitted: (_) => _done(),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+      TextButton(onPressed: _done, child: const Text('Add')),
+    ],
+  );
 }
 
 /// Receipt thumbnails for an entry plus an add tile. Saved receipts come

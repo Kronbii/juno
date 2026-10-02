@@ -605,10 +605,18 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         onSubmitted: (_) => _save(),
                       ),
                       const SizedBox(height: JSpace.md),
+                      if (_type == TxType.expense && (_scope == Scope.household || _tags.any(EntryTags.isPerson))) ...[
+                        PeoplePicker(
+                          selected: _tags.where(EntryTags.isPerson).toList(),
+                          onChanged: (p) =>
+                              setState(() => _tags = [..._tags.where((t) => !EntryTags.isPerson(t)), ...p]),
+                        ),
+                        const SizedBox(height: JSpace.md),
+                      ],
                       TagEditor(
-                        tags: _tags,
+                        tags: _tags.where((t) => !EntryTags.isPerson(t)).toList(),
                         input: _tagInput,
-                        onChanged: (t) => setState(() => _tags = t),
+                        onChanged: (t) => setState(() => _tags = [...t, ..._tags.where(EntryTags.isPerson)]),
                       ),
                       const SizedBox(height: JSpace.md),
                       ReceiptsStrip(

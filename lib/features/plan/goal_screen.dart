@@ -9,10 +9,6 @@ import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/plan/editors.dart';
 import 'package:juno/features/plan/plan_screen.dart';
 
-final _contributionsProvider = StreamProvider.family<List<GoalContribution>, String>(
-  (ref, id) => ref.watch(ledgerProvider).watchContributions(id),
-);
-
 class GoalScreen extends ConsumerWidget {
   const GoalScreen({required this.goalId, super.key});
 
@@ -23,7 +19,7 @@ class GoalScreen extends ConsumerWidget {
     final c = context.jc;
     final goal = (ref.watch(goalsProvider).value ?? const <Goal>[]).where((g) => g.id == goalId).firstOrNull;
     final saved = ref.watch(goalSavedProvider).value?[goalId] ?? 0;
-    final history = ref.watch(_contributionsProvider(goalId)).value ?? const <GoalContribution>[];
+    final history = ref.watch(goalContributionsProvider(goalId)).value ?? const <GoalContribution>[];
 
     if (goal == null) {
       // Deleted (here or on another device), or still loading: never a dead end.
@@ -89,6 +85,8 @@ class GoalScreen extends ConsumerWidget {
                             '${goal.targetDate == null ? '' : ' by ${Day.short(goal.targetDate!)}'}',
                             style: JType.body.copyWith(color: c.inkMuted),
                           ),
+                          const SizedBox(height: 6),
+                          GoalPaceLine(goal: goal, saved: saved),
                         ],
                       ),
                     ),

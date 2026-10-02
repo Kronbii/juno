@@ -149,6 +149,11 @@ final budgetsProvider = StreamProvider<List<Budget>>((ref) => ref.watch(ledgerPr
 
 final goalsProvider = StreamProvider<List<Goal>>((ref) => ref.watch(ledgerProvider).watchGoals());
 
+/// A goal's deposits and withdrawals, newest first.
+final goalContributionsProvider = StreamProvider.family<List<GoalContribution>, String>(
+  (ref, id) => ref.watch(ledgerProvider).watchContributions(id),
+);
+
 final goalSavedProvider = StreamProvider<Map<String, int>>((ref) => ref.watch(ledgerProvider).watchGoalSaved());
 
 final recurringProvider = StreamProvider<List<RecurringRule>>(

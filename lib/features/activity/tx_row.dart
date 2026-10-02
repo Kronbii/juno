@@ -39,7 +39,7 @@ class TxRow extends ConsumerWidget {
       if (isTransfer) '${account?.name ?? '?'} → ${accounts[tx.toAccountId]?.name ?? '?'}',
       if (!isTransfer && (tx.note.isNotEmpty || tx.merchant.isNotEmpty)) cat?.name ?? 'Uncategorised',
       if (!isTransfer) account?.name,
-      for (final t in tx.tagList) '#$t',
+      for (final t in tx.tagList) EntryTags.label(t),
       if (tx.splitGroup != null) 'split',
     ].whereType<String>().join(' · ');
 

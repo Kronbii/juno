@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +11,7 @@ import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
 import 'package:juno/features/plan/cash_flow_tab.dart';
 import 'package:juno/features/plan/editors.dart';
+import 'package:juno/features/plan/goal_pace.dart';
 import 'package:juno/features/plan/recurrence.dart';
 
 enum PlanTab { budgets, goals, recurring, cashFlow }
@@ -199,14 +198,6 @@ class GoalCard extends ConsumerWidget {
     final c = context.jc;
     final color = seriesColor(c, goal.colorIndex);
     final ratio = goal.targetCents == 0 ? 0.0 : saved / goal.targetCents;
-    final left = math.max(0, goal.targetCents - saved);
-    String? perMonth;
-    if (goal.targetDate != null && left > 0) {
-      final end = Day.parse(goal.targetDate!);
-      final now = DateTime.now();
-      final months = math.max(1, (end.year - now.year) * 12 + end.month - now.month);
-      perMonth = '${Money.whole((left / months).round())}/mo to hit ${Day.short(goal.targetDate!)}';
-    }
     return JCard(
       onTap: () => context.push('/plan/goal/${goal.id}'),
       child: Row(
@@ -239,10 +230,7 @@ class GoalCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  ratio >= 1 ? 'Reached — nice.' : perMonth ?? '${Money.whole(left)} to go',
-                  style: JType.body.copyWith(fontSize: 12, color: ratio >= 1 ? c.income : c.inkFaint),
-                ),
+                GoalPaceLine(goal: goal, saved: saved),
               ],
             ),
           ),
@@ -259,6 +247,36 @@ class GoalCard extends ConsumerWidget {
 }
 
 /// A thin progress ring with the percentage in mono.
+/// "On track · $200/mo, there by March 2027" — or behind, with what's
+/// needed. Status is in the words; the colour only repeats it.
+class GoalPaceLine extends ConsumerWidget {
+  const GoalPaceLine({required this.goal, required this.saved, super.key});
+
+  final Goal goal;
+  final int saved;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.jc;
+    final pace = goalPace(
+      goal: goal,
+      saved: saved,
+      contributions: ref.watch(goalContributionsProvider(goal.id)).value ?? const [],
+    );
+    return Text(
+      pace.line,
+      style: JType.body.copyWith(
+        fontSize: 12,
+        color: switch (pace.status) {
+          GoalStatus.reached || GoalStatus.onTrack => c.income,
+          GoalStatus.behind => c.warn,
+          GoalStatus.noPace => c.inkFaint,
+        },
+      ),
+    );
+  }
+}
+
 class GoalRing extends StatelessWidget {
   const GoalRing({required this.ratio, required this.color, this.size = 56, super.key});
 

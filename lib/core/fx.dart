@@ -103,6 +103,27 @@ abstract final class EntryTags {
   static String normalize(String t) =>
       t.trim().toLowerCase().replaceAll('#', '').replaceAll(RegExp(r'\s+'), '-').replaceAll(',', '');
 
+  /// Family members are tags starting with `@` (`@mom`, `@uncle-sami`), so
+  /// "who it was for" syncs with no schema of its own.
+  static bool isPerson(String tag) => tag.startsWith('@') && tag.length > 1;
+
+  /// `Mom` → `@mom`; `Uncle Sami` → `@uncle-sami`. Empty for a blank name.
+  static String personTag(String name) {
+    final n = normalize(name.replaceAll('@', ''));
+    return n.isEmpty ? '' : '@$n';
+  }
+
+  /// `@uncle-sami` → `Uncle Sami`.
+  static String personName(String tag) => tag
+      .replaceFirst('@', '')
+      .split('-')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
+
+  /// How a stored tag reads on screen: `#trip`, or `for Mom` for a person.
+  static String label(String tag) => isPerson(tag) ? 'for ${personName(tag)}' : '#$tag';
+
   /// Splits free text typed into a tag field.
   static List<String> fromInput(String input) => input.split(',').map(normalize).where((t) => t.isNotEmpty).toList();
 }
