@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/app/router.dart';
 import 'package:juno/core/db/backups.dart';
+import 'package:juno/core/db/housekeeping.dart';
 import 'package:juno/core/deeplink/deep_link_handler.dart';
 import 'package:juno/core/ios/intent_inbox.dart';
 import 'package:juno/core/lock/app_lock.dart';
@@ -101,6 +102,11 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
       } on Object {
         // A failed backup must never block opening the app.
       }
+    }
+    try {
+      await Housekeeping.runIfDue(db, ref.read(prefsProvider));
+    } on Object {
+      // Tidying is never worth blocking the app for.
     }
     final sync = ref.read(syncEngineProvider.notifier);
     await sync.syncNow();

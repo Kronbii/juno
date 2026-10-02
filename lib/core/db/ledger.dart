@@ -745,8 +745,34 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     _wrote();
   }
 
-  Future<List<Attachment>> attachmentsWhere({required bool uploaded}) =>
-      (db.select(db.attachments)..where((a) => a.deletedAt.isNull() & a.uploaded.equals(uploaded))).get();
+  /// Live receipts of live entries: a deleted entry's receipt is neither
+  /// uploaded nor fetched onto a new device.
+  Future<List<Attachment>> attachmentsWhere({required bool uploaded}) {
+    final live = db.selectOnly(db.transactions)
+      ..addColumns([db.transactions.id])
+      ..where(db.transactions.deletedAt.isNull());
+    return (db.select(db.attachments)..where(
+          (a) => a.deletedAt.isNull() & a.uploaded.equals(uploaded) & a.transactionId.isInQuery(live),
+        ))
+        .get();
+  }
+
+  /// Receipts whose files can go: deleted ones this device still holds in
+  /// the cloud or on disk, and those of entries deleted over [after] ago.
+  Future<List<Attachment>> attachmentsToRemove({Duration after = const Duration(days: 30)}) async {
+    final cutoff = _now.subtract(after);
+    final gone = db.selectOnly(db.transactions)
+      ..addColumns([db.transactions.id])
+      ..where(db.transactions.deletedAt.isSmallerThanValue(cutoff));
+    return (db.select(db.attachments)..where((a) => a.deletedAt.isNotNull() | a.transactionId.isInQuery(gone))).get();
+  }
+
+  /// This device no longer has [id]'s file in the cloud (it removed it).
+  Future<void> markNotUploaded(String id) async {
+    await (db.update(db.attachments)..where((a) => a.id.equals(id))).write(
+      const AttachmentsCompanion(uploaded: Value(false)),
+    );
+  }
 
   /// Local knowledge that this device's copy of the file is in the cloud.
   /// Not a synced edit: bumping the row would undo a deletion made on

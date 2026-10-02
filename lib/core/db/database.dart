@@ -35,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -61,6 +61,11 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 4) await m.createTable(entryHistory);
       if (from < 5) await m.addColumn(transactions, transactions.splitGroup);
+      if (from < 6) {
+        await customStatement('CREATE INDEX IF NOT EXISTS tx_account_day ON transactions (account_id, occurred_on)');
+        await customStatement('CREATE INDEX IF NOT EXISTS tx_to_account ON transactions (to_account_id)');
+        await customStatement('CREATE INDEX IF NOT EXISTS tx_split ON transactions (split_group)');
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');

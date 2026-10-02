@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +26,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   static const _page = 200;
 
   final _search = TextEditingController();
+
+  /// The search actually run: the field's text once typing pauses, so a
+  /// word isn't a query (and two table scans) per keystroke.
+  String _term = '';
+  Timer? _typing;
   TxType? _type;
   Set<String> _categories = {};
   String? _accountId;
@@ -33,6 +40,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   void dispose() {
+    _typing?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -44,7 +52,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     accountId: _accountId,
     from: _range == null ? null : Day.of(_range!.start),
     to: _range == null ? null : Day.of(_range!.end),
-    search: _search.text,
+    search: _term,
     tag: _tag,
     limit: _limit,
   );
@@ -92,7 +100,17 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           JSearchField(
             hint: 'Search notes and merchants',
             controller: _search,
-            onChanged: (_) => setState(() => _limit = _page),
+            onChanged: (v) {
+              _typing?.cancel();
+              _typing = Timer(const Duration(milliseconds: 250), () {
+                if (mounted) {
+                  setState(() {
+                    _term = v;
+                    _limit = _page;
+                  });
+                }
+              });
+            },
           ),
           const SizedBox(height: JSpace.md),
           SizedBox(
@@ -175,6 +193,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       _range = null;
                       _tag = null;
                       _search.clear();
+                      _typing?.cancel();
+                      _term = '';
                     }),
                   ),
                 ],
@@ -192,8 +212,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               padding: const EdgeInsets.only(top: JSpace.xl),
               child: JEmpty(
                 icon: Icons.search_off_rounded,
-                title: _filtered || _search.text.isNotEmpty ? 'Nothing matches' : 'No entries yet',
-                message: _filtered || _search.text.isNotEmpty
+                title: _filtered || _term.isNotEmpty ? 'Nothing matches' : 'No entries yet',
+                message: _filtered || _term.isNotEmpty
                     ? 'Try a wider date range or clear the filters.'
                     : 'Add an entry or import a CSV from your bank.',
                 action: JButton(

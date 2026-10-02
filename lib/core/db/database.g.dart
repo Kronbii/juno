@@ -7702,6 +7702,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'tx_recurring',
     'CREATE INDEX tx_recurring ON transactions (recurring_id)',
   );
+  late final Index txAccountDay = Index(
+    'tx_account_day',
+    'CREATE INDEX tx_account_day ON transactions (account_id, occurred_on)',
+  );
+  late final Index txToAccount = Index(
+    'tx_to_account',
+    'CREATE INDEX tx_to_account ON transactions (to_account_id)',
+  );
+  late final Index txSplit = Index(
+    'tx_split',
+    'CREATE INDEX tx_split ON transactions (split_group)',
+  );
   late final Index historyTx = Index(
     'history_tx',
     'CREATE INDEX history_tx ON entry_history (transaction_id)',
@@ -7724,6 +7736,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     localMeta,
     txDay,
     txRecurring,
+    txAccountDay,
+    txToAccount,
+    txSplit,
     historyTx,
   ];
   @override

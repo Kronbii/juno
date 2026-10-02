@@ -18,6 +18,48 @@ import 'package:juno/features/insights/health_card.dart';
 import 'package:juno/features/insights/suggestions_card.dart';
 import 'package:juno/features/smart/advisor.dart';
 
+/// Insights' suggestions — unusual spending, likely subscriptions, budget
+/// ideas — computed once per change in the data, not on every redraw, and
+/// from the last six months (all they look at), not all history.
+final insightIdeasProvider =
+    Provider<
+      ({List<SpendingAlert> alerts, List<SubscriptionSuggestion> subscriptions, List<BudgetSuggestion> budgets})
+    >((
+      ref,
+    ) {
+      final today = ref.watch(todayProvider);
+      final lens = ref.watch(scopeFilterProvider);
+      final history =
+          ref
+              .watch(
+                txQueryProvider(
+                  TxQuery(
+                    from: Day.firstOfMonth(DateTime(today.year, today.month - 6)),
+                    to: Day.of(today),
+                    scope: lens,
+                  ),
+                ),
+              )
+              .value ??
+          const <Transaction>[];
+      final cats = ref.watch(categoryMapProvider);
+      return (
+        alerts: detectAnomalies(history: history, categoryNames: {for (final k in cats.values) k.id: k.name}),
+        subscriptions: detectSubscriptions(history, ref.watch(recurringProvider).value ?? const <RecurringRule>[]),
+        budgets: suggestBudgets(history: history, budgets: ref.watch(budgetsProvider).value ?? const []),
+      );
+    });
+
+/// The net-worth line ending at [month], computed once per data change.
+final netWorthProvider = Provider.family<List<(DateTime, int)>, DateTime>(
+  (ref, month) => netWorthSeries(
+    accounts: ref.watch(allAccountsProvider).value ?? const <Account>[],
+    txs: ref.watch(allTxProvider).value ?? const <Transaction>[],
+    perUsd: ref.watch(ratesProvider),
+    last: month,
+  ),
+);
+
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
@@ -34,7 +76,6 @@ class InsightsScreen extends ConsumerWidget {
     final prevTxs = ref.watch(monthTxProvider(prev)).value ?? const <Transaction>[];
     final trail = ref.watch(trailingTxProvider((month, 6))).value ?? const <Transaction>[];
     final cats = ref.watch(categoryMapProvider);
-    final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
     final posting = ref.watch(postingRulesProvider);
     final lens = ref.watch(scopeFilterProvider);
     final accts = ref.watch(accountMapProvider);
@@ -145,22 +186,15 @@ class InsightsScreen extends ConsumerWidget {
             ),
     );
 
-    final everything = (ref.watch(allTxProvider).value ?? const <Transaction>[])
-        .where((t) => lens == null || t.scope == lens)
-        .toList();
+    final ideas = ref.watch(insightIdeasProvider);
     final isCurrentMonth = pace.isCurrent;
     if (isCurrentMonth) {
-      for (final a in detectAnomalies(
-        history: everything,
-        categoryNames: {for (final k in cats.values) k.id: k.name},
-      )) {
+      for (final a in ideas.alerts) {
         insights.insert(0, Insight(a.text, InsightTone.bad, categoryId: a.categoryId));
       }
     }
-    final subsFound = isCurrentMonth ? detectSubscriptions(everything, rules) : const <SubscriptionSuggestion>[];
-    final budgetIdeas = isCurrentMonth
-        ? suggestBudgets(history: everything, budgets: ref.watch(budgetsProvider).value ?? const [])
-        : const <BudgetSuggestion>[];
+    final subsFound = isCurrentMonth ? ideas.subscriptions : const <SubscriptionSuggestion>[];
+    final budgetIdeas = isCurrentMonth ? ideas.budgets : const <BudgetSuggestion>[];
     final suggestions = (subsFound.isEmpty && budgetIdeas.isEmpty)
         ? null
         : SuggestionsCard(subscriptions: subsFound.take(2).toList(), budgets: budgetIdeas.take(2).toList());
@@ -281,12 +315,7 @@ class InsightsScreen extends ConsumerWidget {
           : '${Money.whole(subsMonthly * 12)} a year across ${posting.where((r) => r.type == TxType.expense && (lens == null || r.scope == lens)).length} rules',
     );
 
-    final worth = netWorthSeries(
-      accounts: ref.watch(allAccountsProvider).value ?? const <Account>[],
-      txs: ref.watch(allTxProvider).value ?? const <Transaction>[],
-      perUsd: rates,
-      last: month,
-    );
+    final worth = ref.watch(netWorthProvider(month));
     final worthNow = worth.isEmpty ? 0 : worth.last.$2;
     final worthDelta = worth.length < 2 ? 0 : worthNow - worth[worth.length - 2].$2;
     final netWorth = JCard(

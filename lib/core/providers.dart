@@ -155,7 +155,10 @@ final balancesProvider = StreamProvider<Map<String, int>>(
   (ref) => ref.watch(ledgerProvider).watchBalances(asOf: Day.of(ref.watch(todayProvider))),
 );
 
-final txQueryProvider = StreamProvider.family<List<Transaction>, TxQuery>(
+/// Entries matching a query. Released when nothing watches it any more:
+/// every search keystroke, page size and month browsed is its own query,
+/// and kept alive they piled up for as long as the app stayed open.
+final txQueryProvider = StreamProvider.autoDispose.family<List<Transaction>, TxQuery>(
   (ref, q) => ref.watch(ledgerProvider).watchTransactions(q),
 );
 
@@ -260,7 +263,9 @@ final allTxProvider = StreamProvider<List<Transaction>>(
 );
 
 /// Totals over everything a query matches (limit ignored).
-final txTotalsProvider = StreamProvider.family<TxTotals, TxQuery>((ref, q) => ref.watch(ledgerProvider).watchTotals(q));
+final txTotalsProvider = StreamProvider.autoDispose.family<TxTotals, TxQuery>(
+  (ref, q) => ref.watch(ledgerProvider).watchTotals(q),
+);
 
 final entryHistoryProvider = StreamProvider.family<List<EntryHistoryData>, String>(
   (ref, id) => ref.watch(ledgerProvider).watchHistory(id),

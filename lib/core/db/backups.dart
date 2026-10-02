@@ -58,7 +58,10 @@ class Backups {
   /// Daily backup: only when the newest one is older than [every].
   Future<File?> snapshotIfDue({Duration every = const Duration(hours: 20)}) async {
     final existing = await list();
-    if (existing.isNotEmpty && clock.now().difference(existing.first.at) < every) return null;
+    // A backup "from the future" (the clock was once set ahead) isn't a
+    // recent one: without this, no backup was taken until time caught up.
+    final age = existing.isEmpty ? null : clock.now().difference(existing.first.at);
+    if (age != null && !age.isNegative && age < every) return null;
     return snapshot();
   }
 
@@ -78,26 +81,30 @@ class Backups {
     final source = AppDatabase.memory(NativeDatabase(tmp));
     var changed = 0;
     try {
-      for (final table in SyncCore.tables) {
-        final rows = await source.customSelect('SELECT * FROM $table').get();
-        final info = db.allTables.firstWhere((t) => t.actualTableName == table);
-        final cols = {for (final c in info.$columns) c.name};
-        for (final r in rows) {
-          final names = [
-            for (final k in r.data.keys)
-              if (cols.contains(k) && k != 'dirty') k,
-          ];
-          await db.customStatement(
-            'INSERT INTO $table (${names.join(', ')}, dirty) VALUES (${List.filled(names.length + 1, '?').join(', ')}) '
-            'ON CONFLICT(id) DO UPDATE SET ${[for (final k in names)
-              if (k != 'id') '$k = excluded.$k', 'dirty = 1'].join(', ')} '
-            'WHERE julianday(excluded.updated_at) > julianday($table.updated_at)',
-            [for (final k in names) r.data[k], 1],
-          );
-          final after = await db.customSelect('SELECT changes() AS n').getSingle();
-          if (after.read<int>('n') > 0) changed++;
+      // One transaction: all or nothing (an app killed mid-restore used to
+      // leave a half-merged database), and ~50× faster than a commit a row.
+      await db.transaction(() async {
+        for (final table in SyncCore.tables) {
+          final rows = await source.customSelect('SELECT * FROM $table').get();
+          final info = db.allTables.firstWhere((t) => t.actualTableName == table);
+          final cols = {for (final c in info.$columns) c.name};
+          for (final r in rows) {
+            final names = [
+              for (final k in r.data.keys)
+                if (cols.contains(k) && k != 'dirty') k,
+            ];
+            await db.customStatement(
+              'INSERT INTO $table (${names.join(', ')}, dirty) VALUES (${List.filled(names.length + 1, '?').join(', ')}) '
+              'ON CONFLICT(id) DO UPDATE SET ${[for (final k in names)
+                if (k != 'id') '$k = excluded.$k', 'dirty = 1'].join(', ')} '
+              'WHERE julianday(excluded.updated_at) > julianday($table.updated_at)',
+              [for (final k in names) r.data[k], 1],
+            );
+            final after = await db.customSelect('SELECT changes() AS n').getSingle();
+            if (after.read<int>('n') > 0) changed++;
+          }
         }
-      }
+      });
       // Wake every stream so screens show the restored data.
       db.notifyUpdates({for (final t in db.allTables) TableUpdate.onTable(t)});
     } finally {

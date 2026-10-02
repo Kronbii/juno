@@ -180,10 +180,20 @@ class SubscriptionSuggestion {
   final String lastDay;
 }
 
-String _key(Transaction t) => (t.merchant.isNotEmpty ? t.merchant : t.note)
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
-    .trim();
+final _nonWord = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
+
+String _normalize(String s) => s.toLowerCase().replaceAll(_nonWord, ' ').trim();
+
+/// [_normalize] once per distinct text: the same shops and notes come back
+/// month after month, and the Unicode-aware pattern is the costly part
+/// (~100 µs a call — 2 s over 20k entries).
+String Function(Transaction) _keyer() {
+  final seen = <String, String>{};
+  return (t) {
+    final raw = t.merchant.isNotEmpty ? t.merchant : t.note;
+    return seen[raw] ??= _normalize(raw);
+  };
+}
 
 /// Finds payments that look like subscriptions but aren't recurring rules
 /// yet: the same merchant, a similar amount (±8%), roughly monthly (25–35
@@ -196,15 +206,15 @@ List<SubscriptionSuggestion> detectSubscriptions(
 }) {
   final today = now ?? clock.now();
   final groups = <String, List<Transaction>>{};
+  final key = _keyer();
   for (final t in txs) {
     if (t.type != TxType.expense || t.recurringId != null) continue;
-    final k = _key(t);
+    final k = key(t);
     if (k.length < 3) continue;
     (groups[k] ??= []).add(t);
   }
   final covered = {
-    for (final r in rules.where((r) => r.deletedAt == null))
-      r.note.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ').trim(),
+    for (final r in rules.where((r) => r.deletedAt == null)) _normalize(r.note),
   };
 
   final out = <SubscriptionSuggestion>[];
@@ -277,14 +287,16 @@ List<SpendingAlert> detectAnomalies({
   final mtdEnd = today.day;
   final out = <SpendingAlert>[];
 
-  int mtd(String? cat, DateTime m) {
-    final from = Day.firstOfMonth(m);
-    final to = Day.of(DateTime(m.year, m.month, math.min(mtdEnd, Day.daysInMonth(m))));
-    return history
-        .where((t) => t.type == TxType.expense && t.categoryId == cat)
-        .where((t) => t.occurredOn.compareTo(from) >= 0 && t.occurredOn.compareTo(to) <= 0)
-        .fold(0, (s, t) => s + t.usd);
+  // Month-to-date spend per (category, month), in one pass over history.
+  final sums = <(String?, String), int>{};
+  for (final t in history) {
+    if (t.type != TxType.expense) continue;
+    final d = Day.parse(t.occurredOn);
+    if (d.day > math.min(mtdEnd, Day.daysInMonth(d))) continue;
+    final k = (t.categoryId, t.occurredOn.substring(0, 7));
+    sums[k] = (sums[k] ?? 0) + t.usd;
   }
+  int mtd(String? cat, DateTime m) => sums[(cat, Day.firstOfMonth(m).substring(0, 7))] ?? 0;
 
   final cats = history.where((t) => t.type == TxType.expense && t.categoryId != null).map((t) => t.categoryId).toSet();
   for (final c in cats) {
@@ -310,11 +322,14 @@ List<SpendingAlert> detectAnomalies({
   for (final t in history.where((t) => t.type == TxType.expense && t.occurredOn.compareTo(monthStart) < 0)) {
     (byCat[t.categoryId] ??= []).add(t.usd);
   }
+  // Each category's median once, not re-sorted for every entry this month.
+  final medians = <String?, int>{
+    for (final e in byCat.entries)
+      if (e.value.length >= 5) e.key: (e.value..sort())[e.value.length ~/ 2],
+  };
   for (final t in history.where((t) => t.type == TxType.expense && t.occurredOn.compareTo(monthStart) >= 0)) {
-    final samples = byCat[t.categoryId];
-    if (samples == null || samples.length < 5) continue;
-    final sorted = [...samples]..sort();
-    final median = sorted[sorted.length ~/ 2];
+    final median = medians[t.categoryId];
+    if (median == null) continue;
     if (median > 0 && t.usd >= median * 3 && t.usd >= 5000) {
       final what = t.merchant.isNotEmpty
           ? t.merchant

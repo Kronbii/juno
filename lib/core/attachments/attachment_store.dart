@@ -113,6 +113,22 @@ class AttachmentStore {
       );
       await ledger.markUploaded(a.id);
     }
+    // Files that can go: a deleted receipt's (from the cloud too, so it
+    // isn't kept forever) and, on disk only, receipts of entries deleted a
+    // month ago (restoring such an entry fetches its receipt back).
+    for (final a in await ledger.attachmentsToRemove()) {
+      final f = await fileFor(a);
+      if (f.existsSync()) await f.delete();
+      if (a.deletedAt != null && a.uploaded) {
+        try {
+          await storage.remove(['$uid/${a.id}${_ext(a.fileName)}']);
+        } on StorageException {
+          // Already gone, or offline: try again next sync.
+          continue;
+        }
+        await ledger.markNotUploaded(a.id);
+      }
+    }
     // Any live receipt without a local file: fetch it (it may not be up yet
     // if the other device is still uploading — then next sync).
     for (final uploaded in [true, false]) {

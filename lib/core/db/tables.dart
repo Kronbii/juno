@@ -64,6 +64,12 @@ class Categories extends Table with SyncColumns {
 
 @TableIndex(name: 'tx_day', columns: {#occurredOn})
 @TableIndex(name: 'tx_recurring', columns: {#recurringId})
+// Balances sum each account's rows up to today; without these, every save
+// re-scanned all history per account (300 ms at 20k entries).
+@TableIndex(name: 'tx_account_day', columns: {#accountId, #occurredOn})
+@TableIndex(name: 'tx_to_account', columns: {#toAccountId})
+// Sync's split check looks parts up by group on every run.
+@TableIndex(name: 'tx_split', columns: {#splitGroup})
 class Transactions extends Table with SyncColumns {
   TextColumn get type => textEnum<TxType>()();
   TextColumn get scope => textEnum<Scope>()();
