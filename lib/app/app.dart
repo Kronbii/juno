@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,22 +26,33 @@ class JunoApp extends ConsumerStatefulWidget {
 }
 
 class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
+  /// While the app is in front, a quiet sync every few minutes: a desktop
+  /// window that stays focused for hours otherwise only pulled the phone's
+  /// changes after its own next save.
+  Timer? _pull;
+  bool _inFront = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _onForeground();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboard());
+    _pull = Timer.periodic(const Duration(minutes: 10), (_) {
+      if (_inFront && !_foregroundRunning) ref.read(syncEngineProvider.notifier).syncNow();
+    });
   }
 
   @override
   void dispose() {
+    _pull?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _inFront = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed) {
       // Back after a while: the date may have moved on — if it did, the
       // new-day listener below does the foreground work.

@@ -119,7 +119,9 @@ class _BudgetsTab extends ConsumerWidget {
               child: JMicroStat(value: '$over', label: 'Over', valueColor: over > 0 ? c.expense : null),
             ),
             Expanded(
-              child: JMicroStat(value: '${pace.daysInMonth - now.day}', label: 'Days left'),
+              // Today counts, as on Home's safe-to-spend card (0 on the last
+              // day read as if the month were already over).
+              child: JMicroStat(value: '${pace.daysInMonth - now.day + 1}', label: 'Days left'),
             ),
             Expanded(
               child: JMicroStat(value: '$near', label: 'Close', valueColor: near > 0 ? c.warn : null),
