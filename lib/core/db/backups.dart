@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:juno/core/db/database.dart';
@@ -43,7 +44,7 @@ class Backups {
   /// Takes a snapshot now. Returns the file.
   Future<File> snapshot() async {
     final d = await dir();
-    final now = DateTime.now();
+    final now = clock.now();
     String two(int v) => v.toString().padLeft(2, '0');
     final name =
         'juno-${now.year}${two(now.month)}${two(now.day)}-${two(now.hour)}${two(now.minute)}${two(now.second)}-${now.millisecond.toString().padLeft(3, '0')}.sqlite';
@@ -57,7 +58,7 @@ class Backups {
   /// Daily backup: only when the newest one is older than [every].
   Future<File?> snapshotIfDue({Duration every = const Duration(hours: 20)}) async {
     final existing = await list();
-    if (existing.isNotEmpty && DateTime.now().difference(existing.first.at) < every) return null;
+    if (existing.isNotEmpty && clock.now().difference(existing.first.at) < every) return null;
     return snapshot();
   }
 
@@ -72,7 +73,7 @@ class Backups {
   Future<int> restore(File backup) async {
     // Work on a copy: opening runs migrations, which must not touch the
     // backup itself.
-    final tmp = File('${backup.path}.restore-${DateTime.now().microsecondsSinceEpoch}');
+    final tmp = File('${backup.path}.restore-${clock.now().microsecondsSinceEpoch}');
     await backup.copy(tmp.path);
     final source = AppDatabase.memory(NativeDatabase(tmp));
     var changed = 0;

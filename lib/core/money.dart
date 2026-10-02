@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart' as clk;
 import 'package:intl/intl.dart';
 
 /// Money is integer cents everywhere. Floats never touch a balance.
@@ -98,7 +99,7 @@ abstract final class Day {
   static String of(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  static String today() => of(DateTime.now());
+  static String today() => of(clk.clock.now());
 
   static DateTime parse(String day) {
     final p = day.split('-');
@@ -133,7 +134,7 @@ abstract final class Day {
   /// `Today`, `Yesterday`, `Tue 30 Sep`.
   static String relative(String day, {DateTime? now}) {
     final d = parse(day);
-    now ??= DateTime.now();
+    now ??= clk.clock.now();
     final diff = between(d, now);
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';

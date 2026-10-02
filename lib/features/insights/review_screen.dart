@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show BooleanExpressionOperators, ComparableExpr;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,7 +43,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final prevFrom = yearly ? '${m.year - 1}-01-01' : Day.firstOfMonth(DateTime(m.year, m.month - 1));
     // A period still running is compared with the same point of the one
     // before ("this point in September"), never with all of it.
-    final today = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final today = clock.now();
     final ongoing = Day.today().compareTo(from) >= 0 && Day.today().compareTo(to) <= 0;
     final String prevTo;
     if (!ongoing) {

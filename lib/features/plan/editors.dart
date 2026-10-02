@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -131,7 +132,7 @@ class _DateButton extends StatelessWidget {
         onTap: () async {
           final p = await showDatePicker(
             context: context,
-            initialDate: day == null ? DateTime.now() : Day.parse(day!),
+            initialDate: day == null ? clock.now() : Day.parse(day!),
             firstDate: DateTime(2000),
             lastDate: DateTime(2100),
           );

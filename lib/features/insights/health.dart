@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
@@ -78,7 +79,7 @@ MoneyHealth moneyHealth({
   DateTime? now,
   int window = 3,
 }) {
-  final n = now ?? DateTime.now();
+  final n = now ?? clock.now();
   final to = DateTime(n.year, n.month - 1);
   var from = DateTime(n.year, n.month - window);
   var complete = true;

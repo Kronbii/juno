@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -25,8 +26,8 @@ enum Frequency { weekly, monthly, yearly }
 mixin SyncColumns on Table {
   TextColumn get id => text().clientDefault(newId)();
   TextColumn get userId => text().nullable()();
-  DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now().toUtc())();
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now().toUtc())();
+  DateTimeColumn get createdAt => dateTime().clientDefault(() => clock.now().toUtc())();
+  DateTimeColumn get updatedAt => dateTime().clientDefault(() => clock.now().toUtc())();
   DateTimeColumn get deletedAt => dateTime().nullable()();
 
   /// Local only: changed since the last successful push.

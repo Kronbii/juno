@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +21,8 @@ class CashFlowTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final recent = ref.watch(
       txQueryProvider(TxQuery(from: Day.of(Day.shift(today, -90)), to: Day.of(today))),

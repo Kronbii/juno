@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:home_widget/home_widget.dart';
 import 'package:juno/core/db/database.dart';
@@ -20,7 +21,7 @@ abstract final class HomeWidgetSync {
 
   static Future<void> push(AppDatabase db) async {
     if (!supported) return;
-    final now = DateTime.now();
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final txs = await Ledger(db).transactions(TxQuery(from: Day.firstOfMonth(month), to: Day.lastOfMonth(month)));
     final s = PeriodSummary.of(txs);

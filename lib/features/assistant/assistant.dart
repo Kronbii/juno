@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:clock/clock.dart' as clk;
 import 'package:drift/drift.dart';
 import 'package:intl/intl.dart';
 import 'package:juno/core/ai/assist.dart';
@@ -68,7 +69,7 @@ class ChatLine {
 /// sent next time — and only the last [keepTurns] turns are sent.
 class Assistant {
   Assistant(this.ai, this.ledger, {DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now,
+    : _clock = clock ?? clk.clock.now,
       tools = AssistantTools(ledger, clock: clock) {
     _load();
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart' hide Day;
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -117,7 +118,7 @@ class Reminders {
 
     // Linux: post what is due today or tomorrow, once per due date.
     if (!billsOn) return;
-    final tomorrow = Day.of(Day.shift(DateTime.now(), 1));
+    final tomorrow = Day.of(Day.shift(clock.now(), 1));
     var id = _billIdBase;
     for (final r in bills.where((r) => r.nextDue.compareTo(tomorrow) <= 0)) {
       final key = 'notified.bill.${r.id}.${r.nextDue}';

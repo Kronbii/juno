@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
@@ -83,7 +84,7 @@ class QuickAdd {
       // local calendar day.
       if (d != null) day = Day.of(d.isUtc ? d.toLocal() : d);
       if (dateRaw.toLowerCase() == 'yesterday') {
-        day = Day.of(Day.shift(DateTime.now(), -1));
+        day = Day.of(Day.shift(clock.now(), -1));
       }
     }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
@@ -33,7 +34,7 @@ class ReminderRunner extends Notifier<void> {
     final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull())).get();
     await reminders.planBills(rules, accounts, cats);
 
-    final now = DateTime.now();
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final budgets = await (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).get();
     final txs = await ledger.transactions(TxQuery(from: Day.firstOfMonth(month), to: Day.lastOfMonth(month)));

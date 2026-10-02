@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/ai/assist.dart';
@@ -386,10 +387,10 @@ class SyncEngine extends Notifier<SyncStatus> {
         failures = core.failures;
       } while (_again);
       state = failures == 0
-          ? state.copyWith(phase: SyncPhase.idle, lastSynced: DateTime.now())
+          ? state.copyWith(phase: SyncPhase.idle, lastSynced: clock.now())
           : state.copyWith(
               phase: SyncPhase.error,
-              lastSynced: DateTime.now(),
+              lastSynced: clock.now(),
               message: '$failures item${failures == 1 ? '' : 's'} couldn’t sync; retrying next time.',
             );
     } on AccountMismatch catch (e) {

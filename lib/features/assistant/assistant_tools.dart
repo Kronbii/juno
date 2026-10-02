@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart' as clk;
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/fx.dart';
@@ -64,7 +65,7 @@ class EntryDraft {
 /// entry for the person to confirm. Amounts are US dollars unless a field
 /// says otherwise.
 class AssistantTools {
-  AssistantTools(this.ledger, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  AssistantTools(this.ledger, {DateTime Function()? clock}) : _clock = clock ?? clk.clock.now;
 
   final Ledger ledger;
   final DateTime Function() _clock;

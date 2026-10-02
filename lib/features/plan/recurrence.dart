@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
@@ -62,7 +63,7 @@ String occurrenceId(String ruleId, String day) => const Uuid().v5(Namespace.url.
 /// second device — finds the row and inserts nothing; an occurrence the user
 /// deleted stays deleted.
 Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull() & r.active.equals(true))).get();
   var created = 0;
   await db.transaction(() async {

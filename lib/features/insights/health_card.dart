@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
@@ -16,7 +17,8 @@ class MoneyHealthCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final txs = ref.watch(
       txQueryProvider(
         TxQuery(

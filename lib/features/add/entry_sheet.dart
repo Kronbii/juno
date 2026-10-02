@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -345,7 +346,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     // The range always contains the entry's own date (imports and links can
     // carry any date), or the picker asserts.
     final first = current.isBefore(DateTime(2000)) ? current : DateTime(2000);
-    final soon = DateTime.now().add(const Duration(days: 365));
+    final soon = clock.now().add(const Duration(days: 365));
     final last = current.isAfter(soon) ? current : soon;
     final picked = await showDatePicker(context: context, initialDate: current, firstDate: first, lastDate: last);
     if (picked != null) setState(() => _day = Day.of(picked));

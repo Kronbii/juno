@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
@@ -134,7 +135,8 @@ class _WeeklyCardState extends ConsumerState<WeeklyCard> {
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final today = DateTime(now.year, now.month, now.day);
     final from = Day.of(Day.shift(today, -(today.weekday - 1 + 7)));
     final lens = ref.watch(scopeFilterProvider);

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
@@ -53,7 +54,7 @@ class _DeepLinkHandlerState extends ConsumerState<DeepLinkHandler> {
   }
 
   void _onLink(Uri uri) {
-    final now = DateTime.now();
+    final now = clock.now();
     if (uri == _last && now.difference(_lastAt) < const Duration(seconds: 3)) return;
     _last = uri;
     _lastAt = now;

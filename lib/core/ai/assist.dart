@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:clock/clock.dart' as clk;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -135,7 +136,7 @@ class AiReply {
 class AiAssist {
   AiAssist(this.prefs, {http.Client? client, DateTime Function()? clock, this.cloud})
     : _client = client ?? http.Client(),
-      _clock = clock ?? DateTime.now;
+      _clock = clock ?? clk.clock.now;
 
   final SharedPreferences prefs;
   final AiCloud? cloud;

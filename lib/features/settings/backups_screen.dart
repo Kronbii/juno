@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:clock/clock.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -111,7 +112,7 @@ class _BackupsScreenState extends ConsumerState<BackupsScreen> {
                             final files = await FilePicker.pickFiles(dialogTitle: 'Choose a Juno backup');
                             if (files.isEmpty) return;
                             final tmp = File(
-                              '${Directory.systemTemp.path}/juno-import-${DateTime.now().microsecondsSinceEpoch}.sqlite',
+                              '${Directory.systemTemp.path}/juno-import-${clock.now().microsecondsSinceEpoch}.sqlite',
                             );
                             await tmp.writeAsBytes(await files.first.readAsBytes());
                             final n = await _backups.restore(tmp);

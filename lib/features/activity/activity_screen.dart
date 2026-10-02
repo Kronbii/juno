@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -51,7 +52,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   bool get _filtered => _type != null || _categories.isNotEmpty || _accountId != null || _range != null || _tag != null;
 
   Future<void> _pickRange() async {
-    final now = DateTime.now();
+    final now = clock.now();
     final r = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),

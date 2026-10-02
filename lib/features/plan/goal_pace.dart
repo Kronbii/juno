@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/money.dart';
 
@@ -46,7 +47,7 @@ GoalPace goalPace({
   DateTime? now,
   int window = 3,
 }) {
-  final n = now ?? DateTime.now();
+  final n = now ?? clock.now();
   final left = math.max(0, goal.targetCents - saved);
   if (left == 0) return const GoalPace(status: GoalStatus.reached, perMonth: 0, left: 0);
 

@@ -40,7 +40,11 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _onForeground();
+    if (state == AppLifecycleState.resumed) {
+      // Back after a while: the date may have moved on.
+      ref.read(todayProvider.notifier).refresh();
+      _onForeground();
+    }
   }
 
   /// First launch on a fresh device: a short welcome. Skipped when there is
@@ -79,6 +83,11 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // A new day with the app open (midnight on a desktop left running):
+    // post the day's bills and re-plan reminders, as on launch.
+    ref.listen(todayProvider, (before, now) {
+      if (before != null && before != now) _onForeground();
+    });
     final mode = ref.watch(themeModeProvider);
     return MaterialApp.router(
       title: 'Juno',

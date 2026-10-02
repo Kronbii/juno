@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/seed.dart';
@@ -15,12 +16,12 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
 }
 
 Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final rnd = math.Random(7);
   String cat(String name) => seedId('cat:$name');
   // The demo lives in its own accounts so it never changes yours; removing
   // it deletes these and leaves your real accounts exactly as they were.
-  final stamp = DateTime.now().toUtc();
+  final stamp = clock.now().toUtc();
   Future<String> demoAccount(String key, String name, AccountKind kind, int opening, {String currency = 'USD'}) async {
     final id = _demo('acct:$key');
     await db
@@ -352,7 +353,7 @@ Future<bool> hasDemo(AppDatabase db) async {
 /// cloud copy is cleaned too. Your own accounts, categories and entries are
 /// never touched.
 Future<void> removeDemo(AppDatabase db) async {
-  final now = DateTime.now().toUtc();
+  final now = clock.now().toUtc();
   final gone = Value(now);
   const dirty = Value(true);
   await db.transaction(() async {

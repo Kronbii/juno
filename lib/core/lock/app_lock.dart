@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -96,9 +97,9 @@ class _LockGateState extends ConsumerState<LockGate> with WidgetsBindingObserver
         // The Face ID prompt itself makes the app inactive; don't react to it.
         if (!_prompting) setState(() => _obscured = true);
       case AppLifecycleState.paused:
-        _leftAt ??= DateTime.now();
+        _leftAt ??= clock.now();
       case AppLifecycleState.resumed:
-        final away = _leftAt == null ? Duration.zero : DateTime.now().difference(_leftAt!);
+        final away = _leftAt == null ? Duration.zero : clock.now().difference(_leftAt!);
         _leftAt = null;
         setState(() {
           _obscured = false;

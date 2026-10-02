@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
@@ -86,7 +87,7 @@ CashForecast forecastCash({
   int days = 60,
   int paceWindow = 90,
 }) {
-  final n = now ?? DateTime.now();
+  final n = now ?? clock.now();
   final today = DateTime(n.year, n.month, n.day);
   final todayStr = Day.of(today);
   final lastDay = Day.of(DateTime(today.year, today.month, today.day + days));

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
@@ -61,7 +62,7 @@ SpendPlan planMonth({
   required Map<String, double> rates,
   DateTime? now,
 }) {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final first = DateTime(today.year, today.month);
   final last = Day.lastOfMonth(first);
   final todayStr = Day.of(today);
@@ -163,7 +164,7 @@ List<SubscriptionSuggestion> detectSubscriptions(
   List<RecurringRule> rules, {
   DateTime? now,
 }) {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final groups = <String, List<Transaction>>{};
   for (final t in txs) {
     if (t.type != TxType.expense || t.recurringId != null) continue;
@@ -241,7 +242,7 @@ List<SpendingAlert> detectAnomalies({
   required Map<String, String> categoryNames,
   DateTime? now,
 }) {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final month = DateTime(today.year, today.month);
   final mtdEnd = today.day;
   final out = <SpendingAlert>[];
@@ -319,7 +320,7 @@ List<BudgetSuggestion> suggestBudgets({
   required List<Budget> budgets,
   DateTime? now,
 }) {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   final budgeted = {for (final b in budgets.where((b) => b.deletedAt == null)) b.categoryId};
   final totals = <String, List<int>>{};
   for (var i = 1; i <= 3; i++) {

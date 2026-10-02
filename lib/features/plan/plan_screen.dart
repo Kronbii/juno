@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -80,7 +81,8 @@ class _BudgetsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final budgets = ref.watch(budgetsProvider).value ?? const <Budget>[];
     final txs = ref.watch(monthTxAllScopesProvider(month)).value ?? const <Transaction>[];

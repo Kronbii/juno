@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:juno/core/db/database.dart';
@@ -115,7 +116,7 @@ class Ledger {
   /// Called after any local write — the sync engine debounces a push on it.
   final void Function()? onWrite;
 
-  DateTime get _now => DateTime.now().toUtc();
+  DateTime get _now => clock.now().toUtc();
 
   void _wrote() => onWrite?.call();
 
@@ -209,7 +210,11 @@ class Ledger {
       (db.select(db.transactions)..where((t) => t.id.equals(id))).watchSingleOrNull();
 
   /// Balance per account id: opening + income − expense ± transfers.
-  Stream<Map<String, int>> watchBalances() {
+  /// Balance per account id as of [asOf] (default today): entries dated
+  /// later don't count yet. The date is passed in rather than read by SQLite,
+  /// so it follows the app's clock and its timezone.
+  Stream<Map<String, int>> watchBalances({String? asOf}) {
+    final day = asOf ?? Day.today();
     const sql = '''
       SELECT a.id AS id,
         a.opening_balance_cents
@@ -218,14 +223,14 @@ class Ledger {
                                           ELSE -t.amount_cents END)
                     FROM transactions t
                     WHERE t.account_id = a.id AND t.deleted_at IS NULL
-                      AND t.occurred_on <= date('now', 'localtime')), 0)
+                      AND t.occurred_on <= ?1), 0)
         + COALESCE((SELECT SUM(COALESCE(t.to_amount_cents, t.amount_cents)) FROM transactions t
                     WHERE t.to_account_id = a.id AND t.type = 'transfer'
-                      AND t.deleted_at IS NULL AND t.occurred_on <= date('now', 'localtime')), 0) AS balance
+                      AND t.deleted_at IS NULL AND t.occurred_on <= ?1), 0) AS balance
       FROM accounts a WHERE a.deleted_at IS NULL
     ''';
     return db
-        .customSelect(sql, readsFrom: {db.accounts, db.transactions})
+        .customSelect(sql, variables: [Variable.withString(day)], readsFrom: {db.accounts, db.transactions})
         .watch()
         .map((rows) => {for (final r in rows) r.read<String>('id'): r.read<int>('balance')});
   }
@@ -233,7 +238,7 @@ class Ledger {
   /// Category ids ordered by how often they were used in the last 90 days —
   /// the add sheet puts these first.
   Future<List<String>> recentCategoryIds() async {
-    final since = Day.of(Day.shift(DateTime.now(), -90));
+    final since = Day.of(Day.shift(clock.now(), -90));
     final rows = await db
         .customSelect(
           '''
@@ -323,7 +328,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
           transactionId: before.id,
           snapshot: jsonEncode(before.toJson()),
           action: action,
-          at: DateTime.now().toUtc(),
+          at: clock.now().toUtc(),
         ),
       );
 

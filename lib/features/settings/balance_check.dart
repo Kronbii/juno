@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,7 +59,7 @@ Future<int> applyBalanceCheck(
           scope: Scope.personal,
           amountCents: diff.abs(),
           accountId: account.id,
-          occurredOn: Day.of(now ?? DateTime.now()),
+          occurredOn: Day.of(now ?? clock.now()),
           note: const Value('Balance check'),
           tags: Value(EntryTags.store([adjustmentTag])),
         ),
@@ -99,7 +100,7 @@ class _BalanceCheckSheetState extends ConsumerState<BalanceCheckSheet> {
     setState(() => _busy = true);
     final a = widget.account;
     final diff = await applyBalanceCheck(ref.read(ledgerProvider), a, actual: actual, current: current, fix: _fix);
-    await BalanceChecks.mark(ref.read(prefsProvider), a.id, DateTime.now());
+    await BalanceChecks.mark(ref.read(prefsProvider), a.id, clock.now());
     if (!mounted) return;
     Navigator.of(context).pop();
     showToast(

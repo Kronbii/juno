@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -406,7 +407,7 @@ class _DraftCardState extends ConsumerState<_DraftCard> {
                           onPressed: _busy
                               ? null
                               : () => _run(() async {
-                                  final since = DateTime.now().toUtc();
+                                  final since = clock.now().toUtc();
                                   await showEntrySheet(
                                     context,
                                     prefill: EntryPrefill(

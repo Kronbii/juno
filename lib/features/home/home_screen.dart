@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -21,7 +22,8 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
 
@@ -132,7 +134,8 @@ class _HeroTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
     final s = PeriodSummary.of(txs);
@@ -202,7 +205,8 @@ class _SafeToSpendTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final now = DateTime.now();
+    ref.watch(todayProvider); // redraw when the day changes
+    final now = clock.now();
     final month = DateTime(now.year, now.month);
     final lens = ref.watch(scopeFilterProvider);
     final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
@@ -398,7 +402,7 @@ class _UpcomingCard extends ConsumerWidget {
     final c = context.jc;
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
     final cats = ref.watch(categoryMapProvider);
-    final horizon = Day.of(Day.shift(DateTime.now(), 7));
+    final horizon = Day.of(Day.shift(ref.watch(todayProvider), 7));
     final lens = ref.watch(scopeFilterProvider);
     final soon = rules
         .where((r) => r.isLive && (lens == null || r.scope == lens) && r.nextDue.compareTo(horizon) <= 0)

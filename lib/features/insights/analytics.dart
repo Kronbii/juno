@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
@@ -62,7 +63,7 @@ class PeriodSummary {
 
 /// Pace of spending within a month.
 class MonthPace {
-  MonthPace({required this.month, required this.expense, DateTime? today}) : _today = today ?? DateTime.now();
+  MonthPace({required this.month, required this.expense, DateTime? today}) : _today = today ?? clock.now();
 
   final DateTime month;
   final int expense;

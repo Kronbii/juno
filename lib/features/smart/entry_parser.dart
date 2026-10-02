@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/deeplink/quick_add.dart' show fuzzyMatch;
 import 'package:juno/core/money.dart';
@@ -54,7 +55,7 @@ ParsedEntry parseEntry(
   bool hasLbpAccount = true,
   DateTime? now,
 }) {
-  final today = now ?? DateTime.now();
+  final today = now ?? clock.now();
   var text = ' ${input.trim()} ';
 
   // ---- amount (+ currency) ------------------------------------------------

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:juno/features/smart/receipt_parser.dart';
@@ -17,7 +18,7 @@ abstract final class ReceiptScanner {
   static Future<ReceiptRead?> read(Uint8List imageBytes) async {
     if (!supported) return null;
     final dir = await getTemporaryDirectory();
-    final file = File(p.join(dir.path, 'juno-receipt-${DateTime.now().microsecondsSinceEpoch}.jpg'));
+    final file = File(p.join(dir.path, 'juno-receipt-${clock.now().microsecondsSinceEpoch}.jpg'));
     await file.writeAsBytes(imageBytes, flush: true);
     final recognizer = TextRecognizer();
     try {

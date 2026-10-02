@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
@@ -64,16 +67,56 @@ class ScopeFilter extends Notifier<Scope?> {
 
 final scopeFilterProvider = NotifierProvider<ScopeFilter, Scope?>(ScopeFilter.new);
 
-/// The month Home and Insights are looking at (first day of month).
-class SelectedMonth extends Notifier<DateTime> {
+/// Today's date (midnight), kept current while the app stays open: checked
+/// every minute and on resume, so a desktop window left open rolls into the
+/// new day and month — and a laptop that slept through midnight catches up
+/// on wake. Widgets whose output depends on the date watch this to redraw.
+class Today extends Notifier<DateTime> {
+  Timer? _timer;
+
   @override
   DateTime build() {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month);
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => refresh());
+    ref.onDispose(() => _timer?.cancel());
+    return _date(clock.now());
   }
 
-  void set(DateTime m) => state = DateTime(m.year, m.month);
-  void shift(int months) => state = DateTime(state.year, state.month + months);
+  static DateTime _date(DateTime t) => DateTime(t.year, t.month, t.day);
+
+  /// Re-reads the clock (on resume, or each minute).
+  void refresh() {
+    final d = _date(clock.now());
+    if (d != state) state = d;
+  }
+}
+
+final todayProvider = NotifierProvider<Today, DateTime>(Today.new);
+
+/// The month Home and Insights are looking at (first day of month). It
+/// follows the current month — rolling over at month end — until you pick
+/// another one; picking the current month again follows it once more.
+class SelectedMonth extends Notifier<DateTime> {
+  DateTime? _picked;
+
+  @override
+  DateTime build() {
+    final today = ref.watch(todayProvider);
+    return _picked ?? DateTime(today.year, today.month);
+  }
+
+  DateTime get _current {
+    final t = ref.read(todayProvider);
+    return DateTime(t.year, t.month);
+  }
+
+  void set(DateTime m) {
+    final month = DateTime(m.year, m.month);
+    _picked = month == _current ? null : month;
+    state = month;
+  }
+
+  void shift(int months) => set(DateTime(state.year, state.month + months));
 }
 
 final selectedMonthProvider = NotifierProvider<SelectedMonth, DateTime>(SelectedMonth.new);
@@ -105,7 +148,11 @@ final accountMapProvider = Provider<Map<String, Account>>((ref) {
   return {for (final a in list) a.id: a};
 });
 
-final balancesProvider = StreamProvider<Map<String, int>>((ref) => ref.watch(ledgerProvider).watchBalances());
+/// Balances as of today; re-queried when the day changes, so an entry dated
+/// today counts from midnight.
+final balancesProvider = StreamProvider<Map<String, int>>(
+  (ref) => ref.watch(ledgerProvider).watchBalances(asOf: Day.of(ref.watch(todayProvider))),
+);
 
 final txQueryProvider = StreamProvider.family<List<Transaction>, TxQuery>(
   (ref, q) => ref.watch(ledgerProvider).watchTransactions(q),
