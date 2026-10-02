@@ -730,12 +730,15 @@ class ScopeToggle extends StatelessWidget {
   final Scope value;
   final ValueChanged<Scope> onChanged;
 
+  // A Wrap, not a Row: at large text on a small phone the two pills stack
+  // instead of running off the sheet.
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Wrap(
+    alignment: WrapAlignment.center,
+    spacing: JSpace.sm,
+    runSpacing: JSpace.sm,
     children: [
       for (final s in Scope.values) ...[
-        if (s != Scope.values.first) const SizedBox(width: JSpace.sm),
         JChip(
           label: s.label,
           selected: s == value,

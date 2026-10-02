@@ -291,7 +291,12 @@ class JSegmentBar<T> extends StatelessWidget {
                                 fontSize: 12.5,
                                 color: k == selected ? a : c.inkMuted,
                               ),
-                              child: Text(segments[k]!.toUpperCase()),
+                              // One line, shrunk if need be: at large text
+                              // a wrapped label breaks mid-word ("BUDGE/TS").
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(segments[k]!.toUpperCase(), maxLines: 1, softWrap: false),
+                              ),
                             ),
                           ),
                         ),
@@ -387,6 +392,48 @@ class JListRow extends StatelessWidget {
 }
 
 /// A settings row: icon, title, subtitle, value chip or chevron.
+/// A row of [leading] widgets, the [main] text, and a trailing [figure]
+/// that takes the width it needs up to [maxShare] of the row and shrinks to
+/// fit beyond that — so a long LBP amount (15+ characters) never pushes the
+/// text off the row, and a short one leaves it all the room.
+class JFigureRow extends StatelessWidget {
+  const JFigureRow({
+    required this.main,
+    required this.figure,
+    this.leading = const [],
+    this.gap = JSpace.md,
+    this.maxShare = 0.45,
+    this.crossAxisAlignment = CrossAxisAlignment.center,
+    super.key,
+  });
+
+  final List<Widget> leading;
+  final Widget main;
+  final Widget figure;
+  final double gap;
+  final double maxShare;
+  final CrossAxisAlignment crossAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final width = box.hasBoundedWidth ? box.maxWidth : MediaQuery.sizeOf(context).width;
+      return Row(
+        crossAxisAlignment: crossAxisAlignment,
+        children: [
+          ...leading,
+          Expanded(child: main),
+          SizedBox(width: gap),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width * maxShare),
+            child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: figure),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 class JSettingRow extends StatelessWidget {
   const JSettingRow({
     required this.icon,
@@ -417,30 +464,40 @@ class JSettingRow extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 60),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: JSpace.card, vertical: 10),
-          child: Row(
-            children: [
+          child: JFigureRow(
+            leading: [
               Icon(icon, size: 19, color: destructive ? c.expense : c.inkMuted),
               const SizedBox(width: JSpace.md + 2),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(title, style: JType.rowTitle.copyWith(color: ink)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle!, style: JType.body.copyWith(fontSize: 12, color: c.inkFaint)),
-                    ],
-                  ],
-                ),
-              ),
-              if (trailing != null)
-                trailing!
-              else if (value != null)
-                JPillValue(value!)
-              else if (onTap != null)
-                Icon(Icons.chevron_right_rounded, size: 20, color: c.inkFaint),
             ],
+            main: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: JType.rowTitle.copyWith(color: ink),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                  ),
+                ],
+              ],
+            ),
+            gap: JSpace.sm,
+            figure:
+                trailing ??
+                (value != null
+                    ? JPillValue(value!)
+                    : onTap != null
+                    ? Icon(Icons.chevron_right_rounded, size: 20, color: c.inkFaint)
+                    : const SizedBox.shrink()),
           ),
         ),
       ),

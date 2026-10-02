@@ -215,10 +215,15 @@ class JMicroStat extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(value, maxLines: 1, style: JType.cardMetric.copyWith(color: valueColor ?? c.ink)),
+        // A gutter on the right: side by side in a row, six-figure values
+        // otherwise run into each other ("$338,483$500,959").
+        Padding(
+          padding: const EdgeInsets.only(right: JSpace.md),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, maxLines: 1, style: JType.cardMetric.copyWith(color: valueColor ?? c.ink)),
+          ),
         ),
         const SizedBox(height: 6),
         Text(

@@ -43,33 +43,32 @@ class BudgetLine extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
+          JFigureRow(
+            leading: [
               JDot(cat == null ? c.inkMuted : seriesColor(c, cat.colorIndex)),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  budgetName(b, cats),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: JType.bodyStrong.copyWith(color: c.ink, fontSize: 14),
-                ),
-              ),
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: Money.whole(status.spent),
-                      style: JType.rowMetric.copyWith(color: c.ink, fontSize: 13),
-                    ),
-                    TextSpan(
-                      text: ' / ${Money.whole(b.limitCents)}',
-                      style: JType.rowMetric.copyWith(color: c.inkFaint, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
             ],
+            gap: JSpace.sm,
+            main: Text(
+              budgetName(b, cats),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: JType.bodyStrong.copyWith(color: c.ink, fontSize: 14),
+            ),
+            figure: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: Money.whole(status.spent),
+                    style: JType.rowMetric.copyWith(color: c.ink, fontSize: 13),
+                  ),
+                  TextSpan(
+                    text: ' / ${Money.whole(b.limitCents)}',
+                    style: JType.rowMetric.copyWith(color: c.inkFaint, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           JProgress(value: status.ratio),

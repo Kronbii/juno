@@ -326,6 +326,7 @@ class _RecurringTab extends ConsumerWidget {
     final c = context.jc;
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
     final cats = ref.watch(categoryMapProvider);
+    final accounts = ref.watch(accountMapProvider);
     if (rules.isEmpty) {
       return JEmpty(
         icon: Icons.autorenew_rounded,
@@ -355,49 +356,51 @@ class _RecurringTab extends ConsumerWidget {
             onTap: () => editRecurring(context, rule: r),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: JSpace.card, vertical: 14),
-              child: Row(
-                children: [
+              child: JFigureRow(
+                leading: [
                   Icon(
                     categoryIcon(cats[r.categoryId]?.icon ?? 'repeat'),
                     size: 19,
                     color: r.active ? c.inkMuted : c.inkFaint,
                   ),
                   const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+                main: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.note.isNotEmpty ? r.note : cats[r.categoryId]?.name ?? 'Recurring',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: JType.rowTitle.copyWith(color: r.active ? c.ink : c.inkFaint),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
                       children: [
-                        Text(
-                          r.note.isNotEmpty ? r.note : cats[r.categoryId]?.name ?? 'Recurring',
-                          style: JType.rowTitle.copyWith(color: r.active ? c.ink : c.inkFaint),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            JDot(r.scope == Scope.household ? c.household : c.brand, size: 6),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                !r.active
-                                    ? 'Paused'
-                                    : r.isLive
-                                    ? '${every(r)} · next ${Day.relative(r.nextDue)}'
-                                    : 'Ended ${Day.short(r.endDate!)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
-                              ),
-                            ),
-                          ],
+                        JDot(r.scope == Scope.household ? c.household : c.brand, size: 6),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            !r.active
+                                ? 'Paused'
+                                : accounts[r.accountId]?.archived ?? false
+                                ? 'Paused · account archived'
+                                : r.isLive
+                                ? '${every(r)} · next ${Day.relative(r.nextDue)}'
+                                : 'Ended ${Day.short(r.endDate!)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Text(
-                    '${r.type == TxType.income ? '+' : '−'}${Fx.format(r.amountCents, ref.watch(accountMapProvider)[r.accountId]?.currency ?? baseCurrency)}',
-                    style: JType.rowMetric.copyWith(color: r.type == TxType.income ? c.income : c.ink),
-                  ),
-                ],
+                  ],
+                ),
+                figure: Text(
+                  '${r.type == TxType.income ? '+' : '−'}${Fx.format(r.amountCents, accounts[r.accountId]?.currency ?? baseCurrency)}',
+                  style: JType.rowMetric.copyWith(color: r.type == TxType.income ? c.income : c.ink),
+                ),
               ),
             ),
           ),

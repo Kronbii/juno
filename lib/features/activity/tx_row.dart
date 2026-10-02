@@ -107,8 +107,8 @@ class TxRow extends ConsumerWidget {
         onTap: () => showEntrySheet(context, edit: tx),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 11),
-          child: Row(
-            children: [
+          child: JFigureRow(
+            leading: [
               Container(
                 width: 40,
                 height: 40,
@@ -124,57 +124,54 @@ class TxRow extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: JSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+            main: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: JType.rowTitle.copyWith(fontSize: 14.5, color: c.ink),
+                ),
+                const SizedBox(height: 3),
+                Row(
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: JType.rowTitle.copyWith(fontSize: 14.5, color: c.ink),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        if (!isTransfer) ...[
-                          JDot(tx.scope == Scope.household ? c.household : c.brand, size: 6),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
-                          child: Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
-                          ),
-                        ),
-                      ],
+                    if (!isTransfer) ...[
+                      JDot(tx.scope == Scope.household ? c.household : c.brand, size: 6),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: JSpace.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (clips > 0) ...[
-                        Icon(Icons.attach_file_rounded, size: 13, color: c.inkFaint),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(amount, style: JType.rowMetric.copyWith(color: amountColor)),
+              ],
+            ),
+            figure: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (clips > 0) ...[
+                      Icon(Icons.attach_file_rounded, size: 13, color: c.inkFaint),
+                      const SizedBox(width: 4),
                     ],
-                  ),
-                  if (foreign) ...[
-                    const SizedBox(height: 3),
-                    Text('~${Money.format(tx.usd)}', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                    Text(amount, style: JType.rowMetric.copyWith(color: amountColor)),
                   ],
+                ),
+                if (foreign) ...[
+                  const SizedBox(height: 3),
+                  Text('~${Money.format(tx.usd)}', style: JType.microLabel.copyWith(color: c.inkFaint)),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

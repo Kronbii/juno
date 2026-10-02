@@ -253,17 +253,22 @@ class _Totals extends StatelessWidget {
             ),
           ),
           const SizedBox(width: JSpace.sm),
-          // Large text: the figures shrink before anything overflows.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              children: [
-                Text('IN ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-                Text(Money.whole(totals.income), style: JType.chipLabel.copyWith(color: c.income)),
-                const SizedBox(width: JSpace.md),
-                Text('OUT ', style: JType.microLabel.copyWith(color: c.inkFaint)),
-                Text(Money.whole(totals.expense), style: JType.chipLabel.copyWith(color: c.ink)),
-              ],
+          // Large text and all-time totals: the figures shrink before
+          // anything overflows (a FittedBox needs a bounded width to shrink).
+          Flexible(
+            flex: 2,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Row(
+                children: [
+                  Text('IN ', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                  Text(Money.whole(totals.income), style: JType.chipLabel.copyWith(color: c.income)),
+                  const SizedBox(width: JSpace.md),
+                  Text('OUT ', style: JType.microLabel.copyWith(color: c.inkFaint)),
+                  Text(Money.whole(totals.expense), style: JType.chipLabel.copyWith(color: c.ink)),
+                ],
+              ),
             ),
           ),
         ],

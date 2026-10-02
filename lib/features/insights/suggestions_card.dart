@@ -88,15 +88,26 @@ class _SuggestionsCardState extends ConsumerState<SuggestionsCard> {
       required VoidCallback onDismiss,
     }) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
+      // The action sits under the text, not beside it: beside it, a narrow
+      // phone or large text squeezed the text into a column of syllables.
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 17, color: c.inkMuted),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 17, color: c.inkMuted),
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text, style: JType.body.copyWith(fontSize: 13.5, color: c.ink)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text, style: JType.body.copyWith(fontSize: 13.5, color: c.ink)),
+                const SizedBox(height: 6),
+                JButton(label: action, kind: JButtonKind.secondary, dense: true, onPressed: onAction),
+              ],
+            ),
           ),
-          const SizedBox(width: 8),
-          JButton(label: action, kind: JButtonKind.secondary, dense: true, onPressed: onAction),
           IconButton(
             tooltip: 'Not now',
             visualDensity: VisualDensity.compact,

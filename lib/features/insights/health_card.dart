@@ -137,23 +137,17 @@ class _Row extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(label, style: JType.rowTitle.copyWith(color: c.ink)),
-              ),
-              Text(value, style: JType.rowMetric.copyWith(color: c.ink)),
-            ],
+          JFigureRow(
+            main: Text(label, style: JType.rowTitle.copyWith(color: c.ink)),
+            figure: Text(value, style: JType.rowMetric.copyWith(color: c.ink)),
           ),
           const SizedBox(height: 4),
-          Row(
+          JFigureRow(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(detail, style: JType.body.copyWith(fontSize: 12, color: c.inkFaint)),
-              ),
-              if (verdict != null) ...[const SizedBox(width: JSpace.sm), JPill(words[verdict]!, color: color)],
-            ],
+            gap: JSpace.sm,
+            maxShare: 0.5,
+            main: Text(detail, style: JType.body.copyWith(fontSize: 12, color: c.inkFaint)),
+            figure: verdict == null ? const SizedBox.shrink() : JPill(words[verdict]!, color: color),
           ),
         ],
       ),
