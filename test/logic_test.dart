@@ -193,9 +193,10 @@ Date,Description,Amount,Balance
     });
 
     test('pace projects only the current month', () {
-      final p = MonthPace(month: DateTime(2026, 9), expense: 30000, today: DateTime(2026, 9, 10));
+      final p = MonthPace(month: DateTime(2026, 9), expense: 30000, today: DateTime(2026, 9, 10), projection: 88000);
       expect(p.avgDaily, 3000);
-      expect(p.projected, 90000);
+      expect(p.projected, 88000);
+      expect(MonthPace(month: DateTime(2026, 9), expense: 30000, today: DateTime(2026, 9, 10)).projected, isNull);
       final past = MonthPace(month: DateTime(2026, 8), expense: 31000, today: DateTime(2026, 9, 10));
       expect(past.projected, 31000);
     });

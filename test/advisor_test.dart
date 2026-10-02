@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/seed.dart';
+import 'package:juno/core/money.dart';
+import 'package:juno/features/plan/recurrence.dart';
 import 'package:juno/features/smart/advisor.dart';
 
 var _n = 0;
@@ -80,8 +82,44 @@ void main() {
       expect(plan.incomeExpected, 570000);
       expect(plan.leftToSpend, 570000 - 175000 - 7599);
       expect(plan.perDay, ((570000 - 175000 - 7599) / 22).floor());
-      // Unplanned pace: (175000 − 145000) / 10 days = 3000/day for 21 more days.
+      // No full month of history: this month's everyday pace, (175000 −
+      // 145000) / 10 days = 3000/day, for the 21 days after today.
       expect(plan.forecastSpend, 175000 + 7599 + 3000 * 21);
+    });
+
+    test('month-end estimate: the usual rest of the month, or nothing too early to tell', () {
+      final rent = [tx('2026-10-01', 120000)];
+      // Day 1 with no history: no estimate (it would be 31 × the rent).
+      expect(
+        planMonth(
+          monthTxs: rent,
+          rules: const [],
+          accounts: const {},
+          rates: const {},
+          now: DateTime(2026, 10),
+        ).forecastSpend,
+        isNull,
+      );
+      // With history: spent + what usually follows the 1st.
+      final plan = planMonth(
+        monthTxs: rent,
+        rules: const [],
+        accounts: const {},
+        rates: const {},
+        now: DateTime(2026, 10),
+        usualRest: 60000,
+      );
+      expect(plan.forecastSpend, 180000);
+      // Bills still due count when they exceed the usual rest.
+      final billed = planMonth(
+        monthTxs: rent,
+        rules: [rule('school', TxType.expense, 90000, '2026-10-20')],
+        accounts: const {},
+        rates: const {},
+        now: DateTime(2026, 10),
+        usualRest: 60000,
+      );
+      expect(billed.forecastSpend, 120000 + 90000);
     });
 
     test('a weekly bill counts every remaining occurrence this month', () {
@@ -214,5 +252,43 @@ void main() {
     ];
     final p = quickPresets(recent, cats);
     expect(p.map((x) => x.label), [r'Coffee $4', r'Groceries $42']);
+  });
+
+  test('editing a bill: a new frequency or interval re-anchors it; other edits keep the anchor', () {
+    final monthly = rule('ins', TxType.expense, 48000, '2026-10-31').copyWith(anchorDate: '2026-01-31');
+    // Switched to yearly with next on 31 Oct: anchored there, so 31 Oct 2027 follows, not 31 Jan.
+    final a = anchorAfterEdit(monthly, start: '2026-10-31', frequency: Frequency.yearly, interval: 1);
+    expect(a, '2026-10-31');
+    expect(
+      Day.of(nextOccurrence(anchor: Day.parse(a), from: DateTime(2026, 10, 31), frequency: Frequency.yearly)),
+      '2027-10-31',
+    );
+    // Same rhythm, same next date (say, a new amount): the 31st anchor stays,
+    // so February's clamp still returns to the 31st in March.
+    expect(anchorAfterEdit(monthly, start: '2026-10-31', frequency: Frequency.monthly, interval: 1), '2026-01-31');
+    expect(anchorAfterEdit(monthly, start: '2026-10-31', frequency: Frequency.monthly, interval: 2), '2026-10-31');
+    expect(anchorAfterEdit(null, start: '2026-10-12', frequency: Frequency.weekly, interval: 1), '2026-10-12');
+  });
+
+  test('budget suggestions average over the months you used Juno', () {
+    // A new user: only September has entries (dining $300).
+    final s = suggestBudgets(
+      history: [
+        tx('2026-09-05', 15000, cat: 'd'),
+        tx('2026-09-20', 15000, cat: 'd'),
+      ],
+      budgets: const [],
+      now: DateTime(2026, 10, 10),
+    );
+    expect(s, isEmpty, reason: 'one month is not "regular"');
+    final two = suggestBudgets(
+      history: [
+        tx('2026-08-05', 30000, cat: 'd'),
+        tx('2026-09-05', 30000, cat: 'd'),
+      ],
+      budgets: const [],
+      now: DateTime(2026, 10, 10),
+    );
+    expect(two.single.averageCents, 30000, reason: r'$300 a month, not $200 (divided by 3)');
   });
 }

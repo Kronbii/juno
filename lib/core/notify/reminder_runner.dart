@@ -8,6 +8,7 @@ import 'package:juno/core/notify/reminders.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/widget/home_widget_sync.dart';
 import 'package:juno/features/insights/analytics.dart';
+import 'package:juno/features/plan/recurrence.dart' show postingRules;
 
 final remindersProvider = Provider<Reminders>((ref) => Reminders(ref.watch(prefsProvider)));
 
@@ -31,7 +32,10 @@ class ReminderRunner extends Notifier<void> {
     final ledger = ref.read(ledgerProvider);
     final accounts = {for (final a in await db.select(db.accounts).get()) a.id: a};
     final cats = {for (final c in await db.select(db.categories).get()) c.id: c};
-    final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull())).get();
+    final rules = postingRules(
+      await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull())).get(),
+      accounts,
+    );
     await reminders.planBills(rules, accounts, cats);
 
     final now = clock.now();

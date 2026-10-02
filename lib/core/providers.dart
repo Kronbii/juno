@@ -8,6 +8,7 @@ import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/notify/reminder_runner.dart';
 import 'package:juno/core/sync/sync_engine.dart';
+import 'package:juno/features/plan/recurrence.dart' show postingRules;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Overridden in `main` with the opened database.
@@ -192,6 +193,16 @@ final trailingTxProvider = StreamProvider.family<List<Transaction>, (DateTime, i
       );
 });
 
+/// Your first entry's day, null before any (see Ledger.watchFirstEntryDay).
+final firstEntryDayProvider = StreamProvider<String?>((ref) => ref.watch(ledgerProvider).watchFirstEntryDay());
+
+/// The three full months before today's, under the scope lens — the history
+/// month-end estimates are made from.
+final usualHistoryProvider = Provider<AsyncValue<List<Transaction>>>((ref) {
+  final t = ref.watch(todayProvider);
+  return ref.watch(trailingTxProvider((DateTime(t.year, t.month - 1), 3)));
+});
+
 final budgetsProvider = StreamProvider<List<Budget>>((ref) => ref.watch(ledgerProvider).watchBudgets());
 
 final goalsProvider = StreamProvider<List<Goal>>((ref) => ref.watch(ledgerProvider).watchGoals());
@@ -206,6 +217,13 @@ final goalSavedProvider = StreamProvider<Map<String, int>>((ref) => ref.watch(le
 final recurringProvider = StreamProvider<List<RecurringRule>>(
   (ref) => ref.watch(ledgerProvider).watchRecurring(),
 );
+
+/// The recurring rules that will post: live, on an open account. Every
+/// plan and total reads these; only the Recurring list shows all rules.
+final postingRulesProvider = Provider<List<RecurringRule>>((ref) {
+  final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+  return postingRules(rules, ref.watch(accountMapProvider));
+});
 
 final importsProvider = StreamProvider<List<ImportBatche>>((ref) => ref.watch(ledgerProvider).watchImports());
 

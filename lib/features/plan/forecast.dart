@@ -31,6 +31,13 @@ class CashForecast {
     required this.complete,
   });
 
+  /// History needed before everyday spending is projected: with two days of
+  /// entries, one rent payment would forecast going broke in a week.
+  static const minPaceDays = 14;
+
+  /// Too little history yet to project everyday spending ([minPaceDays]).
+  bool get learning => paceDays < minPaceDays;
+
   /// Spendable money today (USD cents).
   final int start;
 
@@ -113,14 +120,30 @@ CashForecast forecastCash({
   // A newer user has less history: average over the days actually covered.
   final from = firstEntry != null && firstEntry.compareTo(paceFrom) > 0 ? firstEntry : paceFrom;
   final paceDays = firstEntry == null ? 0 : Day.between(Day.parse(from), today);
+  // Bills you logged by hand before making them recurring: the schedule
+  // takes them off now, so they mustn't also count as everyday spending.
+  final bills = [
+    for (final r in rules.where((r) => r.isLive && r.type == TxType.expense))
+      (
+        r.categoryId,
+        r.note.trim().toLowerCase(),
+        Fx.tryToUsd(r.amountCents, accountCurrency(accounts, r.accountId), rates),
+      ),
+  ];
+  bool isBill(Transaction t) => bills.any((b) {
+    final (cat, note, usd) = b;
+    final sameName =
+        note.isNotEmpty && (t.note.trim().toLowerCase() == note || t.merchant.trim().toLowerCase() == note);
+    return sameName || cat != null && cat == t.categoryId && usd != null && (t.usd - usd).abs() <= usd * 0.15;
+  });
   var unplanned = 0;
   for (final t in recent) {
     if (t.type != TxType.expense || t.recurringId != null) continue;
     if (t.occurredOn.compareTo(from) < 0 || t.occurredOn.compareTo(todayStr) >= 0) continue;
-    if (!spendable.containsKey(t.accountId)) continue;
+    if (!spendable.containsKey(t.accountId) || isBill(t)) continue;
     unplanned += t.usd;
   }
-  final pace = paceDays <= 0 ? 0 : (unplanned / paceDays).round();
+  final pace = paceDays < CashForecast.minPaceDays ? 0 : (unplanned / paceDays).round();
 
   final events = <ForecastEvent>[];
   for (final r in rules.where((r) => r.isLive && r.type != TxType.transfer && spendable.containsKey(r.accountId))) {
@@ -183,3 +206,6 @@ CashForecast forecastCash({
     complete: complete,
   );
 }
+
+String accountCurrency(List<Account> accounts, String id) =>
+    accounts.where((a) => a.id == id).firstOrNull?.currency ?? baseCurrency;

@@ -139,7 +139,7 @@ class _HeroTile extends ConsumerWidget {
     final month = DateTime(now.year, now.month);
     final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
     final s = PeriodSummary.of(txs);
-    final pace = MonthPace(month: month, expense: s.expense);
+    final pace = MonthPace(month: month, expense: s.expense, projection: ref.watch(monthPlanProvider).forecastSpend);
     final scope = ref.watch(scopeFilterProvider);
     final rate = s.savingsRate;
 
@@ -163,7 +163,10 @@ class _HeroTile extends ConsumerWidget {
           Text(
             s.expense == 0
                 ? 'Nothing logged yet this month.'
-                : '${Money.format(pace.avgDaily)} a day · on pace for ${Money.whole(pace.projected)}',
+                : [
+                    '${Money.format(pace.avgDaily)} a day',
+                    if (pace.projected case final p?) 'on pace for ${Money.whole(p)}',
+                  ].join(' · '),
             style: JType.body.copyWith(color: c.inkMuted),
           ),
           const SizedBox(height: JSpace.xl),
@@ -205,21 +208,7 @@ class _SafeToSpendTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    ref.watch(todayProvider); // redraw when the day changes
-    final now = clock.now();
-    final month = DateTime(now.year, now.month);
-    final lens = ref.watch(scopeFilterProvider);
-    final txs = ref.watch(monthTxProvider(month)).value ?? const <Transaction>[];
-    final rules = (ref.watch(recurringProvider).value ?? const <RecurringRule>[])
-        .where((r) => lens == null || r.scope == lens)
-        .toList();
-    final plan = planMonth(
-      monthTxs: txs,
-      rules: rules,
-      accounts: ref.watch(accountMapProvider),
-      rates: ref.watch(ratesProvider),
-      now: now,
-    );
+    final plan = ref.watch(monthPlanProvider);
     if (!plan.meaningful) return const SizedBox.shrink();
     final over = plan.leftToSpend < 0;
     return Padding(
@@ -228,7 +217,7 @@ class _SafeToSpendTile extends ConsumerWidget {
         accent: over ? JAccent.expense : JAccent.income,
         alert: over,
         title: 'Safe to spend today',
-        trailing: JPill('${plan.daysLeft} days left'),
+        trailing: JPill(plan.daysLeft == 1 ? 'Last day' : '${plan.daysLeft} days left'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -240,8 +229,10 @@ class _SafeToSpendTile extends ConsumerWidget {
             Text(
               over
                   ? '${Money.whole(-plan.leftToSpend)} over this month once ${Money.whole(plan.committed)} of bills are paid.'
-                  : '${Money.whole(plan.leftToSpend)} left after ${Money.whole(plan.committed)} of bills still due · '
-                        'on pace to spend ${Money.whole(plan.forecastSpend)} by month end',
+                  : [
+                      '${Money.whole(plan.leftToSpend)} left after ${Money.whole(plan.committed)} of bills still due',
+                      if (plan.forecastSpend case final f?) 'on pace to spend ${Money.whole(f)} by month end',
+                    ].join(' · '),
               style: JType.body.copyWith(color: over ? c.ink : c.inkMuted),
             ),
           ],
@@ -400,7 +391,7 @@ class _UpcomingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final rules = ref.watch(postingRulesProvider);
     final cats = ref.watch(categoryMapProvider);
     final horizon = Day.of(Day.shift(ref.watch(todayProvider), 7));
     final lens = ref.watch(scopeFilterProvider);
@@ -506,23 +497,47 @@ class _AccountsCard extends ConsumerWidget {
     ];
     // Unknown until every account's rate is loaded: never a wrong total.
     final total = parts.contains(null) ? null : parts.fold<int>(0, (s, v) => s + v!);
+    // The rows add up to the total: an archived account still holding money
+    // is listed (marked) rather than hidden inside net worth.
+    final shown = [
+      for (final a in everyAccount)
+        if (!a.archived || (balances[a.id] ?? a.openingBalanceCents) != 0) a,
+    ];
     return JCard(
       title: 'Accounts',
       onTap: () => context.go('/settings/accounts'),
       child: Column(
         children: [
-          for (final a in accounts)
+          for (final a in shown)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(a.name, style: JType.bodyStrong.copyWith(color: c.ink, fontSize: 14)),
+                    flex: 3,
+                    child: Text(
+                      a.archived ? '${a.name} (archived)' : a.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: JType.bodyStrong.copyWith(color: a.archived ? c.inkMuted : c.ink, fontSize: 14),
+                    ),
                   ),
-                  Text(
-                    Fx.format(balances[a.id] ?? a.openingBalanceCents, a.currency),
-                    style: JType.rowMetric.copyWith(
-                      color: (balances[a.id] ?? 0) < 0 ? c.expense : c.inkMuted,
+                  const SizedBox(width: JSpace.sm),
+                  // LBP balances run to 13+ characters: shrink, never push
+                  // the name off the row.
+                  Flexible(
+                    flex: 2,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          Fx.format(balances[a.id] ?? a.openingBalanceCents, a.currency),
+                          style: JType.rowMetric.copyWith(
+                            color: (balances[a.id] ?? 0) < 0 ? c.expense : c.inkMuted,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

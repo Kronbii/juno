@@ -104,7 +104,11 @@ class WeeklyCard extends ConsumerStatefulWidget {
   const WeeklyCard({super.key});
 
   /// One read per day and scope lens.
-  static String cacheKey(String day, Scope? lens) => 'weekly.read.$day.${lens?.name ?? 'all'}';
+  /// One read per day, scope lens and set of figures: an entry added (here
+  /// or synced in) after the morning's read gets a fresh one, so the card
+  /// never contradicts Home. The figures are the cache's fingerprint.
+  static String cacheKey(String day, Scope? lens, [WeekFacts? f]) =>
+      'weekly.read.$day.${lens?.name ?? 'all'}${f == null ? '' : '.${f.spent}.${f.lastWeek}.${f.entries}'}';
 
   @override
   ConsumerState<WeeklyCard> createState() => _WeeklyCardState();
@@ -113,7 +117,7 @@ class WeeklyCard extends ConsumerStatefulWidget {
 class _WeeklyCardState extends ConsumerState<WeeklyCard> {
   final _asked = <String>{};
 
-  Future<void> _maybeAsk(WeekFacts f, String key) async {
+  Future<void> _maybeAsk(WeekFacts f, String key, String lensKey) async {
     // Read everything up front: the card can leave the screen while the
     // request is out, and `ref` is unusable after that. The read is still
     // saved, so it shows next time.
@@ -123,9 +127,12 @@ class _WeeklyCardState extends ConsumerState<WeeklyCard> {
     _asked.add(key);
     final text = await ai.weekly(f.facts);
     if (text == null || text.isEmpty) return;
-    // Keep only today's: yesterday's reads are stale.
+    // Keep only today's, and for this lens only the newest figures.
     final today = 'weekly.read.${Day.today()}.';
-    for (final k in prefs.getKeys().where((k) => k.startsWith('weekly.read.') && !k.startsWith(today)).toList()) {
+    final stale = prefs.getKeys().where(
+      (k) => k.startsWith('weekly.read.') && (!k.startsWith(today) || (k.startsWith('$lensKey.') && k != key)),
+    );
+    for (final k in stale.toList()) {
       await prefs.remove(k);
     }
     await prefs.setString(key, text);
@@ -144,9 +151,9 @@ class _WeeklyCardState extends ConsumerState<WeeklyCard> {
     final list = txs.value;
     if (list == null) return const SizedBox.shrink();
     final f = weekFacts(list, ref.watch(categoryMapProvider), now);
-    final key = WeeklyCard.cacheKey(Day.today(), lens);
+    final key = WeeklyCard.cacheKey(Day.today(), lens, f);
     final ai = ref.read(prefsProvider).getString(key);
-    if (ai == null) unawaited(_maybeAsk(f, key));
+    if (ai == null) unawaited(_maybeAsk(f, key, WeeklyCard.cacheKey(Day.today(), lens)));
     return JCard(
       accent: JAccent.household,
       title: 'This week',

@@ -165,6 +165,36 @@ void main() {
       expect(p.eta, DateTime(2028, 9)); // $1,150 left at $50/mo = 23 months
     });
 
+    test(r'monthly deposits: two $500 a month apart is $500/mo, not $1,000', () {
+      final g = goal(target: 600000);
+      final two = goalPace(
+        goal: g,
+        saved: 100000,
+        contributions: [put('2026-09-01', 50000), put('2026-10-01', 50000)],
+        now: DateTime(2026, 10),
+      );
+      expect(two.perMonth, 50000);
+      final four = goalPace(
+        goal: g,
+        saved: 200000,
+        contributions: [
+          for (final m in ['07', '08', '09', '10']) put('2026-$m-01', 50000),
+        ],
+        now: DateTime(2026, 10),
+      );
+      expect(four.perMonth, 50000, reason: 'the last three months, this one included');
+      // Early in the month, before this month's deposit: last three full months.
+      final early = goalPace(
+        goal: g,
+        saved: 150000,
+        contributions: [
+          for (final m in ['07', '08', '09']) put('2026-$m-15', 50000),
+        ],
+        now: DateTime(2026, 10, 2),
+      );
+      expect(early.perMonth, 50000);
+    });
+
     test('reached, and no history without a date', () {
       expect(goalPace(goal: goal(), saved: 120000, contributions: const [], now: now).status, GoalStatus.reached);
       final none = goalPace(goal: goal(), saved: 0, contributions: const [], now: now);
@@ -245,6 +275,32 @@ void main() {
       expect(empty.enough, isFalse);
       expect(empty.runway, isNull);
       expect(empty.savingsRate, isNull);
+    });
+
+    test('a month you started logging late in doesn’t count as a cheap month', () {
+      // First entries on 28–29 September; on 2 October that's all there is.
+      final txs = [tx('2026-09-28', 4000), tx('2026-09-29', 5000), tx('2026-09-28', 300000, type: TxType.income)];
+      final h = moneyHealth(
+        accounts: accounts,
+        balances: balances,
+        rules: const [],
+        txs: txs,
+        rates: rates,
+        now: DateTime(2026, 10, 2),
+        firstEntry: '2026-09-28',
+      );
+      expect(h.enough, isFalse, reason: 'not "55.6 months covered — Strong"');
+      // Started on the 3rd: a full month.
+      final full = moneyHealth(
+        accounts: accounts,
+        balances: balances,
+        rules: const [],
+        txs: [tx('2026-09-03', 4000)],
+        rates: rates,
+        now: DateTime(2026, 10, 2),
+        firstEntry: '2026-09-03',
+      );
+      expect(full.months, 1);
     });
 
     test('a missing rate leaves that account out and says so', () {

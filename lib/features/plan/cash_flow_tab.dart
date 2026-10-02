@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/category_style.dart';
-import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
@@ -38,7 +37,7 @@ class CashFlowTab extends ConsumerWidget {
     final balances = ref.watch(balancesProvider).value;
     if (recent.value == null || ahead.value == null || balances == null) return const SizedBox(height: 240);
     final cats = ref.watch(categoryMapProvider);
-    final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final rules = ref.watch(postingRulesProvider);
     final f = forecastCash(
       accounts: ref.watch(allAccountsProvider).value ?? const [],
       balances: balances,
@@ -96,8 +95,9 @@ class CashFlowTab extends ConsumerWidget {
               const SizedBox(height: JSpace.md),
               Text(
                 'Cash, current accounts and cards, without savings. '
-                '${f.paceDays > 0 ? 'Takes off your usual ${Money.whole(f.dailyPace)} a day of everyday spending '
-                          '(average of the last ${f.paceDays} days, bills excluded), ' : ''}'
+                '${f.learning ? 'Everyday spending joins the forecast after two weeks of entries; until then it shows only '
+                          'what’s scheduled. ' : 'Takes off your usual ${Money.whole(f.dailyPace)} a day of everyday spending '
+                          '(average of the last ${f.paceDays} days, bills excluded), '}'
                 'adds ${Money.whole(f.incomeAhead)} of income due and takes off ${Money.whole(f.billsAhead)} of '
                 'bills.${f.complete ? '' : ' Some amounts are left out because an exchange rate is missing.'}',
                 style: JType.body.copyWith(fontSize: 12.5, color: c.inkFaint),

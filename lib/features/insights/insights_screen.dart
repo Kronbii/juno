@@ -16,7 +16,6 @@ import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/insights/charts.dart';
 import 'package:juno/features/insights/health_card.dart';
 import 'package:juno/features/insights/suggestions_card.dart';
-import 'package:juno/features/plan/recurrence.dart';
 import 'package:juno/features/smart/advisor.dart';
 
 class InsightsScreen extends ConsumerWidget {
@@ -36,19 +35,27 @@ class InsightsScreen extends ConsumerWidget {
     final trail = ref.watch(trailingTxProvider((month, 6))).value ?? const <Transaction>[];
     final cats = ref.watch(categoryMapProvider);
     final rules = ref.watch(recurringProvider).value ?? const <RecurringRule>[];
+    final posting = ref.watch(postingRulesProvider);
     final lens = ref.watch(scopeFilterProvider);
     final accts = ref.watch(accountMapProvider);
     final rates = ref.watch(ratesProvider);
     final wide = MediaQuery.sizeOf(context).width >= JSize.wideBreakpoint;
 
     final s = PeriodSummary.of(txs);
-    final pace = MonthPace(month: month, expense: s.expense);
+    final firstEntry = ref.watch(firstEntryDayProvider).value;
+    final current = DateTime(clock.now().year, clock.now().month);
+    final pace = MonthPace(
+      month: month,
+      expense: s.expense,
+      projection: month == current ? ref.watch(monthPlanProvider).forecastSpend : null,
+    );
     // Mid-month, compare like with like: the first N days of this month
     // against the first N days of last month, not against all of it.
     final toDate = pace.isCurrent ? Day.of(DateTime(prev.year, prev.month, pace.daysElapsed)) : null;
     final ps = PeriodSummary.of(toDate == null ? prevTxs : prevTxs.where((t) => t.occurredOn.compareTo(toDate) <= 0));
     // A day or two of data makes every comparison shout; wait for a few.
-    final comparable = !pace.isCurrent || pace.daysElapsed >= 3;
+    // Nor against a month you'd barely started logging in.
+    final comparable = (!pace.isCurrent || pace.daysElapsed >= 3) && monthCovered(prev, firstEntry);
     final insights = compareInsights(
       current: s,
       previous: comparable ? ps : PeriodSummary.of(const []),
@@ -76,8 +83,8 @@ class InsightsScreen extends ConsumerWidget {
         ),
     ];
 
-    final subsMonthly = rules
-        .where((r) => r.isLive && r.type == TxType.expense && (lens == null || r.scope == lens))
+    final subsMonthly = posting
+        .where((r) => r.type == TxType.expense && (lens == null || r.scope == lens))
         .fold<double>(
           0,
           (sum, r) =>
@@ -99,7 +106,7 @@ class InsightsScreen extends ConsumerWidget {
         ),
         if (pace.isCurrent)
           Expanded(
-            child: JMicroStat(value: Money.whole(pace.projected), label: 'Projected'),
+            child: JMicroStat(value: pace.projected == null ? '—' : Money.whole(pace.projected!), label: 'Projected'),
           ),
       ],
     );
@@ -271,7 +278,7 @@ class InsightsScreen extends ConsumerWidget {
       compact: true,
       caption: subsMonthly == 0
           ? 'Add subscriptions and bills in Plan → Recurring.'
-          : '${Money.whole(subsMonthly * 12)} a year across ${rules.where((r) => r.isLive && r.type == TxType.expense && (lens == null || r.scope == lens)).length} rules',
+          : '${Money.whole(subsMonthly * 12)} a year across ${posting.where((r) => r.type == TxType.expense && (lens == null || r.scope == lens)).length} rules',
     );
 
     final worth = netWorthSeries(

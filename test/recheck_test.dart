@@ -186,7 +186,7 @@ void main() {
         "type = 'expense' AND recurring_id IS NULL AND account_id IN ($ids) AND occurred_on >= '$from' AND occurred_on < '$todayStr'",
       );
       expect(f.paceDays, paceDays);
-      expect(f.dailyPace, paceDays == 0 ? 0 : (unplanned / paceDays).round(), reason: 'pace');
+      expect(f.dailyPace, paceDays < CashForecast.minPaceDays ? 0 : (unplanned / paceDays).round(), reason: 'pace');
 
       final until = Day.of(DateTime(today.year, today.month, today.day + 60));
       final expectedEvents = <(String, int)>[

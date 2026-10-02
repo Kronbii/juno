@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
@@ -61,13 +63,65 @@ class PeriodSummary {
       byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 }
 
+/// Whether [month] has enough of your history to compare against: you'd
+/// started logging by its 7th. A month you began on the 25th looks like a
+/// cheap month and makes every comparison with it shout. [firstEntry] is
+/// your first entry ever (`YYYY-MM-DD`); null means no entries at all.
+bool monthCovered(DateTime month, String? firstEntry) =>
+    firstEntry != null && firstEntry.compareTo(Day.of(DateTime(month.year, month.month, 7))) <= 0;
+
+/// What you usually spend in the rest of a month after [today]'s day: the
+/// average, over your last [months] full months that have enough history
+/// ([monthCovered]), of spending dated after that day. Rent paid on the 1st
+/// isn't in "the rest" from the 2nd on, so it isn't counted again. Null when
+/// no full month is covered yet.
+int? usualRestOfMonth(Iterable<Transaction> history, DateTime today, {required String? firstEntry, int months = 3}) {
+  var total = 0;
+  var counted = 0;
+  for (var i = 1; i <= months; i++) {
+    final m = DateTime(today.year, today.month - i);
+    if (!monthCovered(m, firstEntry)) continue;
+    final after = Day.of(DateTime(m.year, m.month, min(today.day, Day.daysInMonth(m))));
+    final last = Day.lastOfMonth(m);
+    for (final t in history) {
+      if (t.type != TxType.expense) continue;
+      if (t.occurredOn.compareTo(after) > 0 && t.occurredOn.compareTo(last) <= 0) total += t.usd;
+    }
+    counted++;
+  }
+  return counted == 0 ? null : (total / counted).round();
+}
+
+/// The month-end spending estimate every screen shows, for the current
+/// month: [spent] so far plus [usualRest] — or the bills still due
+/// ([committed]) if those are more. With no full month of history yet, it
+/// extrapolates this month's everyday spending ([unplannedSpent], bills
+/// left out), but only from the 7th: three days in, one big purchase would
+/// project a year's salary. Null when there isn't enough to go on.
+int? projectMonthEnd({
+  required DateTime today,
+  required int spent,
+  required int unplannedSpent,
+  required int? usualRest,
+  int committed = 0,
+}) {
+  if (usualRest != null) return spent + max(usualRest, committed);
+  if (today.day < 7) return null;
+  final left = Day.daysInMonth(today) - today.day;
+  return spent + committed + (unplannedSpent / today.day * left).round();
+}
+
 /// Pace of spending within a month.
 class MonthPace {
-  MonthPace({required this.month, required this.expense, DateTime? today}) : _today = today ?? clock.now();
+  MonthPace({required this.month, required this.expense, DateTime? today, this.projection})
+    : _today = today ?? clock.now();
 
   final DateTime month;
   final int expense;
   final DateTime _today;
+
+  /// The current month's month-end estimate ([projectMonthEnd]).
+  final int? projection;
 
   bool get isCurrent => _today.year == month.year && _today.month == month.month;
 
@@ -82,8 +136,9 @@ class MonthPace {
 
   int get avgDaily => daysElapsed == 0 ? 0 : (expense / daysElapsed).round();
 
-  /// Straight-line month-end estimate. Only meaningful for the current month.
-  int get projected => isCurrent ? avgDaily * daysInMonth : expense;
+  /// Month-end total: the [projection] for the current month (null when
+  /// there isn't enough to go on), what was spent for any other.
+  int? get projected => isCurrent ? projection : expense;
 }
 
 /// One bar group in the trend chart.
@@ -152,9 +207,11 @@ List<Insight> compareInsights({
 }) {
   final out = <Insight>[];
 
-  if (previous.expense > 0 && current.expense > 0) {
-    final projecting = pace != null && pace.isCurrent;
-    final basis = projecting ? pace.projected : current.expense;
+  final projecting = pace != null && pace.isCurrent;
+  // Mid-month with no estimate yet: a partial month against a whole one
+  // would always read "much less", so say nothing.
+  if (previous.expense > 0 && current.expense > 0 && !(projecting && pace.projected == null)) {
+    final basis = projecting ? pace.projected! : current.expense;
     final d = (basis - previous.expense) / previous.expense;
     if (d.abs() >= 0.05) {
       final how = d > 0 ? '${_pct(d)} more' : '${_pct(-d)} less';

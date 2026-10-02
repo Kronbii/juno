@@ -52,13 +52,27 @@ GoalPace goalPace({
   if (left == 0) return const GoalPace(status: GoalStatus.reached, perMonth: 0, left: 0);
 
   final today = Day.of(n);
-  final from = Day.of(DateTime(n.year, n.month - window, n.day));
   final live = contributions.where((c) => c.deletedAt == null && c.occurredOn.compareTo(today) <= 0).toList();
-  final first = live.isEmpty ? null : live.map((c) => c.occurredOn).reduce((a, b) => a.compareTo(b) < 0 ? a : b);
-  final since = first != null && first.compareTo(from) > 0 ? first : from;
-  // Months covered, at least one so a first deposit isn't divided by zero.
-  final months = math.max(1, (Day.between(Day.parse(since), n) / 30.44).round());
-  final net = live.where((c) => c.occurredOn.compareTo(since) >= 0).fold(0, (s, c) => s + c.amountCents);
+  // Whole calendar months: the last [window] of them, ending with this one
+  // if you've already put money in this month, else with last month (this
+  // month's deposit may simply not be due yet). A goal started more
+  // recently averages over the months since its first deposit. Counting
+  // days instead made two $500 deposits a month apart read as $1,000/mo.
+  String monthOf(String day) => day.substring(0, 7);
+  final thisMonth = monthOf(today);
+  final endsNow = live.any((c) => monthOf(c.occurredOn) == thisMonth);
+  final last = endsNow ? DateTime(n.year, n.month) : DateTime(n.year, n.month - 1);
+  var start = DateTime(last.year, last.month - window + 1);
+  if (live.isNotEmpty) {
+    final first = Day.parse(live.map((c) => c.occurredOn).reduce((a, b) => a.compareTo(b) < 0 ? a : b));
+    if (DateTime(first.year, first.month).isAfter(start)) start = DateTime(first.year, first.month);
+  }
+  final months = math.max(1, (last.year - start.year) * 12 + last.month - start.month + 1);
+  final since = Day.firstOfMonth(start);
+  final until = Day.lastOfMonth(last);
+  final net = live
+      .where((c) => c.occurredOn.compareTo(since) >= 0 && c.occurredOn.compareTo(until) <= 0)
+      .fold(0, (s, c) => s + c.amountCents);
   // Unrounded for the arrival date: rounding to cents first can push it a
   // month late ($800 at $133.33/mo is 6 months, not 6.0002).
   final pace = live.isEmpty ? 0.0 : math.max(0, net / months).toDouble();

@@ -49,6 +49,18 @@ void main() {
     expect(row.categoryId.value, seedId('cat:Salary'));
   });
 
+  test('"yesterday" is the day before it was said, not before Juno was opened', () async {
+    // Said on 28 September; Juno opened on 2 October.
+    final item = parseInbox('[{"id":"t2","text":"12 taxi yesterday","at":"2026-09-28T19:40:00"}]').single;
+    final row = (await inboxToEntry(item, categories: cats, accounts: accts, rates: const {}))!;
+    expect(row.occurredOn.value, '2026-09-27');
+    final today = parseInbox('[{"id":"t3","text":"5 coffee today","at":"2026-09-28T08:00:00"}]').single;
+    expect(
+      (await inboxToEntry(today, categories: cats, accounts: accts, rates: const {}))!.occurredOn.value,
+      '2026-09-28',
+    );
+  });
+
   test('LBP with no LBP account converts instead of being read as dollars', () async {
     final item = parseInbox('[{"id":"l1","amount":179000,"currency":"LBP","category":"Transport"}]').single;
     final row = (await inboxToEntry(item, categories: cats, accounts: accts, rates: const {'LBP': 89500}))!;

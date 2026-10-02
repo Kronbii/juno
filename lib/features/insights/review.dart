@@ -82,12 +82,20 @@ Review buildReview({
     for (final id in ids) (id, now.byCategory[id] ?? 0, before.byCategory[id] ?? 0),
   ]..sort((a, b) => (b.$2 - b.$3).abs().compareTo((a.$2 - a.$3).abs()));
 
-  // Budgets are monthly: judge each budget in each month of the period.
+  // Budgets are monthly: judge each budget in each month of the period —
+  // but only months it existed in, and that have entries: a month before
+  // you started (or before the budget) isn't a budget kept.
   var met = 0;
   var missed = 0;
   for (final m in months) {
     final monthTx = current.where((t) => t.occurredOn.startsWith(Day.firstOfMonth(m).substring(0, 7))).toList();
-    for (final s in budgetStatuses(budgets, monthTx)) {
+    if (monthTx.isEmpty) continue;
+    final end = DateTime(m.year, m.month + 1);
+    final existed = [
+      for (final b in budgets)
+        if (b.createdAt.toLocal().isBefore(end)) b,
+    ];
+    for (final s in budgetStatuses(existed, monthTx)) {
       if (s.over) {
         missed++;
       } else {

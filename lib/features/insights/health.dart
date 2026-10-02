@@ -4,6 +4,7 @@ import 'package:clock/clock.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
+import 'package:juno/features/insights/analytics.dart' show monthCovered;
 import 'package:juno/features/plan/recurrence.dart';
 
 enum Verdict { good, ok, weak }
@@ -78,6 +79,7 @@ MoneyHealth moneyHealth({
   required Map<String, double> rates,
   DateTime? now,
   int window = 3,
+  String? firstEntry,
 }) {
   final n = now ?? clock.now();
   final to = DateTime(n.year, n.month - 1);
@@ -85,7 +87,8 @@ MoneyHealth moneyHealth({
   var complete = true;
 
   // Only months that have entries count, so a new user isn't averaged
-  // against empty months.
+  // against empty months — and, given [firstEntry], not a month they began
+  // late in, whose few days would read as a very cheap month.
   final spend = <String, int>{};
   final income = <String, int>{};
   final seen = <String>{};
@@ -94,6 +97,7 @@ MoneyHealth moneyHealth({
   for (final t in txs) {
     if (t.occurredOn.compareTo(fromStr) < 0 || t.occurredOn.compareTo(toStr) > 0) continue;
     final m = t.occurredOn.substring(0, 7);
+    if (firstEntry != null && !monthCovered(Day.parse('$m-01'), firstEntry)) continue;
     seen.add(m);
     if (t.type == TxType.expense) spend[m] = (spend[m] ?? 0) + t.usd;
     if (t.type == TxType.income) income[m] = (income[m] ?? 0) + t.usd;
@@ -104,7 +108,9 @@ MoneyHealth moneyHealth({
 
   var net = 0;
   var debt = 0;
-  for (final a in accounts.where((a) => !a.archived && a.deletedAt == null)) {
+  // Archived accounts count: their money still exists, and net worth is the
+  // same figure on every screen.
+  for (final a in accounts.where((a) => a.deletedAt == null)) {
     final usd = Fx.tryToUsd(balances[a.id] ?? a.openingBalanceCents, a.currency, rates);
     if (usd == null) {
       complete = false;

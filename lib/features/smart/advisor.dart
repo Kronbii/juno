@@ -1,15 +1,40 @@
 import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
+import 'package:juno/core/providers.dart';
+import 'package:juno/features/insights/analytics.dart' show projectMonthEnd, usualRestOfMonth;
 import 'package:juno/features/plan/recurrence.dart';
 
 /// On-device money advice. Pure functions over your data — no network, no
 /// model — so every figure is explainable and testable.
 
 // --------------------------------------------------------- safe to spend
+
+/// This month's plan under the scope lens — one source for Home's hero,
+/// safe to spend and Insights, so they never show two different month-end
+/// estimates.
+final monthPlanProvider = Provider<SpendPlan>((ref) {
+  final today = ref.watch(todayProvider);
+  final now = clock.now();
+  final lens = ref.watch(scopeFilterProvider);
+  final txs = ref.watch(monthTxProvider(DateTime(today.year, today.month))).value ?? const <Transaction>[];
+  final rules = ref.watch(postingRulesProvider).where((r) => lens == null || r.scope == lens).toList();
+  final history = ref.watch(usualHistoryProvider).value;
+  return planMonth(
+    monthTxs: txs,
+    rules: rules,
+    accounts: ref.watch(accountMapProvider),
+    rates: ref.watch(ratesProvider),
+    now: now,
+    usualRest: history == null
+        ? null
+        : usualRestOfMonth(history, now, firstEntry: ref.watch(firstEntryDayProvider).value),
+  );
+});
 
 class SpendPlan {
   const SpendPlan({
@@ -39,9 +64,9 @@ class SpendPlan {
   /// Days left including today.
   final int daysLeft;
 
-  /// Month-end spend if today's pace of *unplanned* spending continues, plus
-  /// the bills still due.
-  final int forecastSpend;
+  /// Month-end spending estimate ([projectMonthEnd]): the same figure Home
+  /// and Insights show. Null when there isn't enough to go on yet.
+  final int? forecastSpend;
 
   /// What's left to spend this month once committed bills are covered.
   int get leftToSpend => incomeExpected - spent - committed;
@@ -61,6 +86,7 @@ SpendPlan planMonth({
   required Map<String, Account> accounts,
   required Map<String, double> rates,
   DateTime? now,
+  int? usualRest,
 }) {
   final today = now ?? clock.now();
   final first = DateTime(today.year, today.month);
@@ -85,7 +111,7 @@ SpendPlan planMonth({
   var committed = 0;
   var pendingIncome = 0;
   var ratesMissing = false;
-  for (final r in rules.where((r) => r.isLive)) {
+  for (final r in postingRules(rules, accounts)) {
     final usdAmount = Fx.tryToUsd(r.amountCents, accounts[r.accountId]?.currency ?? baseCurrency, rates);
     if (usdAmount == null) {
       ratesMissing = true;
@@ -105,9 +131,13 @@ SpendPlan planMonth({
     }
   }
 
-  final unplanned = spent - recurringSpent;
-  final pace = today.day == 0 ? 0 : unplanned / today.day;
-  final forecast = spent + committed + (pace * (daysLeft - 1)).round();
+  final forecast = projectMonthEnd(
+    today: today,
+    spent: spent,
+    unplannedSpent: spent - recurringSpent,
+    usualRest: usualRest,
+    committed: committed,
+  );
 
   return SpendPlan(
     income: income,
@@ -323,10 +353,14 @@ List<BudgetSuggestion> suggestBudgets({
   final today = now ?? clock.now();
   final budgeted = {for (final b in budgets.where((b) => b.deletedAt == null)) b.categoryId};
   final totals = <String, List<int>>{};
+  // Months you were using Juno at all: a new user's empty months aren't
+  // months of spending nothing, so they don't drag the average down.
+  var activeMonths = 0;
   for (var i = 1; i <= 3; i++) {
     final m = DateTime(today.year, today.month - i);
     final from = Day.firstOfMonth(m);
     final to = Day.lastOfMonth(m);
+    if (history.any((t) => t.occurredOn.compareTo(from) >= 0 && t.occurredOn.compareTo(to) <= 0)) activeMonths++;
     final sums = <String, int>{};
     for (final t in history) {
       if (t.type != TxType.expense || t.categoryId == null) continue;
@@ -340,7 +374,7 @@ List<BudgetSuggestion> suggestBudgets({
   final out = <BudgetSuggestion>[];
   for (final e in totals.entries) {
     if (budgeted.contains(e.key) || e.value.length < 2) continue;
-    final avg = (e.value.reduce((a, b) => a + b) / 3).round();
+    final avg = (e.value.reduce((a, b) => a + b) / activeMonths).round();
     if (avg < 2000) continue;
     final limit = ((avg + 999) ~/ 1000) * 1000;
     out.add(BudgetSuggestion(e.key, limit, avg));

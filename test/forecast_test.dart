@@ -22,23 +22,31 @@ Account acct(String id, AccountKind kind, {String currency = 'USD', int opening 
 );
 
 var _n = 0;
-Transaction tx(String day, int cents, {TxType type = TxType.expense, String account = 'chk', String? recurringId}) =>
-    Transaction(
-      id: 'f${_n++}',
-      createdAt: DateTime.utc(2026),
-      updatedAt: DateTime.utc(2026),
-      dirty: false,
-      type: type,
-      scope: Scope.personal,
-      amountCents: cents,
-      accountId: account,
-      occurredOn: day,
-      note: '',
-      merchant: 'Shop',
-      currency: 'USD',
-      tags: '',
-      recurringId: recurringId,
-    );
+Transaction tx(
+  String day,
+  int cents, {
+  TxType type = TxType.expense,
+  String account = 'chk',
+  String? recurringId,
+  String note = '',
+  String? category,
+}) => Transaction(
+  id: 'f${_n++}',
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+  dirty: false,
+  type: type,
+  scope: Scope.personal,
+  amountCents: cents,
+  accountId: account,
+  occurredOn: day,
+  note: note,
+  categoryId: category,
+  merchant: 'Shop',
+  currency: 'USD',
+  tags: '',
+  recurringId: recurringId,
+);
 
 RecurringRule rule(
   String id,
@@ -49,8 +57,10 @@ RecurringRule rule(
   Frequency frequency = Frequency.monthly,
   String? end,
   bool active = true,
+  String? category,
 }) => RecurringRule(
   id: id,
+  categoryId: category,
   createdAt: DateTime.utc(2026),
   updatedAt: DateTime.utc(2026),
   dirty: false,
@@ -149,10 +159,26 @@ void main() {
     expect(f.end, f.start - 60 * 1000);
   });
 
-  test('a newer user: the pace uses the days actually covered', () {
-    final f = run(recent: [tx('2026-09-30', 10000), tx('2026-10-05', 10000)]);
-    expect(f.paceDays, 10);
-    expect(f.dailyPace, 2000);
+  test('a newer user: the pace waits for two weeks, then uses the days actually covered', () {
+    // Ten days of history (rent and a coffee): not enough to project.
+    final early = run(recent: [tx('2026-09-30', 120000), tx('2026-10-05', 500)]);
+    expect((early.paceDays, early.dailyPace, early.learning), (10, 0, true));
+    expect(early.firstBelowZero, isNull, reason: 'no "you’ll be broke in a week" from one rent payment');
+    final f = run(recent: [tx('2026-09-20', 10000), tx('2026-10-05', 10000)]);
+    expect((f.paceDays, f.dailyPace, f.learning), (20, 1000, false));
+  });
+
+  test('bills logged by hand before they were made recurring aren’t counted twice', () {
+    final rent = rule('rent', TxType.expense, 145000, '2026-11-02', category: 'cat-rent');
+    final f = run(
+      rules: [rent],
+      recent: [
+        tx('2026-07-12', 9000), // everyday
+        tx('2026-08-02', 145000, note: 'Rent'), // logged by hand, named like the rule
+        tx('2026-09-02', 150000, category: 'cat-rent'), // same category, within 15%
+      ],
+    );
+    expect(f.dailyPace, 100, reason: r'only the $90 of everyday spending, over 90 days');
   });
 
   test('lowest point and first day below zero', () {

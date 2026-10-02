@@ -104,6 +104,8 @@ Future<TransactionsCompanion?> inboxToEntry(
       categories: categories,
       memory: memory,
       hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+      // "yesterday" means the day before it was said, not before Juno opened.
+      now: item.at == null ? null : (item.at!.isUtc ? item.at!.toLocal() : item.at!),
     );
     q = QuickAdd(
       amountCents: q.amountCents ?? e.amountCents,

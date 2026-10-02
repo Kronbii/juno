@@ -64,7 +64,13 @@ String occurrenceId(String ruleId, String day) => const Uuid().v5(Namespace.url.
 /// deleted stays deleted.
 Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
   final today = now ?? clock.now();
-  final rules = await (db.select(db.recurringRules)..where((r) => r.deletedAt.isNull() & r.active.equals(true))).get();
+  final accounts = {for (final a in await db.select(db.accounts).get()) a.id: a};
+  final rules = [
+    for (final r in await (db.select(
+      db.recurringRules,
+    )..where((r) => r.deletedAt.isNull() & r.active.equals(true))).get())
+      if (willPost(r, accounts[r.accountId])) r,
+  ];
   var created = 0;
   await db.transaction(() async {
     for (final rule in rules) {
@@ -108,6 +114,30 @@ Future<int> materializeRecurring(AppDatabase db, {DateTime? now}) async {
   });
   return created;
 }
+
+/// The anchor a rule keeps after an edit setting its next date to [start].
+/// Changing the next date, the frequency or the interval re-anchors it at
+/// [start]: the old anchor's day and month would put a now-yearly bill in
+/// the old anchor's month, or a now-monthly one on a weekly rule's old day.
+String anchorAfterEdit(
+  RecurringRule? r, {
+  required String start,
+  required Frequency frequency,
+  required int interval,
+}) => r == null || r.nextDue != start || r.frequency != frequency || r.interval != interval ? start : r.anchorDate;
+
+/// Whether [r] will post: live, and its account isn't archived or deleted.
+/// A rule on a closed account is paused with it — money must not keep
+/// flowing into an account no screen shows. (An account not known here yet,
+/// say still loading or syncing, doesn't stop it.)
+bool willPost(RecurringRule r, Account? account) =>
+    r.isLive && (account == null || (account.deletedAt == null && !account.archived));
+
+/// The rules that will post ([willPost]).
+List<RecurringRule> postingRules(Iterable<RecurringRule> rules, Map<String, Account> accounts) => [
+  for (final r in rules)
+    if (willPost(r, accounts[r.accountId])) r,
+];
 
 extension RuleLive on RecurringRule {
   /// Whether the rule will post again: active, not deleted, and its next

@@ -403,8 +403,12 @@ class AssistantTools {
   }
 
   Future<Map<String, dynamic>> _accounts() async {
-    final accounts = (await ledger.watchAccounts().first).where((a) => !a.archived);
+    // Archived accounts count toward net worth, as on every screen; one
+    // with nothing left in it isn't worth listing.
     final balances = await ledger.watchBalances().first;
+    final accounts = (await ledger.watchAccounts(includeArchived: true).first).where(
+      (a) => !a.archived || (balances[a.id] ?? a.openingBalanceCents) != 0,
+    );
     final rates = await _rates();
     var net = 0;
     var netComplete = true;
@@ -419,6 +423,7 @@ class AssistantTools {
       }
       list.add({
         'name': a.name,
+        if (a.archived) 'archived': true,
         'kind': a.kind.name,
         'currency': a.currency,
         'balance': a.currency == baseCurrency ? _usd(cents) : Fx.format(cents, a.currency),
@@ -487,6 +492,16 @@ class AssistantTools {
       accounts: await _accountsById(),
       rates: await _rates(),
       now: now,
+      usualRest: usualRestOfMonth(
+        await ledger.transactions(
+          TxQuery(
+            from: Day.firstOfMonth(DateTime(now.year, now.month - 3)),
+            to: Day.lastOfMonth(DateTime(now.year, now.month - 1)),
+          ),
+        ),
+        now,
+        firstEntry: await ledger.watchFirstEntryDay().first,
+      ),
     );
     if (!p.complete) return {'error': 'An exchange rate is missing, so the plan cannot be worked out.'};
     return {
@@ -497,7 +512,7 @@ class AssistantTools {
       'left_to_spend': _usd(p.leftToSpend),
       'per_day': _usd(p.perDay),
       'days_left': p.daysLeft,
-      'forecast_month_spend': _usd(p.forecastSpend),
+      'forecast_month_spend': p.forecastSpend == null ? null : _usd(p.forecastSpend!),
       if (!p.meaningful) 'note': 'No income recorded or expected this month, so there is nothing to plan against.',
     };
   }

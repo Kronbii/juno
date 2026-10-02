@@ -248,6 +248,17 @@ class Ledger {
         .map((rows) => {for (final r in rows) r.read<String>('id'): r.read<int>('balance')});
   }
 
+  /// The day of your first live entry (`YYYY-MM-DD`), null with none.
+  /// Comparisons and averages use it to tell a quiet month from one before
+  /// you started.
+  Stream<String?> watchFirstEntryDay() => db
+      .customSelect(
+        'SELECT MIN(occurred_on) AS d FROM transactions WHERE deleted_at IS NULL',
+        readsFrom: {db.transactions},
+      )
+      .watchSingle()
+      .map((r) => r.readNullable<String>('d'));
+
   /// Category ids ordered by how often they were used in the last 90 days —
   /// the add sheet puts these first.
   Future<List<String>> recentCategoryIds() async {

@@ -639,8 +639,9 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
                                 note: Value(_note.text.trim()),
                                 frequency: Value(_freq),
                                 interval: Value(_interval),
-                                // Changing the next date re-anchors the rule.
-                                anchorDate: Value(r == null || r.nextDue != _start ? _start : r.anchorDate),
+                                anchorDate: Value(
+                                  anchorAfterEdit(r, start: _start, frequency: _freq, interval: _interval),
+                                ),
                                 nextDue: Value(_resumeFrom(r)),
                                 endDate: Value(_end),
                                 active: Value(_active),

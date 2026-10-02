@@ -1,7 +1,6 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
@@ -32,10 +31,11 @@ class MoneyHealthCard extends ConsumerWidget {
     final h = moneyHealth(
       accounts: ref.watch(allAccountsProvider).value ?? const [],
       balances: balances,
-      rules: ref.watch(recurringProvider).value ?? const <RecurringRule>[],
+      rules: ref.watch(postingRulesProvider),
       txs: txs.value!,
       rates: ref.watch(ratesProvider),
       now: now,
+      firstEntry: ref.watch(firstEntryDayProvider).value,
     );
     if (!h.enough) {
       return JCard(
