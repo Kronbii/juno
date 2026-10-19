@@ -20,7 +20,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: jq -n '{SUPABASE_URL: env.SUPABASE_URL, SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY}' > supabase.json
+        run: |
+          jq -n '{SUPABASE_URL: env.SUPABASE_URL, SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY}' > supabase.json
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign --dart-define-from-file=supabase.json
       - name: Package
