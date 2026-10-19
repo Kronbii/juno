@@ -72,4 +72,4 @@ const seriesCount = 8;
 Color seriesColor(JColors c, int index) => (c.isDark ? _seriesDark : _seriesLight)[index % seriesCount];
 
 /// The fold-in colour for "Other" — neutral, never a ninth hue.
-Color otherColor(JColors c) => c.isDark ? const Color(0xFF5A5250) : const Color(0xFFB9B4AC);
+Color otherColor(JColors c) => c.isDark ? const Color(0xFF4E5551) : const Color(0xFFB5BBB3);

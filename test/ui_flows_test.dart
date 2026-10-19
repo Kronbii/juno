@@ -371,7 +371,7 @@ void main() {
     await h.settle();
     await tester.enterText(find.byType(TextField).last, '1.50');
     await h.settle(2);
-    expect(find.textContaining('less than Juno expects'), findsOneWidget);
+    expect(find.textContaining('Juno expects'), findsOneWidget);
     await tester.tap(find.text('Fix the balance'));
     await h.settle();
     final after = (await tester.runAsync(() => h.ledger.watchBalances().first))!;

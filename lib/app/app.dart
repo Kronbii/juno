@@ -146,7 +146,9 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
         final c = context.jc;
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: JTheme.overlay(c),
-          child: LockGate(child: DeepLinkHandler(child: child!)),
+          child: JCursor(
+            child: LockGate(child: DeepLinkHandler(child: child!)),
+          ),
         );
       },
     );

@@ -43,7 +43,7 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
   }
 
   final checking = await demoAccount('checking', 'Demo Checking', AccountKind.checking, 420000);
-  final cash = await demoAccount('cash', 'Demo Cash', AccountKind.cash, 18000);
+  final cash = await demoAccount('cash', 'Demo Cash', AccountKind.cash, 80000);
   await demoAccount('savings', 'Demo Savings', AccountKind.savings, 1250000);
 
   final rows = <TransactionsCompanion>[];

@@ -49,6 +49,7 @@ abstract final class JTheme {
       splashColor: c.ink.withValues(alpha: 0.05),
       highlightColor: Colors.transparent,
       hoverColor: c.ink.withValues(alpha: 0.03),
+      focusColor: c.brand.withValues(alpha: 0.14),
       textTheme: TextTheme(
         displayLarge: ink(JType.heroMetric),
         headlineMedium: ink(JType.screenTitle),
@@ -88,9 +89,9 @@ abstract final class JTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: c.isDark ? c.raised : c.navBar,
         contentTextStyle: JType.bodyStrong.copyWith(
-          color: c.isDark ? c.ink : const Color(0xFFFBF5EA),
+          color: c.isDark ? c.ink : JColors.dark.ink,
         ),
-        actionTextColor: c.isDark ? c.brand : const Color(0xFFE79A9B),
+        actionTextColor: c.isDark ? c.brand : JColors.dark.brand,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(JRadius.chip),
         ),
@@ -104,7 +105,7 @@ abstract final class JTheme {
         border: hairlineBorder,
         enabledBorder: hairlineBorder,
         focusedBorder: hairlineBorder.copyWith(
-          borderSide: BorderSide(color: c.ink.withValues(alpha: 0.5)),
+          borderSide: BorderSide(color: c.brand, width: 1.5),
         ),
         errorBorder: hairlineBorder.copyWith(
           borderSide: BorderSide(color: c.expense),
@@ -115,7 +116,7 @@ abstract final class JTheme {
       ),
       textSelectionTheme: TextSelectionThemeData(
         cursorColor: c.brand,
-        selectionColor: c.brand.withValues(alpha: 0.3),
+        selectionColor: c.brand.withValues(alpha: 0.35),
         selectionHandleColor: c.brand,
       ),
       popupMenuTheme: PopupMenuThemeData(
@@ -154,7 +155,7 @@ abstract final class JTheme {
           borderRadius: BorderRadius.circular(8),
         ),
         textStyle: JType.chipLabel.copyWith(
-          color: c.isDark ? c.ink : const Color(0xFFFBF5EA),
+          color: c.isDark ? c.ink : JColors.dark.ink,
         ),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(

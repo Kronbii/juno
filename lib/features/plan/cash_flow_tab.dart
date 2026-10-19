@@ -251,7 +251,7 @@ class ForecastLine extends StatelessWidget {
                 for (final s in spots)
                   LineTooltipItem(
                     '${Day.short(Day.of(points[s.x.round()].$1))} · ${Money.whole(s.y.round())}',
-                    JType.chipLabel.copyWith(color: c.isDark ? c.ink : const Color(0xFFFBF5EA)),
+                    JType.chipLabel.copyWith(color: c.isDark ? c.ink : JColors.dark.ink),
                   ),
               ],
             ),

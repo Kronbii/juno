@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 ///
 /// Built the way Bikey's instrument panel is: grounds stay quiet, structure is
 /// carried by 1px hairlines instead of filled blocks, and colour only appears
-/// where it means something. The dark ground is Tayseer's warm near-black with
-/// cream ink; the light ground is Lazpress's paper white with warm rules.
+/// where it means something. The palette is Rami's site (kronbii.com, the
+/// Sage world): a green-black ground, cool ink and one sage accent; the light
+/// ground is paper white with the same sage, deepened for contrast.
 ///
 /// Colours live in a [ThemeExtension] (Bikey's were `static const`) so every
 /// component reads them through `context.jc` and follows the system theme.
@@ -55,7 +56,7 @@ class JColors extends ThemeExtension<JColors> {
   // Each one means something. Brand doubles as "personal"; teal is
   // "household", so a scope reads at a glance anywhere in the app.
 
-  /// Burgundy. The primary action and the personal scope.
+  /// Sage. The primary action and the personal scope.
   final Color brand;
 
   /// Money in.
@@ -77,17 +78,17 @@ class JColors extends ThemeExtension<JColors> {
 
   static const dark = JColors(
     brightness: Brightness.dark,
-    bg: Color(0xFF0E0B0B),
-    surface: Color(0xFF1A1414),
-    raised: Color(0xFF221A1A),
-    navBar: Color(0xFF141010),
-    hairline: Color(0x1FFBF5EA),
-    hairlineStrong: Color(0x3DFBF5EA),
-    ink: Color(0xFFFBF5EA),
-    inkMuted: Color(0x99FBF5EA),
-    inkFaint: Color(0x5CFBF5EA),
-    onAccent: Color(0xFF0E0B0B),
-    brand: Color(0xFFC9686A),
+    bg: Color(0xFF0B0D0C),
+    surface: Color(0xFF121614),
+    raised: Color(0xFF191E1B),
+    navBar: Color(0xFF101311),
+    hairline: Color(0x1FEEF1EC),
+    hairlineStrong: Color(0x38EEF1EC),
+    ink: Color(0xFFEEF1EC),
+    inkMuted: Color(0xBDEEF1EC),
+    inkFaint: Color(0x85EEF1EC),
+    onAccent: Color(0xFF10180D),
+    brand: Color(0xFFB7D3A8),
     income: Color(0xFF3FB950),
     expense: Color(0xFFF4553D),
     warn: Color(0xFFE3B341),
@@ -97,16 +98,16 @@ class JColors extends ThemeExtension<JColors> {
   static const light = JColors(
     brightness: Brightness.light,
     bg: Color(0xFFFFFFFF),
-    surface: Color(0xFFF6F4F0),
-    raised: Color(0xFFEFEBE4),
-    navBar: Color(0xFF15171A),
-    hairline: Color(0xFFE7E3DC),
-    hairlineStrong: Color(0xFFCFC9BF),
-    ink: Color(0xFF15171A),
-    inkMuted: Color(0xFF3A3D42),
-    inkFaint: Color(0xFF7A7D83),
+    surface: Color(0xFFF3F5F2),
+    raised: Color(0xFFEAEEE8),
+    navBar: Color(0xFF121614),
+    hairline: Color(0xFFE3E7E1),
+    hairlineStrong: Color(0xFFC8CFC5),
+    ink: Color(0xFF131714),
+    inkMuted: Color(0xFF3A413C),
+    inkFaint: Color(0xFF6F7770),
     onAccent: Color(0xFFFFFFFF),
-    brand: Color(0xFF8C3839),
+    brand: Color(0xFF4E6F42),
     income: Color(0xFF1A7F37),
     expense: Color(0xFFCF2E1F),
     warn: Color(0xFF9A6700),

@@ -222,7 +222,7 @@ BarTouchData _barTouch(JColors c, String Function(int group, int rod) text) => B
     fitInsideVertically: true,
     getTooltipItem: (group, gi, rod, ri) => BarTooltipItem(
       text(gi, ri),
-      JType.chipLabel.copyWith(color: c.isDark ? c.ink : const Color(0xFFFBF5EA)),
+      JType.chipLabel.copyWith(color: c.isDark ? c.ink : JColors.dark.ink),
     ),
   ),
 );
@@ -470,7 +470,7 @@ class NetWorthLine extends StatelessWidget {
                 for (final s in spots)
                   LineTooltipItem(
                     '${Day.monthShort(points[s.x.round()].$1)} · ${Money.whole(s.y.round())}',
-                    JType.chipLabel.copyWith(color: c.isDark ? c.ink : const Color(0xFFFBF5EA)),
+                    JType.chipLabel.copyWith(color: c.isDark ? c.ink : JColors.dark.ink),
                   ),
               ],
             ),

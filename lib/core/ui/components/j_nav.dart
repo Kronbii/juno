@@ -41,7 +41,7 @@ class JBottomNav extends StatelessWidget {
     final c = context.jc;
     // The bar is always the dark navBar ink so it reads as a physical object
     // floating over either theme.
-    final onBar = c.isDark ? c.inkFaint : const Color(0x80FBF5EA);
+    final onBar = c.isDark ? c.inkFaint : JColors.dark.ink.withValues(alpha: 0.5);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         JSpace.page,
@@ -171,10 +171,10 @@ class _AddButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: const SizedBox(
+          child: SizedBox(
             width: 54,
             height: 46,
-            child: Icon(Icons.add_rounded, size: 24, color: Color(0xFF0E0B0B)),
+            child: Icon(Icons.add_rounded, size: 24, color: JColors.dark.onAccent),
           ),
         ),
       ),
@@ -320,7 +320,7 @@ class _RailItem extends StatelessWidget {
   }
 }
 
-/// "Juno." — Manrope 800 with the full stop in serif italic burgundy, a nod
+/// "Juno." — Manrope 800 with the full stop in serif italic sage, a nod
 /// to Lazpress's footer wordmark.
 class JWordmark extends StatelessWidget {
   const JWordmark({this.size = 26, super.key});
