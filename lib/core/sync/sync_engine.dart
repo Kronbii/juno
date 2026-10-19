@@ -545,6 +545,19 @@ class SyncEngine extends Notifier<SyncStatus> {
     }
   }
 
+  /// Sets a new password for the signed-in account; the current session
+  /// stands in for the old one. Returns an error message, or null on success.
+  Future<String?> changePassword(String password) async {
+    try {
+      await _auth.updateUser(UserAttributes(password: password));
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } on Object catch (e) {
+      return 'Couldn’t reach the sync server: $e';
+    }
+  }
+
   Future<void> signOut() => _auth.signOut();
 }
 

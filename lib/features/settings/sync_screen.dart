@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/sync/sync_engine.dart';
+import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/settings/sync_badge.dart';
 
@@ -145,6 +146,23 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: JSpace.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: JButton(
+                label: 'Change password',
+                icon: Icons.key_rounded,
+                kind: JButtonKind.secondary,
+                dense: true,
+                onPressed: () => showJSheet<void>(
+                  context,
+                  title: 'New *password*',
+                  child: ChangePasswordSheet(
+                    onSave: ref.read(syncEngineProvider.notifier).changePassword,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -159,6 +177,101 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
       ],
       slivers: [SliverToBoxAdapter(child: body)],
+    );
+  }
+}
+
+/// Sets a new password while signed in: typed twice, checked here first so a
+/// typo never becomes the only way into the account.
+class ChangePasswordSheet extends StatefulWidget {
+  const ChangePasswordSheet({required this.onSave, super.key});
+
+  /// Returns an error message, or null once the password is changed.
+  final Future<String?> Function(String password) onSave;
+
+  static const minLength = 8;
+
+  @override
+  State<ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
+  final _password = TextEditingController();
+  final _again = TextEditingController();
+  String? _message;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    _again.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final p = _password.text;
+    final problem = p.length < ChangePasswordSheet.minLength
+        ? 'Use at least ${ChangePasswordSheet.minLength} characters.'
+        : p != _again.text
+        ? 'The two passwords don’t match.'
+        : null;
+    if (problem != null) {
+      setState(() => _message = problem);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    final error = await widget.onSave(p);
+    if (!mounted) return;
+    if (error == null) {
+      Navigator.of(context).pop();
+      showToast('Password changed. Use it to sign in on your other devices.');
+    } else {
+      setState(() {
+        _busy = false;
+        _message = error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    return AutofillGroup(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          JField(
+            label: 'New password',
+            child: TextField(
+              controller: _password,
+              obscureText: true,
+              autofocus: true,
+              autofillHints: const [AutofillHints.newPassword],
+            ),
+          ),
+          JField(
+            label: 'Type it again',
+            child: TextField(
+              controller: _again,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              onSubmitted: (_) => _save(),
+            ),
+          ),
+          if (_message != null) ...[
+            Text(_message!, style: JType.body.copyWith(color: c.warn)),
+            const SizedBox(height: JSpace.md),
+          ],
+          JButton(
+            label: _busy ? 'Saving…' : 'Save password',
+            expand: true,
+            onPressed: _busy ? null : _save,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,9 +1,24 @@
 name: iOS build
 
-# An unsigned release build of the iPhone app. Signing and installing happen
-# on Linux with xtool: download the artifact, then `xtool install Juno.ipa`.
+# An unsigned release build of the iPhone app, on every push that changes the
+# app. Signing and installing happen on Linux with xtool: the
+# juno-ios-refresh user service picks up the newest build when the phone is
+# plugged in.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/ios.yml'
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: true
 
 jobs:
   build:
