@@ -2,6 +2,18 @@
 
 Double-tap the back of your iPhone, enter an amount, say what it was, pick who it was for (Personal, Household or Other), and Juno files it in the right category and shows a toast with an **Undo** button. It works offline, and the entry syncs later if sync is on.
 
+## The native way: Log purchase (recommended)
+
+Juno adds a **Log purchase** action to the Shortcuts app. It runs without opening Juno, so there's no Face ID and no switching apps.
+
+1. In **Shortcuts**, tap **+**, search **Juno**, and tap **Log purchase**. Rename the shortcut **Log purchase** and tap **Done**. There's nothing to configure: it always asks.
+2. Go to **Settings → Accessibility → Touch → Back Tap → Double Tap** and choose **Log purchase**.
+3. Double-tap the back of the phone. It asks **How much?**, **What was it?** and **Who for?** (Personal, Household or Other), then confirms what it logged.
+
+The entry is kept on the phone and imported the next time you open Juno, which picks its category from what you wrote (see *How Juno picks the category* below) and syncs it. Siri works too: "Log a purchase in Juno".
+
+## The link way (opens Juno)
+
 ## 1. Build the Shortcut
 
 In the **Shortcuts** app, tap **+** and name the shortcut **Log expense**. Then add these actions in order:

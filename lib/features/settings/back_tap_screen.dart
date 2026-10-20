@@ -78,7 +78,7 @@ class _BackTapScreenState extends ConsumerState<BackTapScreen> {
       eyebrow: 'Settings · Back Tap',
       title: 'Double-tap, *logged*',
       subtitle:
-          'Your iPhone can run a Shortcut when you double-tap its back. Point it at Juno and an expense takes four seconds.',
+          'Your iPhone can run a Shortcut when you double-tap its back. Point it at Juno and a purchase takes a few seconds.',
       actions: [
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
       ],
@@ -88,19 +88,40 @@ class _BackTapScreenState extends ConsumerState<BackTapScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               JCard(
-                title: 'Fastest: no app opening',
+                title: 'Log purchase: Juno stays closed',
                 accent: JAccent.income,
-                child: Text(
-                  'Juno adds its own “Log expense” action to the Shortcuts app. Make a shortcut with just that '
-                  'action, attach it to Back Tap (Settings → Accessibility → Touch → Back Tap), and a double tap '
-                  'asks for the amount and category and logs it — Juno stays closed and imports it next time you '
-                  'open it. Siri works too: “Log an expense in Juno”.',
-                  style: JType.body.copyWith(fontSize: 13.5, color: c.inkMuted),
+                child: Column(
+                  children: [
+                    step(
+                      1,
+                      'Make the shortcut',
+                      'Open Shortcuts → + → search “Juno” → tap “Log purchase”. Rename it “Log purchase” and tap '
+                          'Done. There is nothing to set: it always asks.',
+                    ),
+                    step(
+                      2,
+                      'Attach it to Back Tap',
+                      'Settings → Accessibility → Touch → Back Tap → Double Tap → “Log purchase”.',
+                    ),
+                    step(
+                      3,
+                      'Double-tap the back',
+                      'It asks how much, what it was (type or dictate, like “kalei coffee”) and who it was for: '
+                          'Personal, Household or Other. Juno stays closed.',
+                    ),
+                    Text(
+                      'The entry is kept on the phone and imported the next time you open Juno, which files it in '
+                      'a category from what you wrote: the same words filed before go where they went last time, '
+                      'common words are matched on the phone, and only new ones go to the AI. Siri works too: '
+                      '“Log a purchase in Juno”.',
+                      style: JType.body.copyWith(color: c.inkMuted, fontSize: 13),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: JSpace.gap),
               JCard(
-                title: 'The link Shortcut: you say what, Juno files it',
+                title: 'Or: a link Shortcut (opens Juno)',
                 accent: JAccent.brand,
                 child: Column(
                   children: [
