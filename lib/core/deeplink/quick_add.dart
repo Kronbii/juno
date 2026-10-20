@@ -63,6 +63,7 @@ class QuickAdd {
       null => null,
       final v when v.startsWith('h') || v == 'home' || v == 'family' || v == 'shared' => Scope.household,
       final v when v.startsWith('p') || v == 'me' || v == 'mine' => Scope.personal,
+      final v when v.startsWith('o') => Scope.other,
       _ => null,
     };
 

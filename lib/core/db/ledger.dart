@@ -547,6 +547,115 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     _wrote();
   }
 
+  static String _mergedKey(String id) => 'category.merged.$id';
+
+  /// Deletes category [id] and moves everything that used it to [intoId]:
+  /// entries (live and deleted, so an undo lands in the right place),
+  /// recurring rules, and its budget — added to the target's budget in the
+  /// same scope, or moved there when it has none. The move is remembered on
+  /// this device so entries another device logs in the old category before
+  /// it hears of the deletion are moved too (see [remapMergedCategories]).
+  Future<void> deleteCategory(String id, {required String intoId}) async {
+    if (id == intoId) throw ArgumentError('A category cannot be merged into itself');
+    await db.transaction(() async {
+      await _moveCategoryRows(id, intoId);
+      final budgets = await (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).get();
+      for (final b in budgets.where((b) => b.categoryId == id)) {
+        final twin = budgets.where((t) => t.categoryId == intoId && t.scope == b.scope).firstOrNull;
+        if (twin != null) {
+          await (db.update(db.budgets)..where((t) => t.id.equals(twin.id))).write(
+            BudgetsCompanion(
+              limitCents: Value(twin.limitCents + b.limitCents),
+              updatedAt: Value(await _stamp('budgets', twin.id)),
+              dirty: const Value(true),
+            ),
+          );
+          await (db.update(db.budgets)..where((t) => t.id.equals(b.id))).write(
+            BudgetsCompanion(
+              deletedAt: Value(_now),
+              updatedAt: Value(await _stamp('budgets', b.id)),
+              dirty: const Value(true),
+            ),
+          );
+        } else {
+          await (db.update(db.budgets)..where((t) => t.id.equals(b.id))).write(
+            BudgetsCompanion(
+              categoryId: Value(intoId),
+              updatedAt: Value(await _stamp('budgets', b.id)),
+              dirty: const Value(true),
+            ),
+          );
+        }
+      }
+      await (db.update(db.categories)..where((c) => c.id.equals(id))).write(
+        CategoriesCompanion(
+          deletedAt: Value(_now),
+          updatedAt: Value(await _stamp('categories', id)),
+          dirty: const Value(true),
+        ),
+      );
+      // A category merged into one that was itself merged earlier follows on.
+      for (final r in await (db.select(db.localMeta)..where((m) => m.value.equals(id))).get()) {
+        if (r.key.startsWith('category.merged.')) await db.setMeta(r.key, intoId);
+      }
+      await db.setMeta(_mergedKey(id), intoId);
+    });
+    _wrote();
+  }
+
+  Future<int> _moveCategoryRows(String from, String to) async {
+    var moved = 0;
+    final txIds =
+        await (db.selectOnly(db.transactions)
+              ..addColumns([db.transactions.id])
+              ..where(db.transactions.categoryId.equals(from)))
+            .map((r) => r.read(db.transactions.id)!)
+            .get();
+    for (final t in txIds) {
+      await (db.update(db.transactions)..where((x) => x.id.equals(t))).write(
+        TransactionsCompanion(
+          categoryId: Value(to),
+          updatedAt: Value(await _stamp('transactions', t)),
+          dirty: const Value(true),
+        ),
+      );
+      moved++;
+    }
+    final ruleIds =
+        await (db.selectOnly(db.recurringRules)
+              ..addColumns([db.recurringRules.id])
+              ..where(db.recurringRules.categoryId.equals(from)))
+            .map((r) => r.read(db.recurringRules.id)!)
+            .get();
+    for (final r in ruleIds) {
+      await (db.update(db.recurringRules)..where((x) => x.id.equals(r))).write(
+        RecurringRulesCompanion(
+          categoryId: Value(to),
+          updatedAt: Value(await _stamp('recurring_rules', r)),
+          dirty: const Value(true),
+        ),
+      );
+      moved++;
+    }
+    return moved;
+  }
+
+  /// Moves rows that still point at a category deleted on this device — they
+  /// arrive from another device that logged them before it synced the
+  /// deletion. Runs after each sync; returns how many rows moved.
+  Future<int> remapMergedCategories() async {
+    final merges = await (db.select(db.localMeta)..where((m) => m.key.like('category.merged.%'))).get();
+    if (merges.isEmpty) return 0;
+    var moved = 0;
+    await db.transaction(() async {
+      for (final m in merges) {
+        moved += await _moveCategoryRows(m.key.substring('category.merged.'.length), m.value);
+      }
+    });
+    if (moved > 0) _wrote();
+    return moved;
+  }
+
   // -------------------------------------------------------- plan: budgets
 
   Stream<List<Budget>> watchBudgets() => (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).watch();

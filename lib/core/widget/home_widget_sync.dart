@@ -53,6 +53,7 @@ abstract final class HomeWidgetSync {
       HomeWidget.saveWidgetData<String>('spent', Money.whole(s.expense)),
       HomeWidget.saveWidgetData<String>('personal', Money.whole(s.byScope[Scope.personal]!)),
       HomeWidget.saveWidgetData<String>('household', Money.whole(s.byScope[Scope.household]!)),
+      HomeWidget.saveWidgetData<String>('other', Money.whole(s.byScope[Scope.other]!)),
       HomeWidget.saveWidgetData<String>('pace', '${Money.whole(pace.avgDaily)}/day'),
       HomeWidget.saveWidgetData<double>('budgetRatio', top?.ratio ?? 0),
       HomeWidget.saveWidgetData<String>(

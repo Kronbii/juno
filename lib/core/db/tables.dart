@@ -10,7 +10,9 @@ String newId() => _uuid.v7();
 enum TxType { expense, income, transfer }
 
 /// Whose money it is. Every transaction belongs to exactly one scope.
-enum Scope { personal, household }
+/// Who an entry is for: you, the household, or anything else (work,
+/// reimbursable, gifts to others…).
+enum Scope { personal, household, other }
 
 enum AccountKind { cash, checking, savings, credit }
 

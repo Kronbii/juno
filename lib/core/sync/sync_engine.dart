@@ -484,6 +484,7 @@ class SyncEngine extends Notifier<SyncStatus> {
         await core.run();
         await AttachmentStore(Ledger(db)).sync(Supabase.instance.client);
         failures = core.failures;
+        if (await Ledger(db).remapMergedCategories() > 0) _again = true;
       } while (_again);
       state = failures == 0
           ? state.copyWith(phase: SyncPhase.idle, lastSynced: clock.now())

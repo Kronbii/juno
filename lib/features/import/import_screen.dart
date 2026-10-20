@@ -17,6 +17,7 @@ import 'package:juno/features/add/entry_sheet.dart' show ScopeToggle;
 import 'package:juno/features/import/csv_import.dart';
 import 'package:juno/features/plan/editors.dart' show AccountPicker;
 import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
+import 'package:juno/features/smart/categorizer.dart' show pastExamples;
 
 /// Import a bank CSV: pick → map columns → review → commit (undoable).
 class ImportScreen extends ConsumerStatefulWidget {
@@ -121,12 +122,19 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     if (todo.isEmpty || _categorizing) return;
     final cats = ref.read(categoriesProvider).value ?? const <Category>[];
     setState(() => _categorizing = true);
+    final examples = await pastExamples(
+      ref.read(databaseProvider),
+      todo.map((r) => r.description).join(' '),
+      byId: {for (final k in cats) k.id: k},
+      limit: 30,
+    );
     final names = await ref
         .read(aiAssistProvider)
         .categorize(
           [for (final r in todo) (r.description, r.type == TxType.income)],
           expenseCategories: [for (final k in cats.where((k) => k.kind == CategoryKind.expense)) k.name],
           incomeCategories: [for (final k in cats.where((k) => k.kind == CategoryKind.income)) k.name],
+          examples: examples,
         );
     if (!mounted) return;
     final placed = applyCategorySuggestions(todo, names, cats);
@@ -158,7 +166,10 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             type: r.type,
             // A category with a household default pulls its rows into the
             // household scope; everything else takes the chosen default.
-            scope: cats[r.categoryId]?.defaultScope == Scope.household ? Scope.household : _scope,
+            scope: switch (cats[r.categoryId]?.defaultScope) {
+              final Scope s when s != Scope.personal => s,
+              _ => _scope,
+            },
             amountCents: r.cents!.abs(),
             accountId: account,
             categoryId: Value(r.categoryId),

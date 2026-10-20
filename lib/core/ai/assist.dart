@@ -222,10 +222,14 @@ class AiAssist {
     List<Map<String, dynamic>>? tools,
     int maxOutput, {
     required bool effort,
+    Map<String, dynamic>? responseFormat,
   }) => {
     'model': model,
     'messages': messages,
     if (tools != null && tools.isNotEmpty) 'tools': tools,
+    // Structured output is OpenAI's; the other services' compatible
+    // endpoints differ in what they accept, so they get the prompt alone.
+    if (responseFormat != null && provider == AiProvider.openai) 'response_format': responseFormat,
     if (_reasoning) ...{
       // Reasoning tokens count toward the limit, so leave room for them.
       'max_completion_tokens': maxOutput + 1500,
@@ -237,19 +241,22 @@ class AiAssist {
   };
 
   /// One chat request. Null when off, capped, or anything goes wrong.
+  /// [responseFormat] asks for structured output (an OpenAI
+  /// `response_format`); callers still validate what comes back.
   Future<AiReply?> chat(
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
     int maxOutput = 300,
+    Map<String, dynamic>? responseFormat,
   }) async {
-    if (usingCloud) return _chatCloud(messages, tools, maxOutput);
+    if (usingCloud) return _chatCloud(messages, tools, maxOutput, responseFormat);
     final key = apiKey;
     if (key == null || capped) return null;
     Future<http.Response> send({required bool effort}) => _client
         .post(
           Uri.parse(provider.url),
           headers: {'Authorization': 'Bearer $key', 'Content-Type': 'application/json'},
-          body: jsonEncode(_body(messages, tools, maxOutput, effort: effort)),
+          body: jsonEncode(_body(messages, tools, maxOutput, effort: effort, responseFormat: responseFormat)),
         )
         .timeout(const Duration(seconds: 30));
     try {
@@ -285,6 +292,7 @@ class AiAssist {
     List<Map<String, dynamic>> messages,
     List<Map<String, dynamic>>? tools,
     int maxOutput,
+    Map<String, dynamic>? responseFormat,
   ) async {
     if (capped) return null;
     try {
@@ -299,6 +307,7 @@ class AiAssist {
               'messages': messages,
               if (tools != null && tools.isNotEmpty) 'tools': tools,
               'max_output': maxOutput,
+              'response_format': ?responseFormat,
             }),
           )
           .timeout(const Duration(seconds: 50));
@@ -363,12 +372,96 @@ class AiAssist {
   static int _estimateTokens(List<Map<String, dynamic>> messages, List<Map<String, dynamic>>? tools) =>
       (jsonEncode(messages).length + (tools == null ? 0 : jsonEncode(tools).length)) ~/ 4;
 
-  Future<String?> _ask(String system, String user, {int maxOutput = 300}) async {
-    final r = await chat([
-      {'role': 'system', 'content': system},
-      {'role': 'user', 'content': user},
-    ], maxOutput: maxOutput);
+  Future<String?> _ask(String system, String user, {int maxOutput = 300, Map<String, dynamic>? format}) async {
+    final r = await chat(
+      [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user},
+      ],
+      maxOutput: maxOutput,
+      responseFormat: format,
+    );
     return r?.text;
+  }
+
+  /// The first JSON object in [answer], or null.
+  static Map<String, dynamic>? _json(String? answer) {
+    if (answer == null) return null;
+    final start = answer.indexOf('{');
+    final end = answer.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    try {
+      final v = jsonDecode(answer.substring(start, end + 1));
+      return v is Map<String, dynamic> ? v : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  // Stable, so a provider that caches repeated prefixes can reuse it; all
+  // that changes per entry goes in the user message.
+  static const _pickSystem =
+      'You file one expense or income entry for a personal-finance app used in Lebanon. Pick the single best '
+      'category for what the note describes, from the allowed list only. Notes can be English, Arabic, '
+      'Lebanese Arabizi (e.g. "ahwe" coffee, "benzine" fuel, "ma2koul" food), shop, brand or restaurant names, '
+      'or short abbreviations. How this user filed past entries matters most: when a past note matches, follow '
+      'it. The scope (personal, household, other) tells you who it was for and which categories are usual for '
+      'it, but the note decides. Reply with only JSON {"category": "<exact name from the list>", "sure": '
+      'true|false}; sure is false when the note is ambiguous or you are guessing.';
+
+  /// Picks one category for a single entry from its [note]. [categories] are
+  /// the allowed names (one kind); [usual] the ones this [scope] normally
+  /// uses; [examples] past (note, category) pairs of this user, most
+  /// relevant first. Sends only those, the amount and the scope. Returns the
+  /// exact allowed name, or null when off, capped, failed or off-list.
+  Future<({String category, bool sure})?> pickCategory({
+    required String note,
+    required String amount,
+    required String scope,
+    required List<String> categories,
+    List<String> usual = const [],
+    List<(String note, String category)> examples = const [],
+  }) async {
+    if (categories.isEmpty || note.trim().isEmpty) return null;
+    final user = StringBuffer()
+      ..writeln('Allowed categories: ${categories.join(', ')}')
+      ..writeln(usual.isEmpty ? 'No categories are set as usual for $scope.' : 'Usual for $scope: ${usual.join(', ')}');
+    if (examples.isNotEmpty) {
+      user.writeln('This user filed past entries like this:');
+      for (final (n, c) in examples) {
+        user.writeln('- "$n" → $c');
+      }
+    }
+    user.write('Entry: $amount, for $scope, note: "${note.trim()}"');
+    final j = _json(
+      await _ask(
+        _pickSystem,
+        user.toString(),
+        maxOutput: 40,
+        format: {
+          'type': 'json_schema',
+          'json_schema': {
+            'name': 'category_pick',
+            'strict': true,
+            'schema': {
+              'type': 'object',
+              'properties': {
+                'category': {'type': 'string', 'enum': categories},
+                'sure': {'type': 'boolean'},
+              },
+              'required': ['category', 'sure'],
+              'additionalProperties': false,
+            },
+          },
+        },
+      ),
+    );
+    final raw = j?['category'];
+    if (raw is! String) return null;
+    // Exact names only, forgiving case and stray spaces.
+    final name = categories.where((c) => c.toLowerCase() == raw.trim().toLowerCase()).firstOrNull;
+    if (name == null) return null;
+    return (category: name, sure: j!['sure'] != false);
   }
 
   /// Reads a receipt's total/date/merchant from its OCR text, for when the
@@ -405,6 +498,7 @@ class AiAssist {
     List<(String description, bool income)> rows, {
     required List<String> expenseCategories,
     required List<String> incomeCategories,
+    List<(String note, String category)> examples = const [],
     int maxRows = 120,
   }) async {
     final out = <String, String>{};
@@ -414,14 +508,23 @@ class AiAssist {
     for (var i = 0; i < list.length; i += 60) {
       final chunk = list.sublist(i, i + 60 > list.length ? list.length : i + 60);
       final answer = await _ask(
-        'You sort bank and card transactions into categories for a household in Lebanon. '
-        'Expense categories: ${expenseCategories.join(', ')}. Income categories: ${incomeCategories.join(', ')}. '
-        'For each numbered line, pick the best category from the right list, or null if none fits or you are '
-        'unsure. Reply with only compact JSON: {"1": "Category", "2": null, …}.',
+        'You sort bank and card transactions into categories for a household in Lebanon. Descriptions can be '
+        'English, Arabic or Lebanese Arabizi, shop, brand or card-terminal names. How this user filed past '
+        'entries matters most: when a past note matches, follow it. For each numbered line, pick the best '
+        'category from the right list (OUT lines: expense categories; IN lines: income categories), or null if '
+        'none fits or you are unsure. Reply with only compact JSON: {"1": "Category", "2": null, …}.',
         [
+          'Expense categories: ${expenseCategories.join(', ')}',
+          'Income categories: ${incomeCategories.join(', ')}',
+          if (examples.isNotEmpty) ...[
+            'This user filed past entries like this:',
+            for (final (n, c) in examples) '- "$n" → $c',
+          ],
+          'Lines:',
           for (var j = 0; j < chunk.length; j++) '${j + 1}. ${chunk[j].value ? 'IN' : 'OUT'} ${chunk[j].key}',
         ].join('\n'),
         maxOutput: 40 + chunk.length * 12,
+        format: const {'type': 'json_object'},
       );
       if (answer == null) break;
       try {

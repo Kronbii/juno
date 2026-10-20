@@ -8,6 +8,7 @@ import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/activity/tx_row.dart';
 import 'package:juno/features/add/entry_sheet.dart';
@@ -118,10 +119,10 @@ class ScopeLens extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scope = ref.watch(scopeFilterProvider);
-    final options = <Scope?>[null, Scope.personal, Scope.household];
+    final options = <Scope?>[null, ...Scope.values];
     return JChipBar(
-      labels: const ['All', 'Personal', 'Household'],
-      accents: const [JAccent.brand, JAccent.brand, JAccent.household],
+      labels: ['All', for (final s in Scope.values) s.label],
+      accents: [JAccent.brand, for (final s in Scope.values) s.accent],
       selectedIndex: options.indexOf(scope),
       onSelected: (i) => ref.read(scopeFilterProvider.notifier).set(options[i]),
     );
@@ -144,7 +145,7 @@ class _HeroTile extends ConsumerWidget {
     final rate = s.savingsRate;
 
     return JCard(
-      accent: scope == Scope.household ? JAccent.household : JAccent.brand,
+      accent: scope?.accent ?? JAccent.brand,
       padding: const EdgeInsets.all(JSpace.tile),
       title: scope == null ? 'Spent this month' : 'Spent this month · ${scope.label}',
       trailing: JPill('Day ${pace.daysElapsed}/${pace.daysInMonth}'),
@@ -252,53 +253,73 @@ class _ScopeSplitTile extends ConsumerWidget {
     final c = context.jc;
     final txs = ref.watch(monthTxAllScopesProvider(month)).value ?? const <Transaction>[];
     final s = PeriodSummary.of(txs);
-    final p = s.byScope[Scope.personal]!;
-    final h = s.byScope[Scope.household]!;
-    final total = p + h;
+    // Other shows once it has been used this month; until then the tile is
+    // the two-way split it always was.
+    final shown = [
+      for (final scope in Scope.values)
+        if (scope != Scope.other || s.byScope[scope]! > 0) scope,
+    ];
+    final total = shown.fold(0, (a, scope) => a + s.byScope[scope]!);
     final lens = ref.watch(scopeFilterProvider);
 
-    Widget side(Scope scope, int cents, Color color, CrossAxisAlignment align) => Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => ref.read(scopeFilterProvider.notifier).set(lens == scope ? null : scope),
-        child: Column(
-          crossAxisAlignment: align,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                JDot(color),
-                const SizedBox(width: 6),
-                Text(scope.label.toUpperCase(), style: JType.microLabel.copyWith(color: c.inkMuted)),
-              ],
-            ),
-            const SizedBox(height: JSpace.sm),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(Money.whole(cents), style: JType.panelMetric.copyWith(color: c.ink)),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              total == 0 ? '—' : '${(cents / total * 100).round()}% of spend',
-              style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
-            ),
-          ],
+    Widget side(Scope scope, CrossAxisAlignment align) {
+      final cents = s.byScope[scope]!;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => ref.read(scopeFilterProvider.notifier).set(lens == scope ? null : scope),
+          child: Column(
+            crossAxisAlignment: align,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  JDot(scope.color(c)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      scope.label.toUpperCase(),
+                      overflow: TextOverflow.ellipsis,
+                      style: JType.microLabel.copyWith(color: c.inkMuted),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: JSpace.sm),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(Money.whole(cents), style: JType.panelMetric.copyWith(color: c.ink)),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                total == 0 ? '—' : '${(cents / total * 100).round()}% of spend',
+                style: JType.body.copyWith(fontSize: 12, color: c.inkFaint),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
 
     return JCard(
-      title: 'Personal vs household',
+      title: shown.length == 3 ? 'Personal, household, other' : 'Personal vs household',
       child: Column(
         children: [
           Row(
             children: [
-              side(Scope.personal, p, c.brand, CrossAxisAlignment.start),
-              side(Scope.household, h, c.household, CrossAxisAlignment.end),
+              for (var i = 0; i < shown.length; i++)
+                side(
+                  shown[i],
+                  i == 0
+                      ? CrossAxisAlignment.start
+                      : i == shown.length - 1
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.center,
+                ),
             ],
           ),
           const SizedBox(height: JSpace.lg),
-          _SplitBar(a: p, b: h, aColor: c.brand, bColor: c.household),
+          _SplitBar(parts: [for (final scope in shown) (s.byScope[scope]!, scope.color(c))]),
         ],
       ),
     );
@@ -306,47 +327,37 @@ class _ScopeSplitTile extends ConsumerWidget {
 }
 
 class _SplitBar extends StatelessWidget {
-  const _SplitBar({required this.a, required this.b, required this.aColor, required this.bColor});
+  const _SplitBar({required this.parts});
 
-  final int a;
-  final int b;
-  final Color aColor;
-  final Color bColor;
+  final List<(int cents, Color color)> parts;
 
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final total = a + b;
+    final total = parts.fold(0, (a, p) => a + p.$1);
+    final filled = [
+      for (final p in parts)
+        if (p.$1 > 0) p,
+    ];
     return SizedBox(
       height: 8,
       child: total == 0
           ? Container(
               decoration: BoxDecoration(color: c.hairline, borderRadius: BorderRadius.circular(4)),
             )
-          : TweenAnimationBuilder<double>(
-              tween: Tween(end: a / total),
-              duration: JMotion.reduced(context) ? Duration.zero : JMotion.reveal,
-              curve: JMotion.ease,
-              builder: (_, t, _) => Row(
-                children: [
-                  if (t > 0)
-                    Expanded(
-                      flex: (t * 1000).round().clamp(1, 1000),
-                      child: Container(
-                        decoration: BoxDecoration(color: aColor, borderRadius: BorderRadius.circular(4)),
-                      ),
-                    ),
+          : Row(
+              children: [
+                for (var i = 0; i < filled.length; i++) ...[
                   // 2px surface gap between fills (dataviz spacer rule).
-                  if (t > 0 && t < 1) const SizedBox(width: 2),
-                  if (t < 1)
-                    Expanded(
-                      flex: ((1 - t) * 1000).round().clamp(1, 1000),
-                      child: Container(
-                        decoration: BoxDecoration(color: bColor, borderRadius: BorderRadius.circular(4)),
-                      ),
+                  if (i > 0) const SizedBox(width: 2),
+                  Expanded(
+                    flex: (filled[i].$1 / total * 1000).round().clamp(1, 1000),
+                    child: Container(
+                      decoration: BoxDecoration(color: filled[i].$2, borderRadius: BorderRadius.circular(4)),
                     ),
+                  ),
                 ],
-              ),
+              ],
             ),
     );
   }

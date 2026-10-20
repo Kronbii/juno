@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:juno/core/category_style.dart';
+import 'package:juno/core/db/database.dart';
 import 'package:juno/core/money.dart';
+import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/insights/analytics.dart';
 
@@ -322,7 +325,7 @@ class IncomeExpenseBars extends StatelessWidget {
   }
 }
 
-/// Personal + household spending per month, stacked with a 2px gap.
+/// Spending per month by scope, stacked with a 2px gap between scopes.
 class ScopeStackBars extends StatelessWidget {
   const ScopeStackBars({required this.points, super.key});
 
@@ -331,13 +334,13 @@ class ScopeStackBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final maxY = _niceMax(points.fold(0, (m, p) => math.max(m, p.personal + p.household)));
+    final maxY = _niceMax(points.fold(0, (m, p) => math.max(m, p.byScope.values.fold(0, (a, b) => a + b))));
     // The 2px gap is drawn by leaving a sliver of the stack unfilled.
     final gap = maxY * 0.012;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ChartLegend(items: [('Personal', c.brand), ('Household', c.household)]),
+        ChartLegend(items: [for (final s in Scope.values) (s.label, s.color(c))]),
         const SizedBox(height: JSpace.lg),
         SizedBox(
           height: 180,
@@ -350,26 +353,33 @@ class ScopeStackBars extends StatelessWidget {
               titlesData: _titles(c, points, maxY),
               barTouchData: _barTouch(c, (g, _) {
                 final p = points[g];
-                return '${Day.monthShort(p.month)}\nPersonal ${Money.whole(p.personal)}\nHousehold ${Money.whole(p.household)}';
+                return [
+                  Day.monthShort(p.month),
+                  for (final s in Scope.values)
+                    if (s != Scope.other || p.byScope[s]! > 0) '${s.label} ${Money.whole(p.byScope[s]!)}',
+                ].join('\n');
               }),
               barGroups: [
                 for (var i = 0; i < points.length; i++)
                   () {
-                    final p = points[i].personal.toDouble();
-                    final h = points[i].household.toDouble();
-                    final both = p > 0 && h > 0;
+                    final items = <BarChartRodStackItem>[];
+                    var y = 0.0;
+                    for (final s in Scope.values) {
+                      final v = points[i].byScope[s]!.toDouble();
+                      if (v <= 0) continue;
+                      if (items.isNotEmpty) y += gap;
+                      items.add(BarChartRodStackItem(y, y + v, s.color(c)));
+                      y += v;
+                    }
                     return BarChartGroupData(
                       x: i,
                       barRods: [
                         BarChartRodData(
-                          toY: p + h + (both ? gap : 0),
+                          toY: y,
                           width: 18,
                           color: Colors.transparent,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                          rodStackItems: [
-                            BarChartRodStackItem(0, p, c.brand),
-                            BarChartRodStackItem(p + (both ? gap : 0), p + h + (both ? gap : 0), c.household),
-                          ],
+                          rodStackItems: items,
                         ),
                       ],
                     );

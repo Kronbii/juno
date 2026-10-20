@@ -141,6 +141,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                           ),
                           stat('Personal', Money.whole(review.now.byScope[Scope.personal]!)),
                           stat('Household', Money.whole(review.now.byScope[Scope.household]!)),
+                          if (review.now.byScope[Scope.other]! > 0)
+                            stat('Other', Money.whole(review.now.byScope[Scope.other]!)),
                         ],
                       ),
                     ],

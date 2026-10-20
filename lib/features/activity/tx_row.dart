@@ -6,6 +6,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_sheet.dart';
@@ -138,7 +139,7 @@ class TxRow extends ConsumerWidget {
                 Row(
                   children: [
                     if (!isTransfer) ...[
-                      JDot(tx.scope == Scope.household ? c.household : c.brand, size: 6),
+                      JDot(tx.scope.color(c), size: 6),
                       const SizedBox(width: 6),
                     ],
                     Expanded(

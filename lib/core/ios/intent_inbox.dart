@@ -88,6 +88,7 @@ Future<TransactionsCompanion?> inboxToEntry(
     scope: switch (item.scope?.toLowerCase()) {
       'household' => Scope.household,
       'personal' => Scope.personal,
+      'other' => Scope.other,
       _ => null,
     },
     type: switch (item.type?.toLowerCase()) {

@@ -234,6 +234,7 @@ extension ScopeLabel on Scope {
   String get label => switch (this) {
     Scope.personal => 'Personal',
     Scope.household => 'Household',
+    Scope.other => 'Other',
   };
 }
 

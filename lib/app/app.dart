@@ -17,6 +17,8 @@ import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/onboarding/onboarding_screen.dart';
 import 'package:juno/features/plan/recurrence.dart';
+import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
+import 'package:juno/features/smart/categorizer.dart';
 
 class JunoApp extends ConsumerStatefulWidget {
   const JunoApp({super.key});
@@ -123,6 +125,11 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
     final sync = ref.read(syncEngineProvider.notifier);
     await sync.syncNow();
     if (await materializeRecurring(db) > 0) await sync.syncNow();
+    try {
+      await fileUncategorisedQuickEntries(db, ledger: ref.read(ledgerProvider), ai: ref.read(aiAssistProvider));
+    } on Object {
+      // Filing can wait for the next launch.
+    }
     await ref.read(reminderRunnerProvider.notifier).run();
   }
 

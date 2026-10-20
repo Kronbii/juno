@@ -7,6 +7,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/insights/analytics.dart';
 import 'package:juno/features/plan/budget_widgets.dart';
@@ -379,7 +380,7 @@ class _RecurringTab extends ConsumerWidget {
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        JDot(r.scope == Scope.household ? c.household : c.brand, size: 6),
+                        JDot(r.scope.color(c), size: 6),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(

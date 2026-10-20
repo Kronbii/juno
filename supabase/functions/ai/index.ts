@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
   const raw = await req.text();
   if (raw.length > MAX_BODY) return reply(413, { error: { code: "too_large" } });
-  let body: { messages?: unknown; tools?: unknown; max_output?: unknown };
+  let body: { messages?: unknown; tools?: unknown; max_output?: unknown; response_format?: unknown };
   try {
     body = JSON.parse(raw);
   } catch {
@@ -59,6 +59,13 @@ Deno.serve(async (req) => {
   }
   const tools = Array.isArray(body.tools) && body.tools.length > 0 ? body.tools.slice(0, 20) : undefined;
   const maxOutput = Math.min(Math.max(Number(body.max_output) || 600, 1), 1500);
+  // Structured output (a JSON schema the reply must follow), passed through
+  // when it is one of OpenAI's two shapes and small.
+  const rf = body.response_format as { type?: unknown } | undefined;
+  const responseFormat = rf && typeof rf === "object" && (rf.type === "json_schema" || rf.type === "json_object") &&
+      JSON.stringify(rf).length <= 16_000
+    ? rf
+    : undefined;
 
   const month = new Date().toISOString().slice(0, 7);
   const { data: row } = await admin
@@ -71,6 +78,7 @@ Deno.serve(async (req) => {
     model: MODEL,
     messages,
     ...(tools ? { tools } : {}),
+    ...(responseFormat ? { response_format: responseFormat } : {}),
     ...(reasoning
       ? { max_completion_tokens: maxOutput + 1500, reasoning_effort: MODEL.startsWith("gpt-5-") ? "minimal" : "low" }
       : { max_tokens: maxOutput, temperature: 0.2 }),

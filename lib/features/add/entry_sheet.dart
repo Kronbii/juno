@@ -13,6 +13,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_extras.dart';
@@ -606,7 +607,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         onSubmitted: (_) => _save(),
                       ),
                       const SizedBox(height: JSpace.md),
-                      if (_type == TxType.expense && (_scope == Scope.household || _tags.any(EntryTags.isPerson))) ...[
+                      if (_type == TxType.expense && (_scope != Scope.personal || _tags.any(EntryTags.isPerson))) ...[
                         PeoplePicker(
                           selected: _tags.where(EntryTags.isPerson).toList(),
                           onChanged: (p) =>
@@ -722,15 +723,15 @@ class _AmountDisplay extends StatelessWidget {
   }
 }
 
-/// Personal ⇄ Household. Two pills, each in its own scope colour, so the
-/// choice reads before you look at the words.
+/// Personal, Household or Other. One pill each, in its scope's colour, so
+/// the choice reads before you look at the words.
 class ScopeToggle extends StatelessWidget {
   const ScopeToggle({required this.value, required this.onChanged, super.key});
 
   final Scope value;
   final ValueChanged<Scope> onChanged;
 
-  // A Wrap, not a Row: at large text on a small phone the two pills stack
+  // A Wrap, not a Row: at large text on a small phone the pills stack
   // instead of running off the sheet.
   @override
   Widget build(BuildContext context) => Wrap(
@@ -742,12 +743,9 @@ class ScopeToggle extends StatelessWidget {
         JChip(
           label: s.label,
           selected: s == value,
-          accent: s == Scope.personal ? JAccent.brand : JAccent.household,
-          leading: Icon(
-            s == Scope.personal ? Icons.person_outline_rounded : Icons.home_outlined,
-            size: 15,
-            color: s == value ? (s == Scope.personal ? context.jc.brand : context.jc.household) : context.jc.inkFaint,
-          ),
+          accent: s.accent,
+          leading: Icon(s.icon, size: 15, color: s == value ? s.color(context.jc) : context.jc.inkFaint),
+          compact: true,
           onTap: () {
             HapticFeedback.selectionClick();
             onChanged(s);

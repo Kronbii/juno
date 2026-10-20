@@ -240,7 +240,8 @@ void main() {
       final sizes = <int>[];
       final ai = await make({'ai.key': 'sk'}, (r) async {
         final msgs = (jsonDecode(r.body) as Map<String, dynamic>)['messages'] as List;
-        sizes.add(((msgs.last as Map)['content'] as String).split('\n').length);
+        final lines = ((msgs.last as Map)['content'] as String).split('\n');
+        sizes.add(lines.where((l) => RegExp(r'^\d+\. ').hasMatch(l)).length);
         return reply('{"1": "Dining"}');
       });
       final rows = [for (var i = 0; i < 100; i++) ('SHOP ${i % 70}', false)];

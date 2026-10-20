@@ -8,6 +8,7 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
+import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_sheet.dart' show ScopeToggle;
 import 'package:juno/features/plan/recurrence.dart';
@@ -199,9 +200,9 @@ class _BudgetFormState extends ConsumerState<_BudgetForm> {
         JField(
           label: 'Applies to',
           child: JSegmentBar<String>(
-            segments: const {'both': 'Both', 'personal': 'Personal', 'household': 'Household'},
+            segments: {'both': 'All', for (final s in Scope.values) s.name: s.label},
             selected: _scope?.name ?? 'both',
-            accentOf: (k) => k == 'household' ? JAccent.household : JAccent.brand,
+            accentOf: (k) => Scope.values.where((s) => s.name == k).firstOrNull?.accent ?? JAccent.brand,
             onChanged: (k) => setState(() => _scope = Scope.values.where((s) => s.name == k).firstOrNull),
           ),
         ),

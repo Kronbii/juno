@@ -44,7 +44,8 @@ class Review {
       )
       ..writeln('Income ${Money.whole(now.income)} · kept ${now.savingsRate == null ? '—' : pct(now.savingsRate!)}')
       ..writeln(
-        'Personal ${Money.whole(now.byScope[Scope.personal]!)} · Household ${Money.whole(now.byScope[Scope.household]!)}',
+        'Personal ${Money.whole(now.byScope[Scope.personal]!)} · Household ${Money.whole(now.byScope[Scope.household]!)}'
+        '${now.byScope[Scope.other]! > 0 ? ' · Other ${Money.whole(now.byScope[Scope.other]!)}' : ''}',
       );
     if (categoryMoves.isNotEmpty) {
       b.writeln('Biggest moves:');

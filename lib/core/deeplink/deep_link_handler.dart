@@ -15,6 +15,8 @@ import 'package:juno/core/money.dart';
 import 'package:juno/core/providers.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/features/add/entry_sheet.dart';
+import 'package:juno/features/settings/ai_screen.dart' show aiAssistProvider;
+import 'package:juno/features/smart/categorizer.dart';
 import 'package:juno/features/smart/entry_parser.dart';
 
 /// Listens for `juno://add` links (cold start and while running) and either
@@ -78,7 +80,7 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
   final accounts = await ref.read(accountsProvider.future);
 
   final r = resolveQuickAdd(q, categories, accounts);
-  final cat = r.category;
+  var cat = r.category;
   final type = r.type;
   final account = r.account;
   final scope = r.scope;
@@ -104,6 +106,25 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
     return;
   }
 
+  // No category named (the Back Tap Shortcut sends only the amount, a note
+  // and who it was for): let the note decide — your history, then
+  // keywords, then the AI. Saved uncategorised if none can say, and filed
+  // later when the AI is reachable again.
+  CategoryGuess? guess;
+  if (cat == null && q.category == null && (q.note?.trim().isNotEmpty ?? false)) {
+    guess = await guessCategory(
+      ref.read(databaseProvider),
+      note: q.note!,
+      scope: scope,
+      type: type,
+      amountCents: q.amountCents!,
+      currency: account.currency,
+      categories: categories,
+      ai: ref.read(aiAssistProvider),
+    );
+    cat = guess?.category;
+  }
+
   final ledger = ref.read(ledgerProvider);
   final id = await ledger.addTransaction(
     TransactionsCompanion.insert(
@@ -114,13 +135,16 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
       categoryId: Value(cat?.id),
       occurredOn: q.day ?? Day.today(),
       note: Value(q.note ?? ''),
-      tags: Value(EntryTags.store(q.tags)),
+      tags: Value(EntryTags.store([...q.tags, 'quick'])),
     ),
   );
   unawaited(HapticFeedback.mediumImpact());
   final parts = [
     Fx.format(q.amountCents!, account.currency),
-    cat?.name ?? (q.category == null ? 'Uncategorised' : '“${q.category}” (no match)'),
+    if (cat == null)
+      q.category == null ? 'Uncategorised' : '“${q.category}” (no match)'
+    else
+      guess?.sure == false ? '${cat.name}?' : cat.name,
     scope.label,
   ];
   showToast(

@@ -147,15 +147,18 @@ class MonthPoint {
     required this.month,
     required this.income,
     required this.expense,
-    required this.personal,
-    required this.household,
+    required this.byScope,
   });
 
   final DateTime month;
   final int income;
   final int expense;
-  final int personal;
-  final int household;
+
+  /// Spending per scope; every scope has an entry.
+  final Map<Scope, int> byScope;
+
+  int get personal => byScope[Scope.personal]!;
+  int get household => byScope[Scope.household]!;
 }
 
 /// Buckets transactions into the [months] calendar months ending at [last].
@@ -176,8 +179,7 @@ List<MonthPoint> monthlySeries(Iterable<Transaction> txs, DateTime last, int mon
           month: m,
           income: s.income,
           expense: s.expense,
-          personal: s.byScope[Scope.personal]!,
-          household: s.byScope[Scope.household]!,
+          byScope: s.byScope,
         );
       }(),
   ];

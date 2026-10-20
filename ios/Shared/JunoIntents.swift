@@ -98,11 +98,12 @@ struct CategoryQuery: EntityStringQuery {
 }
 
 enum ScopeOption: String, AppEnum {
-    case personal, household
+    case personal, household, other
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "For")
     static var caseDisplayRepresentations: [ScopeOption: DisplayRepresentation] = [
         .personal: "Personal",
         .household: "Household",
+        .other: "Other",
     ]
 }
 

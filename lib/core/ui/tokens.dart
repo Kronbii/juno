@@ -29,6 +29,7 @@ class JColors extends ThemeExtension<JColors> {
     required this.expense,
     required this.warn,
     required this.household,
+    required this.other,
   });
 
   final Brightness brightness;
@@ -71,6 +72,9 @@ class JColors extends ThemeExtension<JColors> {
   /// The household scope.
   final Color household;
 
+  /// The third scope, "Other".
+  final Color other;
+
   bool get isDark => brightness == Brightness.dark;
 
   /// A thin wash of an accent behind an active element.
@@ -93,6 +97,7 @@ class JColors extends ThemeExtension<JColors> {
     expense: Color(0xFFF4553D),
     warn: Color(0xFFE3B341),
     household: Color(0xFF1FA89E),
+    other: Color(0xFFB8A6F2),
   );
 
   static const light = JColors(
@@ -112,6 +117,7 @@ class JColors extends ThemeExtension<JColors> {
     expense: Color(0xFFCF2E1F),
     warn: Color(0xFF9A6700),
     household: Color(0xFF008AA0),
+    other: Color(0xFF6A4FC4),
   );
 
   @override
@@ -138,6 +144,7 @@ class JColors extends ThemeExtension<JColors> {
       expense: l(expense, other.expense),
       warn: l(warn, other.warn),
       household: l(household, other.household),
+      other: l(this.other, other.other),
     );
   }
 }
@@ -153,7 +160,8 @@ enum JAccent {
   income,
   expense,
   warn,
-  household
+  household,
+  other
   ;
 
   Color of(JColors c) => switch (this) {
@@ -162,6 +170,7 @@ enum JAccent {
     JAccent.expense => c.expense,
     JAccent.warn => c.warn,
     JAccent.household => c.household,
+    JAccent.other => c.other,
   };
 }
 

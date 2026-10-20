@@ -129,6 +129,7 @@ class JChip extends StatelessWidget {
     required this.onTap,
     this.accent = JAccent.brand,
     this.leading,
+    this.compact = false,
     super.key,
   });
 
@@ -137,6 +138,9 @@ class JChip extends StatelessWidget {
   final VoidCallback onTap;
   final JAccent accent;
   final Widget? leading;
+
+  /// Tighter sides, for a row of chips that should fit on one line.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -161,11 +165,11 @@ class JChip extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 38),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (leading != null) ...[leading!, const SizedBox(width: 8)],
+                    if (leading != null) ...[leading!, SizedBox(width: compact ? 6 : 8)],
                     Flexible(
                       child: Text(
                         label,

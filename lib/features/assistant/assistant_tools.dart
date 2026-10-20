@@ -97,8 +97,8 @@ class AssistantTools {
   static const _to = {'type': 'string', 'description': 'Last day, YYYY-MM-DD. Default: today.'};
   static const _scope = {
     'type': 'string',
-    'enum': ['personal', 'household'],
-    'description': 'Only personal or only household money. Omit for both.',
+    'enum': ['personal', 'household', 'other'],
+    'description': 'Only one scope: personal, household or other. Omit for all.',
   };
 
   static final definitions = <Map<String, dynamic>>[
@@ -221,7 +221,8 @@ class AssistantTools {
   static Scope? _scopeOf(Map<String, dynamic> a) {
     final v = a['scope'];
     if (v == null) return null;
-    return Scope.values.where((s) => s.name == v).firstOrNull ?? (throw _BadArg('scope must be personal or household'));
+    return Scope.values.where((s) => s.name == v).firstOrNull ??
+        (throw _BadArg('scope must be personal, household or other'));
   }
 
   static int _limit(Map<String, dynamic> a, int fallback, int max) {
@@ -273,6 +274,7 @@ class AssistantTools {
       'savings_rate': s.savingsRate == null ? null : (s.savingsRate! * 100).round(),
       if (scope == null) 'personal_spent': _usd(s.byScope[Scope.personal]!),
       if (scope == null) 'household_spent': _usd(s.byScope[Scope.household]!),
+      if (scope == null && s.byScope[Scope.other]! > 0) 'other_spent': _usd(s.byScope[Scope.other]!),
       'entries': s.count,
       'top_categories': [
         for (final e in s.rankedCategories.take(8))
