@@ -125,8 +125,7 @@ enum CurrencyOption: String, AppEnum {
 struct LogPurchaseIntent: AppIntent {
     static var title: LocalizedStringResource = "Log purchase"
     static var description = IntentDescription(
-        "Asks how much, what it was and who it was for, and adds it to Juno without opening it. "
-            + "Juno picks the category from what you wrote.")
+        "Asks how much, what it was and who it was for, and adds it to Juno without opening it. Juno picks the category from what you wrote.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Amount", requestValueDialog: "How much?")
