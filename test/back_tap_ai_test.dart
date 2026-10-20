@@ -234,4 +234,28 @@ void main() {
     expect(tester.takeException(), isNull);
     await h.dispose();
   });
+
+  testWidgets('Back Tap sentence link: "25 flowers for rania" + Other → amount and note read, filed, saved', (
+    tester,
+  ) async {
+    final h = await boot(
+      tester,
+      demo: false,
+      prefs: {'ai.key': 'sk-test'},
+      ai: (sp) => AiAssist(sp, client: MockClient((req) async => answer({'category': 'Gifts', 'sure': true}))),
+    );
+    await h.go('/settings/back-tap');
+    final field = find.byType(TextField).last;
+    await tester.ensureVisible(field);
+    await tester.enterText(field, 'juno://add?scope=other&text=25%20flowers%20for%20rania');
+    await tester.tap(find.text('Run link'));
+    await h.settle(8);
+    final t = (await tester.runAsync(() => h.db.select(h.db.transactions).get()))!.single;
+    expect(t.amountCents, 2500);
+    expect(t.categoryId, seedId('cat:Gifts'));
+    expect(t.scope, Scope.other);
+    expect(t.note.toLowerCase(), contains('flowers'));
+    expect(tester.takeException(), isNull);
+    await h.dispose();
+  });
 }
