@@ -118,7 +118,50 @@ enum CurrencyOption: String, AppEnum {
 
 // MARK: - Intents
 
-/// "Log an expense in Juno" — amount, category and who it was for.
+/// The Back Tap action: always asks how much, what it was and who it was
+/// for, in that order (all three required, so iPhone asks every time). Juno
+/// picks the category from what it was — your history, keywords, then the
+/// AI — when it imports the entry.
+struct LogPurchaseIntent: AppIntent {
+    static var title: LocalizedStringResource = "Log purchase"
+    static var description = IntentDescription(
+        "Asks how much, what it was and who it was for, and adds it to Juno without opening it. "
+            + "Juno picks the category from what you wrote.")
+    static var openAppWhenRun = false
+
+    @Parameter(title: "Amount", requestValueDialog: "How much?")
+    var amount: Double
+
+    @Parameter(title: "What was it", requestValueDialog: "What was it?")
+    var note: String
+
+    @Parameter(title: "Who for", requestValueDialog: "Who for?")
+    var scope: ScopeOption
+
+    @Parameter(title: "Currency", default: .usd)
+    var currency: CurrencyOption
+
+    init() {}
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Log \(\.$amount) for \(\.$note), \(\.$scope)") {
+            \.$currency
+        }
+    }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        JunoInbox.append(JunoInbox.entry(
+            amount: amount, currency: currency.rawValue, category: nil,
+            scope: scope.rawValue, type: "expense", note: note, text: nil))
+        let money = currency == .lbp
+            ? "LBP \(Int(amount).formatted())"
+            : amount.formatted(.currency(code: "USD"))
+        return .result(dialog: "Logged \(money) · \(note) · \(scope.rawValue.capitalized). Juno files it when you next open it.")
+    }
+}
+
+/// "Log expense" — amount, optional category and who it was for. Also the
+/// widget's one-tap buttons, which can't ask anything.
 struct LogExpenseIntent: AppIntent {
     static var title: LocalizedStringResource = "Log expense"
     static var description = IntentDescription("Adds an expense to Juno without opening it.")
@@ -202,14 +245,22 @@ struct OpenQuickAddIntent: AppIntent {
 struct JunoShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
-            intent: LogExpenseIntent(),
+            intent: LogPurchaseIntent(),
             phrases: [
+                "Log a purchase in \(.applicationName)",
                 "Log an expense in \(.applicationName)",
-                "Log a \(\.$category) expense in \(.applicationName)",
                 "Add to \(.applicationName)",
             ],
-            shortTitle: "Log expense",
+            shortTitle: "Log purchase",
             systemImageName: "plus.circle"
+        )
+        AppShortcut(
+            intent: LogExpenseIntent(),
+            phrases: [
+                "Log a \(\.$category) expense in \(.applicationName)",
+            ],
+            shortTitle: "Log expense",
+            systemImageName: "tag"
         )
         AppShortcut(
             intent: LogByTextIntent(),
