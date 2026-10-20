@@ -8,7 +8,7 @@ import Foundation
 // an inbox in the shared App Group; Juno imports it on its next launch or
 // resume (lib/core/ios/intent_inbox.dart — keep the two in sync).
 //
-// Add this file to BOTH the Runner and JunoWidget targets (docs/ios-intents.md).
+// Built into the Runner target (and the JunoWidget target, if you add one).
 
 let junoAppGroup = "group.com.kronbii.juno"
 
@@ -133,10 +133,11 @@ struct LogExpenseIntent: AppIntent {
     @Parameter(title: "Category", requestValueDialog: "What for?")
     var category: CategoryEntity?
 
-    @Parameter(title: "For")
+    @Parameter(title: "For", requestValueDialog: "Who for?")
     var scope: ScopeOption?
 
-    @Parameter(title: "Note")
+    // Left without a category, Juno files the entry from this note.
+    @Parameter(title: "Note", requestValueDialog: "What was it?")
     var note: String?
 
     init() {}
@@ -162,7 +163,8 @@ struct LogExpenseIntent: AppIntent {
             ? "LBP \(Int(amount).formatted())"
             : amount.formatted(.currency(code: "USD"))
         let what = category.map { " · \($0.name)" } ?? ""
-        return .result(dialog: "Logged \(money)\(what).")
+        let who = scope.map { " · \($0.rawValue.capitalized)" } ?? ""
+        return .result(dialog: "Logged \(money)\(what)\(who).")
     }
 }
 
