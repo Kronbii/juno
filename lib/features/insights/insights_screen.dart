@@ -42,9 +42,8 @@ final insightIdeasProvider =
               )
               .value ??
           const <Transaction>[];
-      final cats = ref.watch(categoryMapProvider);
       return (
-        alerts: detectAnomalies(history: history, categoryNames: {for (final k in cats.values) k.id: k.name}),
+        alerts: detectAnomalies(history: history, categoryNames: ref.watch(categoryLabelsProvider)),
         subscriptions: detectSubscriptions(history, ref.watch(recurringProvider).value ?? const <RecurringRule>[]),
         budgets: suggestBudgets(history: history, budgets: ref.watch(budgetsProvider).value ?? const []),
       );
@@ -76,6 +75,7 @@ class InsightsScreen extends ConsumerWidget {
     final prevTxs = ref.watch(monthTxProvider(prev)).value ?? const <Transaction>[];
     final trail = ref.watch(trailingTxProvider((month, 6))).value ?? const <Transaction>[];
     final cats = ref.watch(categoryMapProvider);
+    final labels = ref.watch(categoryLabelsProvider);
     final posting = ref.watch(postingRulesProvider);
     final lens = ref.watch(scopeFilterProvider);
     final accts = ref.watch(accountMapProvider);
@@ -100,7 +100,7 @@ class InsightsScreen extends ConsumerWidget {
     final insights = compareInsights(
       current: s,
       previous: comparable ? ps : PeriodSummary.of(const []),
-      names: {for (final k in cats.values) k.id: k.name},
+      names: labels,
       prevLabel: pace.isCurrent ? 'this point in ${Day.month(prev)}' : Day.month(prev),
       // Under a scope lens every entry is that scope; a share would be 100%.
       scopeShare: lens == null,
@@ -112,7 +112,7 @@ class InsightsScreen extends ConsumerWidget {
       for (final e in ranked.take(_topN))
         Slice(
           id: e.key,
-          label: cats[e.key]?.name ?? 'Uncategorised',
+          label: labels[e.key] ?? 'Uncategorised',
           value: e.value,
           color: cats[e.key] == null ? otherColor(c) : seriesColor(c, cats[e.key]!.colorIndex),
         ),

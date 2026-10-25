@@ -125,7 +125,7 @@ void main() {
                 'role': 'assistant',
                 'content': null,
                 'tool_calls': [
-                  call('1', {'amount': 12, 'category': 'dining'}),
+                  call('1', {'amount': 12, 'category': 'food'}),
                   call('2', {'amount': 30, 'category': 'groceries'}),
                 ],
               }

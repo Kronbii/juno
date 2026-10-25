@@ -58,8 +58,12 @@ class Categories extends Table with SyncColumns {
   IntColumn get colorIndex => integer()();
   TextColumn get kind => textEnum<CategoryKind>()();
 
-  /// Scope new entries in this category start in (Groceries → household).
-  TextColumn get defaultScope => textEnum<Scope>().withDefault(const Constant('personal'))();
+  /// Whose spending this category is: every expense filed under it has this
+  /// scope (Rent is household, Dates personal). Two scopes can each have a
+  /// category of the same name; they are separate buckets. Meaningless for
+  /// income. Stored as `default_scope`, its name from when it was only a
+  /// hint, so older app versions keep syncing.
+  TextColumn get scope => textEnum<Scope>().named('default_scope').withDefault(const Constant('personal'))();
   IntColumn get sort => integer().withDefault(const Constant(0))();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
 }

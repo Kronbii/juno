@@ -32,7 +32,7 @@ Category cat(String id, String name) => Category(
   icon: 'cart',
   colorIndex: 0,
   kind: CategoryKind.expense,
-  defaultScope: Scope.personal,
+  scope: Scope.personal,
   sort: 0,
   archived: false,
 );
@@ -126,7 +126,7 @@ void main() {
       icon: 'briefcase',
       colorIndex: 0,
       kind: CategoryKind.income,
-      defaultScope: Scope.personal,
+      scope: Scope.personal,
       sort: 0,
       archived: false,
     );

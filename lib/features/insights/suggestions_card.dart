@@ -67,14 +67,14 @@ class _SuggestionsCardState extends ConsumerState<SuggestionsCard> {
     final id = await ledger.upsertBudget(
       BudgetsCompanion.insert(categoryId: Value(b.categoryId), limitCents: b.limitCents),
     );
-    final name = ref.read(categoryMapProvider)[b.categoryId]?.name ?? 'Category';
+    final name = ref.read(categoryLabelsProvider)[b.categoryId] ?? 'Category';
     showToast('Budget set: $name ${Money.whole(b.limitCents)} a month', onUndo: () => ledger.deleteBudget(id));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.jc;
-    final cats = ref.watch(categoryMapProvider);
+    final labels = ref.watch(categoryLabelsProvider);
     final dismissed = _dismissed;
     final subs = widget.subscriptions.where((s) => !dismissed.contains(_subId(s))).toList();
     final budgets = widget.budgets.where((b) => !dismissed.contains(_budgetId(b))).toList();
@@ -139,7 +139,7 @@ class _SuggestionsCardState extends ConsumerState<SuggestionsCard> {
           for (final b in budgets)
             row(
               icon: Icons.donut_large_outlined,
-              text: '${cats[b.categoryId]?.name ?? 'A category'} averages ${Money.whole(b.averageCents)} a month.',
+              text: '${labels[b.categoryId] ?? 'A category'} averages ${Money.whole(b.averageCents)} a month.',
               action: 'Budget ${Money.whole(b.limitCents)}',
               onAction: () async {
                 await _setBudget(b);

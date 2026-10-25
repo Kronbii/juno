@@ -31,11 +31,11 @@ In the **Shortcuts** app, tap **+** and name the shortcut **Log expense**. Then 
 
 ### How Juno picks the category
 
-From the note, cheapest first:
+From the note, cheapest first, and only among the categories of the scope you picked (a household entry never lands in a personal category):
 
 1. **Your history:** a note you have filed before goes where it went last time. If you correct an entry's category, the next one follows the correction.
 2. **Keywords, on the phone:** common words ("coffee", "fuel", "rent").
-3. **The AI, only for new notes:** it gets your categories (those usual for the scope you picked first) and your own past entries that share words with the note, and must answer with one of your category names. A guess it isn't sure of shows as "Coffee?" in the toast.
+3. **The AI, only for new notes:** it gets that scope's categories and your own past entries that share words with the note, and must answer with one of those category names. A guess it isn't sure of shows as "Food & Outings?" in the toast.
 
 If the AI can't be reached (offline, or you left Juno before it answered), the entry is saved uncategorised and filed the next time Juno opens online. Once filed, that note is history, so it never costs another AI call.
 
@@ -48,8 +48,8 @@ Go to **Settings → Accessibility → Touch → Back Tap → Double Tap** and c
 | Parameter | Meaning |
 |---|---|
 | `amount` | `12.50`, `12,50`, `$12.50`. If you include it, the entry saves straight away. |
-| `category` | Optional. Matched loosely by name: "grocery" and "Groceris" both find Groceries. Leave it out to have Juno file the entry from the note. |
-| `scope` | `personal`, `household` or `other`. If you leave it out, the category's default scope is used. |
+| `category` | Optional. Matched loosely by name: "grocery" and "Groceris" both find Groceries. A spending category belongs to one scope, and the entry takes that scope. Leave it out to have Juno file the entry from the note. |
+| `scope` | `personal`, `household` or `other`. When two scopes each have a category of the name given (Subscriptions), this picks which. Without a category, it is who the entry was for (default personal). |
 | `note` | What it was. Without a category, Juno files the entry from this. |
 | `account` | Matched by name. If you leave it out, the first account is used. |
 | `type` | `expense` or `income`. If you leave it out, the category decides, so "Salary" means income. |

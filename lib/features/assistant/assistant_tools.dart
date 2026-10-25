@@ -280,6 +280,7 @@ class AssistantTools {
         for (final e in s.rankedCategories.take(8))
           {
             'name': cats[e.key]?.name ?? 'Uncategorised',
+            if (cats[e.key]?.kind == CategoryKind.expense) 'scope': cats[e.key]!.scope.name,
             'spent': _usd(e.value),
             'share_pct': s.expense == 0 ? 0 : (e.value * 100 / s.expense).round(),
           },
@@ -550,10 +551,16 @@ extension on AssistantTools {
     if (catName != null && catName.isNotEmpty) {
       final ids = await _matchCategories(catName);
       final cats = await _categories();
-      category = ids.map((id) => cats[id]!).where((k) => k.kind == kind && !k.archived).firstOrNull;
+      final asked = AssistantTools._scopeOf(a);
+      final fits = ids.map((id) => cats[id]!).where((k) => k.kind == kind && !k.archived);
+      // Two scopes can each have a "Subscriptions": take the asked scope's.
+      category = fits.where((k) => kind == CategoryKind.income || k.scope == asked).firstOrNull ?? fits.firstOrNull;
     }
     final day = _day(a, 'date', Day.of(_clock()));
-    final scope = AssistantTools._scopeOf(a) ?? category?.defaultScope ?? Scope.personal;
+    // Spending is in its category's scope.
+    final scope = category?.kind == CategoryKind.expense
+        ? category!.scope
+        : AssistantTools._scopeOf(a) ?? Scope.personal;
     final draft = EntryDraft(
       type: type,
       amountCents: (amount * 100).round(),

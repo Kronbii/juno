@@ -67,24 +67,32 @@ struct JunoCatalog: Decodable {
     }
 }
 
+/// A spending category belongs to one scope, and two scopes can each have
+/// one of the same name ("Subscriptions"), so the scope is part of its id.
 struct CategoryEntity: AppEntity {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Category")
     static var defaultQuery = CategoryQuery()
 
-    var id: String { name }
+    var id: String { kind == "expense" ? "\(scope):\(name)" : name }
     let name: String
     let kind: String
+    let scope: String
 
-    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+    var displayRepresentation: DisplayRepresentation {
+        kind == "expense"
+            ? DisplayRepresentation(title: "\(name)", subtitle: "\(scope.capitalized)")
+            : DisplayRepresentation(title: "\(name)")
+    }
 }
 
 struct CategoryQuery: EntityStringQuery {
     private func all() -> [CategoryEntity] {
-        JunoCatalog.load().categories.map { CategoryEntity(name: $0.name, kind: $0.kind) }
+        JunoCatalog.load().categories.map { CategoryEntity(name: $0.name, kind: $0.kind, scope: $0.scope) }
     }
 
+    // Shortcuts saved before categories had a scope stored the bare name.
     func entities(for identifiers: [String]) async throws -> [CategoryEntity] {
-        all().filter { identifiers.contains($0.id) }
+        all().filter { identifiers.contains($0.id) || identifiers.contains($0.name) }
     }
 
     func entities(matching string: String) async throws -> [CategoryEntity] {
@@ -184,10 +192,11 @@ struct LogExpenseIntent: AppIntent {
 
     init() {}
 
-    init(amount: Double, category: String?, currency: CurrencyOption = .usd) {
+    init(amount: Double, category: String?, scope: String? = nil, currency: CurrencyOption = .usd) {
         self.amount = amount
         self.currency = currency
-        self.category = category.map { CategoryEntity(name: $0, kind: "expense") }
+        self.category = category.map { CategoryEntity(name: $0, kind: "expense", scope: scope ?? "personal") }
+        self.scope = scope.flatMap { ScopeOption(rawValue: $0) }
     }
 
     static var parameterSummary: some ParameterSummary {
@@ -198,15 +207,17 @@ struct LogExpenseIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // A spending category's own scope says who it was for.
+        let who = category.flatMap { $0.kind == "expense" ? $0.scope : nil } ?? scope?.rawValue
         JunoInbox.append(JunoInbox.entry(
             amount: amount, currency: currency.rawValue, category: category?.name,
-            scope: scope?.rawValue, type: "expense", note: note, text: nil))
+            scope: who, type: "expense", note: note, text: nil))
         let money = currency == .lbp
             ? "LBP \(Int(amount).formatted())"
             : amount.formatted(.currency(code: "USD"))
         let what = category.map { " · \($0.name)" } ?? ""
-        let who = scope.map { " · \($0.rawValue.capitalized)" } ?? ""
-        return .result(dialog: "Logged \(money)\(what)\(who).")
+        let forWhom = who.map { " · \($0.capitalized)" } ?? ""
+        return .result(dialog: "Logged \(money)\(what)\(forWhom).")
     }
 }
 

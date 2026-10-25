@@ -202,7 +202,11 @@ Rules:
 - When a question is vague about time, use this month and say so.
 - Reply in the language the user writes in.
 
-Categories: ${cats.map((c) => c.name).join(', ')}.
+Each spending category belongs to one scope, and an expense is in its category's scope; two scopes can each have a category of the same name.
+${[
+      for (final s in Scope.values) '${s.name[0].toUpperCase()}${s.name.substring(1)} categories: ${cats.where((c) => c.kind == CategoryKind.expense && c.scope == s).map((c) => c.name).join(', ')}.',
+    ].join('\n')}
+Income categories: ${cats.where((c) => c.kind == CategoryKind.income).map((c) => c.name).join(', ')}.
 Accounts: ${accounts.map((a) => '${a.name} (${a.currency})').join(', ')}.
 Exchange rates per US dollar: ${rates.isEmpty ? 'none set' : rates.entries.map((e) => '${e.key} ${e.value}').join(', ')}.
 Today is ${DateFormat('EEEE d MMMM y').format(now)} (${Day.of(now)}).''';

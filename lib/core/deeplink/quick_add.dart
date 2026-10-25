@@ -180,17 +180,33 @@ class ResolvedEntry {
 
 /// The single place quick-add meaning is decided — shared by `juno://add`
 /// links and the iOS App Intent inbox, so both behave identically.
-ResolvedEntry resolveQuickAdd(QuickAdd q, List<Category> categories, List<Account> accounts) {
+///
+/// A spending category decides the scope. When two scopes have a category
+/// of the same name, the one in the scope the request names wins, then the
+/// one in [prefer] (the scope the app is showing).
+ResolvedEntry resolveQuickAdd(
+  QuickAdd q,
+  List<Category> categories,
+  List<Account> accounts, {
+  Scope? prefer,
+}) {
+  final first = q.scope ?? prefer;
+  final ordered = first == null
+      ? categories
+      : [
+          ...categories.where((c) => c.kind == CategoryKind.income || c.scope == first),
+          ...categories.where((c) => c.kind == CategoryKind.expense && c.scope != first),
+        ];
   // Without an explicit type, the category decides: "Salary" means income.
   final Category? cat;
   final TxType type;
   if (q.type == null) {
-    cat = fuzzyMatch(q.category, categories, (c) => c.name);
+    cat = fuzzyMatch(q.category, ordered, (c) => c.name);
     type = cat?.kind == CategoryKind.income ? TxType.income : TxType.expense;
   } else {
     type = q.type!;
     final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
-    cat = fuzzyMatch(q.category, categories.where((c) => c.kind == kind), (c) => c.name);
+    cat = fuzzyMatch(q.category, ordered.where((c) => c.kind == kind), (c) => c.name);
   }
   final account =
       fuzzyMatch(q.account, accounts, (a) => a.name) ??
@@ -198,7 +214,7 @@ ResolvedEntry resolveQuickAdd(QuickAdd q, List<Category> categories, List<Accoun
       accounts.firstOrNull;
   return ResolvedEntry(
     type: type,
-    scope: q.scope ?? cat?.defaultScope ?? Scope.personal,
+    scope: type == TxType.expense && cat?.kind == CategoryKind.expense ? cat!.scope : q.scope ?? Scope.personal,
     category: cat,
     account: account,
     currencyMismatch: q.currency != null && account != null && account.currency != q.currency,

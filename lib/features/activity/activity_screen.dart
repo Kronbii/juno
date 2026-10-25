@@ -377,6 +377,7 @@ class _CategoryFilterSheet extends StatefulWidget {
 
 class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
   late final Set<String> _sel = {...widget.initial};
+  late final _labels = categoryLabels(widget.categories);
 
   @override
   Widget build(BuildContext context) {
@@ -398,7 +399,7 @@ class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
                   children: [
                     for (final k in widget.categories)
                       JChip(
-                        label: k.name,
+                        label: _labels[k.id]!,
                         selected: _sel.contains(k.id),
                         leading: JDot(seriesColor(c, k.colorIndex), size: 7),
                         onTap: () => setState(() => _sel.contains(k.id) ? _sel.remove(k.id) : _sel.add(k.id)),

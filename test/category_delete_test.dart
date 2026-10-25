@@ -10,9 +10,11 @@ import 'package:juno/core/money.dart';
 import 'support/harness.dart';
 
 void main() {
-  final coffee = seedId('cat:Coffee');
-  final dining = seedId('cat:Dining');
+  // Personal, personal, household.
+  final coffee = seedId('cat:Dates');
+  final dining = seedId('cat:Food & Outings');
   final groceries = seedId('cat:Groceries');
+  final clothes = seedId('cat:Clothes & Accessories');
 
   Future<AppDatabase> fresh() async {
     final db = AppDatabase.memory(NativeDatabase.memory());
@@ -84,9 +86,9 @@ void main() {
     expect(live.where((b) => b.categoryId == dining).single.limitCents, 36000);
     expect(live.where((b) => b.categoryId == coffee), isEmpty);
 
-    await l.deleteCategory(groceries, intoId: seedId('cat:Shopping'));
+    await l.deleteCategory(groceries, intoId: seedId('cat:Utilities'));
     final after = await (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).get();
-    expect(after.where((b) => b.categoryId == seedId('cat:Shopping')).single.limitCents, 50000);
+    expect(after.where((b) => b.categoryId == seedId('cat:Utilities')).single.limitCents, 50000);
   });
 
   test('an entry another device logged in the deleted category before syncing follows it', () async {
@@ -94,14 +96,14 @@ void main() {
     addTearDown(db.close);
     final l = Ledger(db);
     await l.deleteCategory(coffee, intoId: dining);
-    // Dining is later merged into Shopping: the earlier move follows on.
-    await l.deleteCategory(dining, intoId: seedId('cat:Shopping'));
+    // Dining is later merged into Clothes: the earlier move follows on.
+    await l.deleteCategory(dining, intoId: clothes);
     // Arrives from the phone with the old category, as sync would write it.
     await db.into(db.transactions).insert(entry(coffee, 400, id: 'from-phone'));
 
     expect(await l.remapMergedCategories(), 1);
     final t = await (db.select(db.transactions)..where((x) => x.id.equals('from-phone'))).getSingle();
-    expect(t.categoryId, seedId('cat:Shopping'));
+    expect(t.categoryId, clothes);
     expect(t.dirty, isTrue, reason: 'the move is pushed back so the phone sees it');
     expect(await l.remapMergedCategories(), 0);
   });
@@ -112,10 +114,21 @@ void main() {
     expect(() => Ledger(db).deleteCategory(coffee, intoId: coffee), throwsArgumentError);
   });
 
+  test("spending moves only within its scope, so no scope's total changes", () async {
+    final db = await fresh();
+    addTearDown(db.close);
+    final l = Ledger(db);
+    await l.addTransaction(entry(coffee, 450));
+    expect(() => l.deleteCategory(coffee, intoId: groceries), throwsArgumentError);
+    expect((await (db.select(db.categories)..where((c) => c.id.equals(coffee))).getSingle()).deletedAt, isNull);
+    // Income has no scope: any income category will do.
+    await l.deleteCategory(seedId('cat:Freelance'), intoId: seedId('cat:Salary'));
+  });
+
   testWidgets('settings: delete asks where history goes, then moves it', (tester) async {
     final h = await boot(tester, demo: false, setup: (db) => Ledger(db).addTransaction(entry(coffee, 450)));
     await h.go('/settings/categories');
-    await tester.tap(find.text('Coffee'));
+    await tester.tap(find.text('Dates'));
     await h.settle();
     await tester.ensureVisible(find.text('Delete category'));
     await tester.tap(find.text('Delete category'));
@@ -123,13 +136,14 @@ void main() {
     expect(find.textContaining('Its 1 entry'), findsOneWidget);
     final confirm = find.widgetWithText(InkWell, 'Delete and move history');
     expect(tester.widget<InkWell>(confirm.first).onTap, isNull, reason: 'nothing happens until a target is chosen');
-    await tester.tap(find.text('Dining').last);
+    expect(find.text('Rent'), findsNothing, reason: 'a household category is no home for personal spending');
+    await tester.tap(find.text('Food & Outings').last);
     await h.settle(1);
     await tester.tap(find.text('Delete and move history'));
     await h.settle();
     expect(await count(h.db, "SELECT COUNT(*) n FROM transactions WHERE category_id = '$dining'"), 1);
-    expect(find.textContaining('moved to Dining'), findsOneWidget);
-    expect(find.text('Coffee'), findsNothing);
+    expect(find.textContaining('moved to Food & Outings'), findsOneWidget);
+    expect(find.text('Dates'), findsNothing);
     expect(tester.takeException(), isNull);
     await h.dispose();
   });

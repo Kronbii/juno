@@ -312,28 +312,30 @@ String dedupeHash(String day, int cents, String description, int occurrence, {St
 /// Built-in keyword → category-name hints for first-time imports, before
 /// Juno has learned anything from your own history.
 const keywordHints = <String, String>{
-  'uber eats': 'Dining',
-  'deliveroo': 'Dining',
-  'doordash': 'Dining',
-  'talabat': 'Dining',
-  'toters': 'Dining',
-  'restaurant': 'Dining',
-  'pizza': 'Dining',
-  'burger': 'Dining',
-  'mcdonald': 'Dining',
-  'kfc': 'Dining',
-  'starbucks': 'Coffee',
-  'coffee': 'Coffee',
-  'cafe': 'Coffee',
-  'uber': 'Transport',
-  'lyft': 'Transport',
-  'bolt': 'Transport',
-  'taxi': 'Transport',
-  'parking': 'Transport',
-  'shell': 'Fuel',
-  'total': 'Fuel',
-  'fuel': 'Fuel',
-  'gas station': 'Fuel',
+  'uber eats': 'Food & Outings',
+  'deliveroo': 'Food & Outings',
+  'doordash': 'Food & Outings',
+  'talabat': 'Food & Outings',
+  'toters': 'Food & Outings',
+  'restaurant': 'Food & Outings',
+  'pizza': 'Food & Outings',
+  'burger': 'Food & Outings',
+  'mcdonald': 'Food & Outings',
+  'kfc': 'Food & Outings',
+  'starbucks': 'Food & Outings',
+  'coffee': 'Food & Outings',
+  'cafe': 'Food & Outings',
+  'lunch': 'Food & Outings',
+  'dinner': 'Food & Outings',
+  'uber': 'Transportation',
+  'lyft': 'Transportation',
+  'bolt': 'Transportation',
+  'taxi': 'Transportation',
+  'parking': 'Transportation',
+  'shell': 'Transportation',
+  'total': 'Transportation',
+  'fuel': 'Transportation',
+  'gas station': 'Transportation',
   'netflix': 'Subscriptions',
   'spotify': 'Subscriptions',
   'apple.com': 'Subscriptions',
@@ -341,16 +343,23 @@ const keywordHints = <String, String>{
   'youtube': 'Subscriptions',
   'disney': 'Subscriptions',
   'openai': 'Subscriptions',
+  'chatgpt': 'Subscriptions',
   'anthropic': 'Subscriptions',
   'github': 'Subscriptions',
-  'amazon': 'Shopping',
-  'aliexpress': 'Shopping',
-  'shein': 'Shopping',
-  'ikea': 'Household supplies',
-  'pharmacy': 'Health',
-  'clinic': 'Health',
-  'hospital': 'Health',
-  'gym': 'Fitness',
+  'amazon': 'Clothes & Accessories',
+  'aliexpress': 'Clothes & Accessories',
+  'shein': 'Clothes & Accessories',
+  'clothes': 'Clothes & Accessories',
+  'course': 'Learning & Tech',
+  'udemy': 'Learning & Tech',
+  'coursera': 'Learning & Tech',
+  'pharmacy': 'Personal Care',
+  'clinic': 'Personal Care',
+  'doctor': 'Personal Care',
+  'haircut': 'Personal Care',
+  'barber': 'Personal Care',
+  'gym': 'Personal Care',
+  'ikea': 'Groceries',
   'supermarket': 'Groceries',
   'grocery': 'Groceries',
   'market': 'Groceries',
@@ -358,14 +367,11 @@ const keywordHints = <String, String>{
   'spinneys': 'Groceries',
   'walmart': 'Groceries',
   'costco': 'Groceries',
-  'electric': 'Utilities',
+  'electric': 'Electricity',
+  'generator': 'Electricity',
+  'edl': 'Electricity',
   'water': 'Utilities',
-  'internet': 'Internet & phone',
-  'mobile': 'Internet & phone',
-  'airline': 'Travel',
-  'airbnb': 'Travel',
-  'booking.com': 'Travel',
-  'hotel': 'Travel',
+  'internet': 'Internet',
   'rent': 'Rent',
   'salary': 'Salary',
   'payroll': 'Salary',
@@ -380,8 +386,15 @@ List<ImportRow> buildRows({
   required Map<String, String> memory,
   required List<Category> categories,
   String accountId = '',
+  Scope scope = Scope.personal,
 }) {
-  final byName = {for (final k in categories) k.name.toLowerCase(): k};
+  // Two scopes can each have a "Subscriptions": names resolve to the one in
+  // the scope being imported into.
+  final ordered = [
+    ...categories.where((c) => c.kind == CategoryKind.income || c.scope == scope),
+    ...categories.where((c) => c.kind == CategoryKind.expense && c.scope != scope),
+  ];
+  final byName = {for (final k in ordered.reversed) k.name.toLowerCase(): k};
   final seen = <String, int>{};
   final out = <ImportRow>[];
 
@@ -435,7 +448,7 @@ List<ImportRow> buildRows({
     row.categoryId =
         (named == null || named.isEmpty
             ? null
-            : fuzzyMatch(named, categories.where((c) => c.kind == kind), (c) => c.name)?.id) ??
+            : fuzzyMatch(named, ordered.where((c) => c.kind == kind), (c) => c.name)?.id) ??
         suggestCategory(desc, row.type, memory, byName);
     out.add(row);
   }

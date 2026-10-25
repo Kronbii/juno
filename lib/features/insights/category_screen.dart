@@ -73,7 +73,7 @@ class CategoryScreen extends ConsumerWidget {
 
     return JScreen(
       eyebrow: 'Category · ${Day.monthYear(month)}',
-      title: '*${cat.name}*',
+      title: '*${ref.watch(categoryLabelsProvider)[cat.id] ?? cat.name}*',
       actions: [
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
       ],

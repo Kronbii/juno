@@ -152,17 +152,17 @@ void main() {
             scope: Scope.personal,
             amountCents: 1000,
             accountId: seedId('acct:cash'),
-            categoryId: Value(seedId('cat:Coffee')),
+            categoryId: Value(seedId('cat:Dates')),
             frequency: Frequency.monthly,
             anchorDate: Day.today(),
             nextDue: Day.today(),
           ),
         );
-        await l.upsertBudget(BudgetsCompanion.insert(categoryId: Value(seedId('cat:Coffee')), limitCents: 5000));
+        await l.upsertBudget(BudgetsCompanion.insert(categoryId: Value(seedId('cat:Dates')), limitCents: 5000));
         await (db.update(db.accounts)..where((a) => a.id.equals(seedId('acct:cash')))).write(
           const AccountsCompanion(archived: Value(true)),
         );
-        await (db.update(db.categories)..where((c) => c.id.equals(seedId('cat:Coffee')))).write(
+        await (db.update(db.categories)..where((c) => c.id.equals(seedId('cat:Dates')))).write(
           const CategoriesCompanion(archived: Value(true)),
         );
       },
@@ -178,6 +178,12 @@ void main() {
     unawaitedFuture(editBudget(h.ctx, budget: budget));
     await h.settle();
     expect(tester.takeException(), isNull, reason: 'budget editor with archived category');
+    rootNavigatorKey.currentState!.pop();
+    await h.settle();
+    // One whose category is gone altogether (merged away on another device).
+    unawaitedFuture(editBudget(h.ctx, budget: budget.copyWith(categoryId: const Value('gone'))));
+    await h.settle();
+    expect(tester.takeException(), isNull, reason: 'budget editor with a missing category');
     await h.dispose();
   });
 
@@ -206,8 +212,23 @@ void main() {
     await h.settle();
     final t = (await tester.runAsync(() => h.ledger.transactions(const TxQuery())))!.single;
     expect(t.amountCents, 1200);
-    expect(t.categoryId, seedId('cat:Coffee'));
-    expect(t.note, 'Kalei');
+    expect(t.categoryId, seedId('cat:Food & Outings'));
+    expect(t.scope, Scope.personal);
+    expect(t.note, 'Coffee Kalei');
+    await h.dispose();
+  });
+
+  testWidgets('quick text "600 rent" is household: the category brings its scope', (tester) async {
+    final h = await boot(tester, demo: false);
+    unawaitedFuture(showEntrySheet(h.ctx));
+    await h.settle();
+    await tester.enterText(find.byType(TextField).first, '600 rent');
+    await h.settle(1);
+    await tester.tap(find.textContaining(r'Log $600.00').first);
+    await h.settle();
+    final t = (await tester.runAsync(() => h.ledger.transactions(const TxQuery())))!.single;
+    expect(t.categoryId, seedId('cat:Rent'));
+    expect(t.scope, Scope.household);
     await h.dispose();
   });
 

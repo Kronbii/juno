@@ -79,7 +79,7 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
   final categories = await ref.read(categoriesProvider.future);
   final accounts = await ref.read(accountsProvider.future);
 
-  final r = resolveQuickAdd(q, categories, accounts);
+  final r = resolveQuickAdd(q, categories, accounts, prefer: ref.read(scopeFilterProvider));
   var cat = r.category;
   final type = r.type;
   final account = r.account;
@@ -163,6 +163,7 @@ Future<QuickAdd> _fromText(WidgetRef ref, QuickAdd q) async {
     categories: categories,
     memory: await ref.read(ledgerProvider).merchantCategoryMemory(),
     hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+    prefer: q.scope ?? ref.read(scopeFilterProvider),
   );
   final cat = categories.where((c) => c.id == e.categoryId).firstOrNull;
   return QuickAdd(

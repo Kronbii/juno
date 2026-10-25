@@ -47,12 +47,15 @@ class MoneyField extends StatelessWidget {
   );
 }
 
-/// Dropdown of categories (optionally with an "all" option).
+/// Dropdown of categories (optionally with an "all" option). With [scope],
+/// spending categories are that scope's only; without, each shows its
+/// scope's icon so two scopes' "Subscriptions" can be told apart.
 class CategoryPicker extends ConsumerWidget {
   const CategoryPicker({
     required this.value,
     required this.onChanged,
     this.kind = CategoryKind.expense,
+    this.scope,
     this.allowAll = false,
     this.allLabel = 'All spending',
     super.key,
@@ -61,19 +64,26 @@ class CategoryPicker extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
   final CategoryKind kind;
+  final Scope? scope;
   final bool allowAll;
   final String allLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.jc;
-    final cats = (ref.watch(categoriesProvider).value ?? const <Category>[]).where((k) => k.kind == kind).toList();
+    final byScope = kind == CategoryKind.expense ? scope : null;
+    final cats = (ref.watch(categoriesProvider).value ?? const <Category>[])
+        .where((k) => k.kind == kind && (byScope == null || k.scope == byScope))
+        .toList();
     // A budget/rule may point at a category archived since: keep it
     // selectable (marked) instead of crashing the dropdown.
     final archived = value == null || cats.any((k) => k.id == value) ? null : ref.watch(categoryMapProvider)[value];
     if (archived != null) cats.add(archived);
     return DropdownButtonFormField<String?>(
-      initialValue: value,
+      // The list changes with the scope; start over with it.
+      key: ValueKey(byScope),
+      // A category gone altogether (merged away on another device) shows as none.
+      initialValue: cats.any((k) => k.id == value) ? value : null,
       isExpanded: true,
       dropdownColor: c.raised,
       borderRadius: BorderRadius.circular(JRadius.chip),
@@ -88,6 +98,10 @@ class CategoryPicker extends ConsumerWidget {
                 Icon(categoryIcon(k.icon), size: 16, color: seriesColor(c, k.colorIndex)),
                 const SizedBox(width: 10),
                 Text(k.archived ? '${k.name} (archived)' : k.name),
+                if (kind == CategoryKind.expense && byScope == null) ...[
+                  const Spacer(),
+                  Icon(k.scope.icon, size: 14, color: k.scope.color(c)),
+                ],
               ],
             ),
           ),
@@ -194,16 +208,29 @@ class _BudgetFormState extends ConsumerState<_BudgetForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         JField(
-          label: 'Category',
-          child: CategoryPicker(value: _cat, allowAll: true, onChanged: (v) => setState(() => _cat = v)),
-        ),
-        JField(
           label: 'Applies to',
           child: JSegmentBar<String>(
             segments: {'both': 'All', for (final s in Scope.values) s.name: s.label},
             selected: _scope?.name ?? 'both',
             accentOf: (k) => Scope.values.where((s) => s.name == k).firstOrNull?.accent ?? JAccent.brand,
-            onChanged: (k) => setState(() => _scope = Scope.values.where((s) => s.name == k).firstOrNull),
+            onChanged: (k) => setState(() {
+              _scope = Scope.values.where((s) => s.name == k).firstOrNull;
+              // A category budget is for that category's scope.
+              if (_scope == null || ref.read(categoryMapProvider)[_cat]?.scope != _scope) _cat = null;
+            }),
+          ),
+        ),
+        JField(
+          label: 'Category',
+          child: CategoryPicker(
+            value: _cat,
+            scope: _scope,
+            allowAll: true,
+            onChanged: (v) => setState(() {
+              _cat = v;
+              final cat = ref.read(categoryMapProvider)[v];
+              if (cat != null) _scope = cat.scope;
+            }),
           ),
         ),
         JField(
@@ -535,10 +562,25 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
           ),
         ),
         JField(
+          label: 'Scope',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ScopeToggle(
+              value: _scope,
+              onChanged: (s) => setState(() {
+                _scope = s;
+                final cat = ref.read(categoryMapProvider)[_cat];
+                if (cat?.kind == CategoryKind.expense && cat!.scope != s) _cat = null;
+              }),
+            ),
+          ),
+        ),
+        JField(
           label: 'Category',
           child: CategoryPicker(
             value: _cat,
             kind: _type == TxType.income ? CategoryKind.income : CategoryKind.expense,
+            scope: _scope,
             allowAll: true,
             allLabel: 'None',
             onChanged: (v) => setState(() => _cat = v),
@@ -547,13 +589,6 @@ class _RecurringFormState extends ConsumerState<_RecurringForm> {
         JField(
           label: 'Account',
           child: AccountPicker(value: _account, onChanged: (v) => setState(() => _account = v)),
-        ),
-        JField(
-          label: 'Scope',
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: ScopeToggle(value: _scope, onChanged: (s) => setState(() => _scope = s)),
-          ),
         ),
         JField(
           label: 'Repeats',

@@ -77,17 +77,26 @@ class _SplitFormState extends ConsumerState<_SplitForm> {
                 children: [
                   MoneyField(controller: _parts[i].amount, autofocus: i == 0),
                   const SizedBox(height: JSpace.sm),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ScopeToggle(
+                      value: _parts[i].scope,
+                      onChanged: (s) => setState(() {
+                        _parts[i].scope = s;
+                        // Spending stays in a category of its own scope.
+                        final cat = ref.read(categoryMapProvider)[_parts[i].categoryId];
+                        if (cat?.kind == CategoryKind.expense && cat!.scope != s) _parts[i].categoryId = null;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: JSpace.sm),
                   CategoryPicker(
                     value: _parts[i].categoryId,
                     kind: kind,
+                    scope: _parts[i].scope,
                     allowAll: true,
                     allLabel: 'No category',
                     onChanged: (v) => setState(() => _parts[i].categoryId = v),
-                  ),
-                  const SizedBox(height: JSpace.sm),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ScopeToggle(value: _parts[i].scope, onChanged: (s) => setState(() => _parts[i].scope = s)),
                   ),
                 ],
               ),

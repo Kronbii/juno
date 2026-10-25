@@ -36,75 +36,91 @@ Future<void> seedRates(AppDatabase db) => db.batch((b) {
 Future<void> seedDefaults(AppDatabase db) async {
   await seedRates(db);
   await db.batch((b) {
-    b.insertAll(db.accounts, [
-      AccountsCompanion.insert(
-        id: Value(seedId('acct:checking')),
-        createdAt: Value(seedStamp),
-        updatedAt: Value(seedStamp),
-        name: 'Checking',
-        kind: AccountKind.checking,
-        sort: const Value(0),
-      ),
-      AccountsCompanion.insert(
-        id: Value(seedId('acct:cash')),
-        createdAt: Value(seedStamp),
-        updatedAt: Value(seedStamp),
-        name: 'Cash',
-        kind: AccountKind.cash,
-        sort: const Value(1),
-      ),
-      AccountsCompanion.insert(
-        id: Value(seedId('acct:savings')),
-        createdAt: Value(seedStamp),
-        updatedAt: Value(seedStamp),
-        name: 'Savings',
-        kind: AccountKind.savings,
-        sort: const Value(2),
-      ),
-    ]);
-
-    var i = 0;
-    CategoriesCompanion cat(
-      String name,
-      String icon,
-      int color, {
-      CategoryKind kind = CategoryKind.expense,
-      Scope scope = Scope.personal,
-    }) => CategoriesCompanion.insert(
-      id: Value(seedId('cat:$name')),
-      createdAt: Value(seedStamp),
-      updatedAt: Value(seedStamp),
-      name: name,
-      icon: icon,
-      colorIndex: color,
-      kind: kind,
-      defaultScope: Value(scope),
-      sort: Value(i++),
-    );
-
-    b.insertAll(db.categories, [
-      cat('Groceries', 'cart', 0, scope: Scope.household),
-      cat('Dining', 'dining', 1),
-      cat('Coffee', 'coffee', 4),
-      cat('Transport', 'car', 2),
-      cat('Fuel', 'fuel', 3),
-      cat('Rent', 'home', 6, scope: Scope.household),
-      cat('Utilities', 'bolt', 3, scope: Scope.household),
-      cat('Internet & phone', 'wifi', 5, scope: Scope.household),
-      cat('Subscriptions', 'repeat', 7),
-      cat('Shopping', 'bag', 4),
-      cat('Health', 'health', 2),
-      cat('Fitness', 'fitness', 5),
-      cat('Entertainment', 'ticket', 7),
-      cat('Travel', 'plane', 0),
-      cat('Gifts', 'gift', 4),
-      cat('Household supplies', 'spray', 2, scope: Scope.household),
-      cat('Education', 'book', 6),
-      cat('Other', 'dots', 6),
-      cat('Salary', 'briefcase', 5, kind: CategoryKind.income),
-      cat('Freelance', 'laptop', 2, kind: CategoryKind.income),
-      cat('Refunds', 'undo', 0, kind: CategoryKind.income),
-      cat('Other income', 'plus', 3, kind: CategoryKind.income),
-    ]);
+    b
+      ..insertAll(db.accounts, [
+        AccountsCompanion.insert(
+          id: Value(seedId('acct:checking')),
+          createdAt: Value(seedStamp),
+          updatedAt: Value(seedStamp),
+          name: 'Checking',
+          kind: AccountKind.checking,
+          sort: const Value(0),
+        ),
+        AccountsCompanion.insert(
+          id: Value(seedId('acct:cash')),
+          createdAt: Value(seedStamp),
+          updatedAt: Value(seedStamp),
+          name: 'Cash',
+          kind: AccountKind.cash,
+          sort: const Value(1),
+        ),
+        AccountsCompanion.insert(
+          id: Value(seedId('acct:savings')),
+          createdAt: Value(seedStamp),
+          updatedAt: Value(seedStamp),
+          name: 'Savings',
+          kind: AccountKind.savings,
+          sort: const Value(2),
+        ),
+      ])
+      ..insertAll(db.categories, [
+        for (final (i, c) in starterCategories.indexed)
+          CategoriesCompanion.insert(
+            id: Value(c.id),
+            createdAt: Value(seedStamp),
+            updatedAt: Value(seedStamp),
+            name: c.name,
+            icon: c.icon,
+            colorIndex: c.color,
+            kind: c.kind,
+            scope: Value(c.scope),
+            sort: Value(i),
+          ),
+      ]);
   });
 }
+
+/// A category Juno starts with. [key] names its id, so every device seeds
+/// the same rows and converges on sync; it stays fixed when [name] changes.
+class StarterCategory {
+  const StarterCategory(
+    this.key,
+    this.name,
+    this.icon,
+    this.color, {
+    required this.scope,
+    this.kind = CategoryKind.expense,
+  });
+
+  final String key;
+  final String name;
+  final String icon;
+  final int color;
+  final Scope scope;
+  final CategoryKind kind;
+
+  String get id => seedId('cat:$key');
+}
+
+/// Spending categories per scope, then income (which has no scope). Order
+/// is the starting sort order.
+const starterCategories = [
+  StarterCategory('Transportation', 'Transportation', 'car', 2, scope: Scope.personal),
+  StarterCategory('Dates', 'Dates', 'heart', 4, scope: Scope.personal),
+  StarterCategory('Food & Outings', 'Food & Outings', 'dining', 1, scope: Scope.personal),
+  StarterCategory('Subscriptions', 'Subscriptions', 'repeat', 7, scope: Scope.personal),
+  StarterCategory('Clothes & Accessories', 'Clothes & Accessories', 'bag', 0, scope: Scope.personal),
+  StarterCategory('Learning & Tech', 'Learning & Tech', 'laptop', 6, scope: Scope.personal),
+  StarterCategory('Personal Care', 'Personal Care', 'beauty', 5, scope: Scope.personal),
+  StarterCategory('Rent', 'Rent', 'home', 6, scope: Scope.household),
+  StarterCategory('Electricity', 'Electricity', 'bolt', 3, scope: Scope.household),
+  StarterCategory('Utilities', 'Utilities', 'water', 0, scope: Scope.household),
+  StarterCategory('Groceries', 'Groceries', 'cart', 2, scope: Scope.household),
+  StarterCategory('household:Subscriptions', 'Subscriptions', 'repeat', 7, scope: Scope.household),
+  StarterCategory('Internet', 'Internet', 'wifi', 5, scope: Scope.household),
+  StarterCategory('Other', 'Other', 'dots', 6, scope: Scope.other),
+  StarterCategory('Salary', 'Salary', 'briefcase', 5, scope: Scope.personal, kind: CategoryKind.income),
+  StarterCategory('Freelance', 'Freelance', 'laptop', 2, scope: Scope.personal, kind: CategoryKind.income),
+  StarterCategory('Refunds', 'Refunds', 'undo', 0, scope: Scope.personal, kind: CategoryKind.income),
+  StarterCategory('Other income', 'Other income', 'plus', 3, scope: Scope.personal, kind: CategoryKind.income),
+];

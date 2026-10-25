@@ -38,10 +38,10 @@ class ParsedEntry {
 
 /// Parses quick-entry text on-device:
 ///
-/// * `12 coffee kalei` → $12.00, Coffee, note "Kalei"
-/// * `40k taxi yesterday` → LBP 40,000, Transport, yesterday
-/// * `LBP 150000 generator household` → LBP 150,000, household
-/// * `$5.50 lunch at tawlet` → $5.50, Dining, "Tawlet"
+/// * `12 coffee kalei` → $12.00, Food & Outings, note "Coffee Kalei"
+/// * `40k taxi yesterday` → LBP 40,000, Transportation, yesterday
+/// * `LBP 150000 generator` → LBP 150,000, Electricity (household)
+/// * `$5.50 lunch at tawlet` → $5.50, Food & Outings, "Lunch Tawlet"
 /// * `salary 5200` → income, Salary
 /// * `2 days ago 18 groceries` → $18, Groceries, two days ago
 ///
@@ -54,6 +54,7 @@ ParsedEntry parseEntry(
   Map<String, String> memory = const {},
   bool hasLbpAccount = true,
   DateTime? now,
+  Scope? prefer,
 }) {
   final today = now ?? clock.now();
   var text = ' ${input.trim()} ';
@@ -143,8 +144,16 @@ ParsedEntry parseEntry(
   String? categoryId;
   var used = <int>{};
   final kindFor = type == TxType.income ? CategoryKind.income : null;
-  List<Category> pool(CategoryKind? kind) =>
-      kind == null ? categories : categories.where((c) => c.kind == kind).toList();
+  // Two scopes can each have a "Subscriptions": the scope the text names,
+  // else the one preferred, gets first pick.
+  final first = scope ?? prefer;
+  final ordered = first == null
+      ? categories
+      : [
+          ...categories.where((c) => c.kind == CategoryKind.income || c.scope == first),
+          ...categories.where((c) => c.kind == CategoryKind.expense && c.scope != first),
+        ];
+  List<Category> pool(CategoryKind? kind) => kind == null ? ordered : ordered.where((c) => c.kind == kind).toList();
 
   // 1. Your history: a remembered merchant/note inside the text.
   final phrase = lowerWords.join(' ');
@@ -171,7 +180,7 @@ ParsedEntry parseEntry(
       }
     }
   }
-  // 3. Built-in hints ("taxi" → Transport, "netflix" → Subscriptions).
+  // 3. Built-in hints ("taxi" → Transportation, "netflix" → Subscriptions).
   if (categoryId == null) {
     final keys = keywordHints.keys.where((k) => ' $phrase '.contains(' $k ') || phrase.contains(k)).toList()
       ..sort((a, b) => b.length.compareTo(a.length));
@@ -186,6 +195,8 @@ ParsedEntry parseEntry(
   }
   final cat = categories.where((c) => c.id == categoryId).firstOrNull;
   if (type == null && cat?.kind == CategoryKind.income) type = TxType.income;
+  // Spending is in its category's scope ("rent" is household).
+  if (type != TxType.income && cat?.kind == CategoryKind.expense) scope = cat!.scope;
 
   final noteWords = [
     for (var i = 0; i < words.length; i++)
@@ -214,7 +225,10 @@ bool _closeEnough(String word, String name) {
   final n = name.toLowerCase();
   if (n == w || n.startsWith(w) || w.startsWith(n)) return w.length >= 3;
   final first = n.split(RegExp(r'[\s&]+')).first;
-  return first.startsWith(w) || w.startsWith(first) || _edit(w, first) <= 2;
+  if (first.startsWith(w) || w.startsWith(first)) return true;
+  // A typo keeps the first letter, and a short word gets one: "eats" is not
+  // "Dates", "grocries" is "Groceries".
+  return w.isNotEmpty && first.isNotEmpty && w[0] == first[0] && _edit(w, first) <= (w.length < 6 ? 1 : 2);
 }
 
 int _edit(String a, String b) {

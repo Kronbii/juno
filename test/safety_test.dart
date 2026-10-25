@@ -100,8 +100,8 @@ void main() {
     await l.setRate('LBP', 100000); // later rate change must not leak in
     final ids = await l.splitTransaction(id, [
       (seedId('cat:Groceries'), Scope.household, 70000000),
-      (seedId('cat:Shopping'), Scope.personal, 20000000),
-      (seedId('cat:Coffee'), Scope.personal, 10000000),
+      (seedId('cat:Clothes & Accessories'), Scope.personal, 20000000),
+      (seedId('cat:Food & Outings'), Scope.personal, 10000000),
     ]);
     final rows = await l.transactions(const TxQuery());
     expect(rows, hasLength(3));

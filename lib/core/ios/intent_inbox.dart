@@ -105,6 +105,7 @@ Future<TransactionsCompanion?> inboxToEntry(
       categories: categories,
       memory: memory,
       hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+      prefer: q.scope,
       // "yesterday" means the day before it was said, not before Juno opened.
       now: item.at == null ? null : (item.at!.isUtc ? item.at!.toLocal() : item.at!),
     );
@@ -213,7 +214,7 @@ abstract final class IntentInbox {
       catalogKey,
       jsonEncode({
         'categories': [
-          for (final c in categories) {'name': c.name, 'kind': c.kind.name, 'scope': c.defaultScope.name},
+          for (final c in categories) {'name': c.name, 'kind': c.kind.name, 'scope': c.scope.name},
         ],
         'currencies': {for (final a in accounts) a.currency}.toList(),
       }),

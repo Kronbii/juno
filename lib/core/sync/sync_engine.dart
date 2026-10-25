@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/ai/assist.dart';
 import 'package:juno/core/attachments/attachment_store.dart';
+import 'package:juno/core/db/category_restructure.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/core/db/seed.dart';
@@ -174,7 +175,8 @@ class SyncCore {
   /// their cursor, so the next run retries them; everything else proceeds.
   int failures = 0;
 
-  /// Rows this run repaired locally (phantom bills, healed splits).
+  /// Rows this run repaired locally (phantom bills, healed splits, entries
+  /// put back in a category of their own scope).
   int repaired = 0;
 
   /// How far each pull re-reads behind its cursor. server_updated_at is the
@@ -211,9 +213,15 @@ class SyncCore {
     // Repairs made while pulling (phantom bills withdrawn, splits healed)
     // go out now, so the other device doesn't pull the broken copy first.
     await healSplits();
-    if (repaired > 0) {
+    // An older app version can still file a personal entry in Rent.
+    final conformed = await conformCategories(db);
+    repaired += conformed;
+    for (final t in [
+      if (repaired > 0) 'transactions',
+      if (conformed > 0) ...['recurring_rules', 'budgets'],
+    ]) {
       try {
-        await push('transactions', uid);
+        await push(t, uid);
       } on Object {
         failures++;
       }

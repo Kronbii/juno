@@ -804,14 +804,14 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
     requiredDuringInsert: true,
   ).withConverter<CategoryKind>($CategoriesTable.$converterkind);
   @override
-  late final GeneratedColumnWithTypeConverter<Scope, String> defaultScope = GeneratedColumn<String>(
+  late final GeneratedColumnWithTypeConverter<Scope, String> scope = GeneratedColumn<String>(
     'default_scope',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultValue: const Constant('personal'),
-  ).withConverter<Scope>($CategoriesTable.$converterdefaultScope);
+  ).withConverter<Scope>($CategoriesTable.$converterscope);
   static const VerificationMeta _sortMeta = const VerificationMeta('sort');
   @override
   late final GeneratedColumn<int> sort = GeneratedColumn<int>(
@@ -849,7 +849,7 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
     icon,
     colorIndex,
     kind,
-    defaultScope,
+    scope,
     sort,
     archived,
   ];
@@ -985,7 +985,7 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
           data['${effectivePrefix}kind'],
         )!,
       ),
-      defaultScope: $CategoriesTable.$converterdefaultScope.fromSql(
+      scope: $CategoriesTable.$converterscope.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
           data['${effectivePrefix}default_scope'],
@@ -1010,9 +1010,7 @@ class $CategoriesTable extends Categories with TableInfo<$CategoriesTable, Categ
   static JsonTypeConverter2<CategoryKind, String, String> $converterkind = const EnumNameConverter<CategoryKind>(
     CategoryKind.values,
   );
-  static JsonTypeConverter2<Scope, String, String> $converterdefaultScope = const EnumNameConverter<Scope>(
-    Scope.values,
-  );
+  static JsonTypeConverter2<Scope, String, String> $converterscope = const EnumNameConverter<Scope>(Scope.values);
 }
 
 class Category extends DataClass implements Insertable<Category> {
@@ -1033,8 +1031,12 @@ class Category extends DataClass implements Insertable<Category> {
   final int colorIndex;
   final CategoryKind kind;
 
-  /// Scope new entries in this category start in (Groceries → household).
-  final Scope defaultScope;
+  /// Whose spending this category is: every expense filed under it has this
+  /// scope (Rent is household, Dates personal). Two scopes can each have a
+  /// category of the same name; they are separate buckets. Meaningless for
+  /// income. Stored as `default_scope`, its name from when it was only a
+  /// hint, so older app versions keep syncing.
+  final Scope scope;
   final int sort;
   final bool archived;
   const Category({
@@ -1048,7 +1050,7 @@ class Category extends DataClass implements Insertable<Category> {
     required this.icon,
     required this.colorIndex,
     required this.kind,
-    required this.defaultScope,
+    required this.scope,
     required this.sort,
     required this.archived,
   });
@@ -1075,7 +1077,7 @@ class Category extends DataClass implements Insertable<Category> {
     }
     {
       map['default_scope'] = Variable<String>(
-        $CategoriesTable.$converterdefaultScope.toSql(defaultScope),
+        $CategoriesTable.$converterscope.toSql(scope),
       );
     }
     map['sort'] = Variable<int>(sort);
@@ -1095,7 +1097,7 @@ class Category extends DataClass implements Insertable<Category> {
       icon: Value(icon),
       colorIndex: Value(colorIndex),
       kind: Value(kind),
-      defaultScope: Value(defaultScope),
+      scope: Value(scope),
       sort: Value(sort),
       archived: Value(archived),
     );
@@ -1119,8 +1121,8 @@ class Category extends DataClass implements Insertable<Category> {
       kind: $CategoriesTable.$converterkind.fromJson(
         serializer.fromJson<String>(json['kind']),
       ),
-      defaultScope: $CategoriesTable.$converterdefaultScope.fromJson(
-        serializer.fromJson<String>(json['defaultScope']),
+      scope: $CategoriesTable.$converterscope.fromJson(
+        serializer.fromJson<String>(json['scope']),
       ),
       sort: serializer.fromJson<int>(json['sort']),
       archived: serializer.fromJson<bool>(json['archived']),
@@ -1142,8 +1144,8 @@ class Category extends DataClass implements Insertable<Category> {
       'kind': serializer.toJson<String>(
         $CategoriesTable.$converterkind.toJson(kind),
       ),
-      'defaultScope': serializer.toJson<String>(
-        $CategoriesTable.$converterdefaultScope.toJson(defaultScope),
+      'scope': serializer.toJson<String>(
+        $CategoriesTable.$converterscope.toJson(scope),
       ),
       'sort': serializer.toJson<int>(sort),
       'archived': serializer.toJson<bool>(archived),
@@ -1161,7 +1163,7 @@ class Category extends DataClass implements Insertable<Category> {
     String? icon,
     int? colorIndex,
     CategoryKind? kind,
-    Scope? defaultScope,
+    Scope? scope,
     int? sort,
     bool? archived,
   }) => Category(
@@ -1175,7 +1177,7 @@ class Category extends DataClass implements Insertable<Category> {
     icon: icon ?? this.icon,
     colorIndex: colorIndex ?? this.colorIndex,
     kind: kind ?? this.kind,
-    defaultScope: defaultScope ?? this.defaultScope,
+    scope: scope ?? this.scope,
     sort: sort ?? this.sort,
     archived: archived ?? this.archived,
   );
@@ -1191,7 +1193,7 @@ class Category extends DataClass implements Insertable<Category> {
       icon: data.icon.present ? data.icon.value : this.icon,
       colorIndex: data.colorIndex.present ? data.colorIndex.value : this.colorIndex,
       kind: data.kind.present ? data.kind.value : this.kind,
-      defaultScope: data.defaultScope.present ? data.defaultScope.value : this.defaultScope,
+      scope: data.scope.present ? data.scope.value : this.scope,
       sort: data.sort.present ? data.sort.value : this.sort,
       archived: data.archived.present ? data.archived.value : this.archived,
     );
@@ -1210,7 +1212,7 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('icon: $icon, ')
           ..write('colorIndex: $colorIndex, ')
           ..write('kind: $kind, ')
-          ..write('defaultScope: $defaultScope, ')
+          ..write('scope: $scope, ')
           ..write('sort: $sort, ')
           ..write('archived: $archived')
           ..write(')'))
@@ -1229,7 +1231,7 @@ class Category extends DataClass implements Insertable<Category> {
     icon,
     colorIndex,
     kind,
-    defaultScope,
+    scope,
     sort,
     archived,
   );
@@ -1247,7 +1249,7 @@ class Category extends DataClass implements Insertable<Category> {
           other.icon == this.icon &&
           other.colorIndex == this.colorIndex &&
           other.kind == this.kind &&
-          other.defaultScope == this.defaultScope &&
+          other.scope == this.scope &&
           other.sort == this.sort &&
           other.archived == this.archived);
 }
@@ -1263,7 +1265,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> icon;
   final Value<int> colorIndex;
   final Value<CategoryKind> kind;
-  final Value<Scope> defaultScope;
+  final Value<Scope> scope;
   final Value<int> sort;
   final Value<bool> archived;
   final Value<int> rowid;
@@ -1278,7 +1280,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.icon = const Value.absent(),
     this.colorIndex = const Value.absent(),
     this.kind = const Value.absent(),
-    this.defaultScope = const Value.absent(),
+    this.scope = const Value.absent(),
     this.sort = const Value.absent(),
     this.archived = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1294,7 +1296,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     required String icon,
     required int colorIndex,
     required CategoryKind kind,
-    this.defaultScope = const Value.absent(),
+    this.scope = const Value.absent(),
     this.sort = const Value.absent(),
     this.archived = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1313,7 +1315,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<String>? icon,
     Expression<int>? colorIndex,
     Expression<String>? kind,
-    Expression<String>? defaultScope,
+    Expression<String>? scope,
     Expression<int>? sort,
     Expression<bool>? archived,
     Expression<int>? rowid,
@@ -1329,7 +1331,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       if (icon != null) 'icon': icon,
       if (colorIndex != null) 'color_index': colorIndex,
       if (kind != null) 'kind': kind,
-      if (defaultScope != null) 'default_scope': defaultScope,
+      if (scope != null) 'default_scope': scope,
       if (sort != null) 'sort': sort,
       if (archived != null) 'archived': archived,
       if (rowid != null) 'rowid': rowid,
@@ -1347,7 +1349,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String>? icon,
     Value<int>? colorIndex,
     Value<CategoryKind>? kind,
-    Value<Scope>? defaultScope,
+    Value<Scope>? scope,
     Value<int>? sort,
     Value<bool>? archived,
     Value<int>? rowid,
@@ -1363,7 +1365,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       icon: icon ?? this.icon,
       colorIndex: colorIndex ?? this.colorIndex,
       kind: kind ?? this.kind,
-      defaultScope: defaultScope ?? this.defaultScope,
+      scope: scope ?? this.scope,
       sort: sort ?? this.sort,
       archived: archived ?? this.archived,
       rowid: rowid ?? this.rowid,
@@ -1405,9 +1407,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
         $CategoriesTable.$converterkind.toSql(kind.value),
       );
     }
-    if (defaultScope.present) {
+    if (scope.present) {
       map['default_scope'] = Variable<String>(
-        $CategoriesTable.$converterdefaultScope.toSql(defaultScope.value),
+        $CategoriesTable.$converterscope.toSql(scope.value),
       );
     }
     if (sort.present) {
@@ -1435,7 +1437,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('icon: $icon, ')
           ..write('colorIndex: $colorIndex, ')
           ..write('kind: $kind, ')
-          ..write('defaultScope: $defaultScope, ')
+          ..write('scope: $scope, ')
           ..write('sort: $sort, ')
           ..write('archived: $archived, ')
           ..write('rowid: $rowid')
@@ -8068,7 +8070,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String icon,
       required int colorIndex,
       required CategoryKind kind,
-      Value<Scope> defaultScope,
+      Value<Scope> scope,
       Value<int> sort,
       Value<bool> archived,
       Value<int> rowid,
@@ -8085,7 +8087,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> icon,
       Value<int> colorIndex,
       Value<CategoryKind> kind,
-      Value<Scope> defaultScope,
+      Value<Scope> scope,
       Value<int> sort,
       Value<bool> archived,
       Value<int> rowid,
@@ -8149,8 +8151,8 @@ class $$CategoriesTableFilterComposer extends Composer<_$AppDatabase, $Categorie
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
-  ColumnWithTypeConverterFilters<Scope, Scope, String> get defaultScope => $composableBuilder(
-    column: $table.defaultScope,
+  ColumnWithTypeConverterFilters<Scope, Scope, String> get scope => $composableBuilder(
+    column: $table.scope,
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
@@ -8223,8 +8225,8 @@ class $$CategoriesTableOrderingComposer extends Composer<_$AppDatabase, $Categor
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get defaultScope => $composableBuilder(
-    column: $table.defaultScope,
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -8271,10 +8273,8 @@ class $$CategoriesTableAnnotationComposer extends Composer<_$AppDatabase, $Categ
   GeneratedColumnWithTypeConverter<CategoryKind, String> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
 
-  GeneratedColumnWithTypeConverter<Scope, String> get defaultScope => $composableBuilder(
-    column: $table.defaultScope,
-    builder: (column) => column,
-  );
+  GeneratedColumnWithTypeConverter<Scope, String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
 
   GeneratedColumn<int> get sort => $composableBuilder(column: $table.sort, builder: (column) => column);
 
@@ -8316,7 +8316,7 @@ class $$CategoriesTableTableManager
                 Value<String> icon = const Value.absent(),
                 Value<int> colorIndex = const Value.absent(),
                 Value<CategoryKind> kind = const Value.absent(),
-                Value<Scope> defaultScope = const Value.absent(),
+                Value<Scope> scope = const Value.absent(),
                 Value<int> sort = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8331,7 +8331,7 @@ class $$CategoriesTableTableManager
                 icon: icon,
                 colorIndex: colorIndex,
                 kind: kind,
-                defaultScope: defaultScope,
+                scope: scope,
                 sort: sort,
                 archived: archived,
                 rowid: rowid,
@@ -8348,7 +8348,7 @@ class $$CategoriesTableTableManager
                 required String icon,
                 required int colorIndex,
                 required CategoryKind kind,
-                Value<Scope> defaultScope = const Value.absent(),
+                Value<Scope> scope = const Value.absent(),
                 Value<int> sort = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8363,7 +8363,7 @@ class $$CategoriesTableTableManager
                 icon: icon,
                 colorIndex: colorIndex,
                 kind: kind,
-                defaultScope: defaultScope,
+                scope: scope,
                 sort: sort,
                 archived: archived,
                 rowid: rowid,

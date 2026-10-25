@@ -18,7 +18,8 @@ Future<void> seedDemo(AppDatabase db, {DateTime? now}) async {
 Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
   final today = now ?? clock.now();
   final rnd = math.Random(7);
-  String cat(String name) => seedId('cat:$name');
+  // By starter key (see starterCategories).
+  String cat(String key) => seedId('cat:$key');
   // The demo lives in its own accounts so it never changes yours; removing
   // it deletes these and leaves your real accounts exactly as they were.
   final stamp = clock.now().toUtc();
@@ -134,35 +135,36 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
     add(DateTime(first.year, first.month, 2), 'Rent', 145000, Scope.household, 'Apartment rent');
     add(
       DateTime(first.year, first.month, 6),
-      'Utilities',
+      'Electricity',
       9000 + rnd.nextInt(5000),
       Scope.household,
       'EDL electricity',
     );
-    add(DateTime(first.year, first.month, 9), 'Internet & phone', 4500, Scope.household, 'Home fibre');
+    add(DateTime(first.year, first.month, 9), 'Internet', 4500, Scope.household, 'Home fibre');
     add(DateTime(first.year, first.month, 12), 'Subscriptions', 1599, Scope.personal, 'Netflix');
     add(DateTime(first.year, first.month, 14), 'Subscriptions', 2000, Scope.personal, 'Claude Pro');
-    add(DateTime(first.year, first.month, 21), 'Fitness', 6000, Scope.personal, 'Gym membership');
-    add(DateTime(first.year, first.month, 11), 'Dining', 7800, Scope.personal, 'Date night', tags: ['date-night']);
+    add(DateTime(first.year, first.month, 16), 'household:Subscriptions', 999, Scope.household, 'Shahid family plan');
+    add(DateTime(first.year, first.month, 21), 'Personal Care', 6000, Scope.personal, 'Gym membership');
+    add(DateTime(first.year, first.month, 11), 'Dates', 7800, Scope.personal, 'Date night', tags: ['date-night']);
     add(
       DateTime(first.year, first.month, 24),
-      'Gifts',
+      'Other',
       4500 + rnd.nextInt(3000),
-      Scope.household,
+      Scope.other,
       'Gift for mom',
       tags: ['family', 'gift', '@mom'],
     );
     // Family members you pay for, marked "For" (person tags).
-    add(DateTime(first.year, first.month, 8), 'Health', 6500, Scope.household, 'Mom’s medication', tags: ['@mom']);
-    add(DateTime(first.year, first.month, 3), 'Education', 22000, Scope.household, 'School fees', tags: ['@karim']);
-    add(DateTime(first.year, first.month, 19), 'Shopping', 4800, Scope.household, 'Shoes', tags: ['@karim', '@lea']);
+    add(DateTime(first.year, first.month, 8), 'Groceries', 6500, Scope.household, 'Mom’s medication', tags: ['@mom']);
+    add(DateTime(first.year, first.month, 3), 'Other', 22000, Scope.other, 'School fees', tags: ['@karim']);
+    add(DateTime(first.year, first.month, 19), 'Other', 4800, Scope.other, 'Shoes', tags: ['@karim', '@lea']);
     if (m == 1) {
       final trip = DateTime(first.year, first.month, 5);
-      add(trip, 'Travel', 38000, Scope.personal, 'Flight to Istanbul', tags: ['trip-istanbul']);
-      add(Day.shift(trip, 1), 'Travel', 54000, Scope.personal, 'Hotel Galata', tags: ['trip-istanbul']);
+      add(trip, 'Transportation', 38000, Scope.personal, 'Flight to Istanbul', tags: ['trip-istanbul']);
+      add(Day.shift(trip, 1), 'Food & Outings', 54000, Scope.personal, 'Hotel Galata', tags: ['trip-istanbul']);
       add(
         Day.shift(trip, 2),
-        'Dining',
+        'Food & Outings',
         6200,
         Scope.personal,
         'Karaköy Lokantası',
@@ -174,7 +176,7 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
       if (rnd.nextDouble() < 0.55) {
         add(
           day,
-          'Coffee',
+          'Food & Outings',
           350 + rnd.nextInt(300),
           Scope.personal,
           ['Kalei', 'Sip', 'Backburner'][rnd.nextInt(3)],
@@ -191,33 +193,35 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
         );
       }
       if (rnd.nextDouble() < 0.22) {
+        final cents = 1800 + rnd.nextInt(4200);
+        final home = rnd.nextDouble() < 0.3;
         add(
           day,
-          'Dining',
-          1800 + rnd.nextInt(4200),
-          rnd.nextDouble() < 0.3 ? Scope.household : Scope.personal,
+          home ? 'Groceries' : 'Food & Outings',
+          cents,
+          home ? Scope.household : Scope.personal,
           ['Tawlet', 'Em Sherif', 'Toters order', 'Bar Tartine'][rnd.nextInt(4)],
         );
       }
-      if (rnd.nextDouble() < 0.18) add(day, 'Transport', 600 + rnd.nextInt(1400), Scope.personal, 'Bolt ride');
-      if (d % 9 == 0) add(day, 'Fuel', 4000 + rnd.nextInt(2000), Scope.personal, 'Total station');
+      if (rnd.nextDouble() < 0.18) add(day, 'Transportation', 600 + rnd.nextInt(1400), Scope.personal, 'Bolt ride');
+      if (d % 9 == 0) add(day, 'Transportation', 4000 + rnd.nextInt(2000), Scope.personal, 'Total station');
       if (rnd.nextDouble() < 0.08) {
         add(
           day,
-          'Shopping',
+          'Clothes & Accessories',
           2500 + rnd.nextInt(12000),
           Scope.personal,
           ['Amazon', 'ABC Verdun', 'Zara'][rnd.nextInt(3)],
         );
       }
       if (rnd.nextDouble() < 0.05) {
-        add(day, 'Household supplies', 1500 + rnd.nextInt(3500), Scope.household, 'Cleaning supplies');
+        add(day, 'Groceries', 1500 + rnd.nextInt(3500), Scope.household, 'Cleaning supplies');
       }
       if (rnd.nextDouble() < 0.12) {
-        addLbp(day, 'Transport', 200000 + rnd.nextInt(6) * 50000, Scope.personal, 'Service taxi');
+        addLbp(day, 'Transportation', 200000 + rnd.nextInt(6) * 50000, Scope.personal, 'Service taxi');
       }
-      if (d == 15) addLbp(day, 'Household supplies', 1800000, Scope.household, 'Generator subscription');
-      if (rnd.nextDouble() < 0.04) add(day, 'Health', 2000 + rnd.nextInt(6000), Scope.personal, 'Pharmacy');
+      if (d == 15) addLbp(day, 'Electricity', 1800000, Scope.household, 'Generator subscription');
+      if (rnd.nextDouble() < 0.04) add(day, 'Personal Care', 2000 + rnd.nextInt(6000), Scope.personal, 'Pharmacy');
     }
   }
   await db
@@ -236,13 +240,24 @@ Future<void> _seedDemo(AppDatabase db, {DateTime? now}) async {
 
   await db.batch((b) {
     b.insertAllOnConflictUpdate(db.budgets, [
-      BudgetsCompanion.insert(id: Value(_demo('budget:dining')), categoryId: Value(cat('Dining')), limitCents: 30000),
+      BudgetsCompanion.insert(
+        id: Value(_demo('budget:dining')),
+        categoryId: Value(cat('Food & Outings')),
+        scope: const Value(Scope.personal),
+        limitCents: 45000,
+      ),
       BudgetsCompanion.insert(
         id: Value(_demo('budget:groceries')),
         categoryId: Value(cat('Groceries')),
+        scope: const Value(Scope.household),
         limitCents: 60000,
       ),
-      BudgetsCompanion.insert(id: Value(_demo('budget:coffee')), categoryId: Value(cat('Coffee')), limitCents: 6000),
+      BudgetsCompanion.insert(
+        id: Value(_demo('budget:coffee')),
+        categoryId: Value(cat('Dates')),
+        scope: const Value(Scope.personal),
+        limitCents: 10000,
+      ),
       BudgetsCompanion.insert(
         id: Value(_demo('budget:household')),
         scope: const Value(Scope.household),

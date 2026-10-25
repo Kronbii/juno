@@ -76,7 +76,7 @@ MockClient _scripted() => MockClient((req) async {
       'content': null,
       'tool_calls': logging
           ? [
-              call('c1', 'draft_entry', {'amount': 12, 'category': 'dining', 'note': 'Coffee'}),
+              call('c1', 'draft_entry', {'amount': 12, 'category': 'food', 'note': 'Coffee'}),
               call('c2', 'draft_entry', {'amount': 40, 'category': 'groceries', 'note': 'Spinneys'}),
             ]
           : [call('c1', 'safe_to_spend', {})],

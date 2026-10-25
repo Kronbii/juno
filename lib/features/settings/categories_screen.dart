@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/core/category_style.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/providers.dart';
-import 'package:juno/core/scope_style.dart';
 import 'package:juno/core/toast.dart';
 import 'package:juno/core/ui/ui.dart';
 import 'package:juno/features/add/entry_sheet.dart' show ScopeToggle;
@@ -24,11 +23,28 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     final c = context.jc;
     final all = ref.watch(allCategoriesProvider).value ?? const <Category>[];
     final list = all.where((k) => k.kind == _kind).toList();
+    final spending = _kind == CategoryKind.expense;
+    // Spending is grouped by scope, each a list of its own; income has none.
+    final groups = spending
+        ? [for (final s in Scope.values) (s, list.where((k) => k.scope == s).toList())]
+        : [(null, list)];
+
+    void reorder(Scope? scope, int from, int to) {
+      final ids = <String>[];
+      for (final (s, ks) in groups) {
+        final section = [for (final k in ks) k.id];
+        if (s == scope) section.insert(to > from ? to - 1 : to, section.removeAt(from));
+        ids.addAll(section);
+      }
+      ref.read(ledgerProvider).reorderCategories(ids);
+    }
 
     return JScreen(
       eyebrow: 'Settings · Categories',
       title: 'Name the *buckets*',
-      subtitle: 'Drag to reorder. Default scope decides where new entries land.',
+      subtitle: spending
+          ? 'Each belongs to one scope: what you file in it counts there. Drag to reorder.'
+          : 'Drag to reorder.',
       actions: [
         JIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => Navigator.of(context).maybePop()),
         JIconButton(
@@ -44,85 +60,108 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         onChanged: (k) => setState(() => _kind = k),
       ),
       slivers: [
-        SliverReorderableList(
-          itemCount: list.length,
-          onReorder: (from, to) {
-            final ids = [for (final k in list) k.id];
-            final moved = ids.removeAt(from);
-            ids.insert(to > from ? to - 1 : to, moved);
-            ref.read(ledgerProvider).reorderCategories(ids);
-          },
-          itemBuilder: (context, i) {
-            final k = list[i];
-            final color = seriesColor(c, k.colorIndex);
-            return ReorderableDelayedDragStartListener(
-              key: ValueKey(k.id),
-              index: i,
-              child: Material(
-                color: c.bg,
-                child: Column(
-                  children: [
-                    InkWell(
-                      onTap: () => editCategory(context, category: k),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: c.tint(color),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: color.withValues(alpha: 0.3)),
-                              ),
-                              child: Icon(categoryIcon(k.icon), size: 18, color: color),
-                            ),
-                            const SizedBox(width: JSpace.md),
-                            Expanded(
-                              child: Text(
-                                k.archived ? '${k.name} (archived)' : k.name,
-                                style: JType.rowTitle.copyWith(color: k.archived ? c.inkFaint : c.ink),
-                              ),
-                            ),
-                            if (k.kind == CategoryKind.expense)
-                              JPill(
-                                k.defaultScope.label,
-                                color: k.defaultScope.color(c),
-                              ),
-                            const SizedBox(width: JSpace.sm),
-                            ReorderableDragStartListener(
-                              index: i,
-                              child: Icon(Icons.drag_indicator_rounded, size: 18, color: c.inkFaint),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Divider(color: c.hairline),
-                  ],
+        for (final (scope, ks) in groups) ...[
+          if (scope != null)
+            SliverToBoxAdapter(
+              child: JSectionLabel(
+                scope.label,
+                top: scope == Scope.values.first ? JSpace.sm : JSpace.xl,
+                trailing: JIconButton(
+                  icon: Icons.add_rounded,
+                  tooltip: 'New ${scope.label.toLowerCase()} category',
+                  onPressed: () => editCategory(context, kind: _kind, scope: scope),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          if (scope != null && ks.isEmpty)
+            SliverToBoxAdapter(
+              child: Text('No categories yet.', style: JType.body.copyWith(color: c.inkFaint)),
+            ),
+          SliverReorderableList(
+            itemCount: ks.length,
+            onReorder: (from, to) => reorder(scope, from, to),
+            itemBuilder: (context, i) => _CategoryRow(key: ValueKey(ks[i].id), category: ks[i], index: i),
+          ),
+        ],
       ],
     );
   }
 }
 
-Future<void> editCategory(BuildContext context, {Category? category, CategoryKind kind = CategoryKind.expense}) =>
-    showJSheet<void>(
-      context,
-      title: category == null ? 'New *category*' : 'Edit *category*',
-      child: _CategoryForm(category: category, kind: category?.kind ?? kind),
+class _CategoryRow extends StatelessWidget {
+  const _CategoryRow({required this.category, required this.index, super.key});
+
+  final Category category;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.jc;
+    final k = category;
+    final color = seriesColor(c, k.colorIndex);
+    return ReorderableDelayedDragStartListener(
+      index: index,
+      child: Material(
+        color: c.bg,
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () => editCategory(context, category: k),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: c.tint(color),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
+                      ),
+                      child: Icon(categoryIcon(k.icon), size: 18, color: color),
+                    ),
+                    const SizedBox(width: JSpace.md),
+                    Expanded(
+                      child: Text(
+                        k.archived ? '${k.name} (archived)' : k.name,
+                        style: JType.rowTitle.copyWith(color: k.archived ? c.inkFaint : c.ink),
+                      ),
+                    ),
+                    const SizedBox(width: JSpace.sm),
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.drag_indicator_rounded, size: 18, color: c.inkFaint),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Divider(color: c.hairline),
+          ],
+        ),
+      ),
     );
+  }
+}
+
+Future<void> editCategory(
+  BuildContext context, {
+  Category? category,
+  CategoryKind kind = CategoryKind.expense,
+  Scope scope = Scope.personal,
+}) => showJSheet<void>(
+  context,
+  title: category == null ? 'New *category*' : 'Edit *category*',
+  child: _CategoryForm(category: category, kind: category?.kind ?? kind, scope: category?.scope ?? scope),
+);
 
 class _CategoryForm extends ConsumerStatefulWidget {
-  const _CategoryForm({required this.kind, this.category});
+  const _CategoryForm({required this.kind, required this.scope, this.category});
 
   final Category? category;
   final CategoryKind kind;
+  final Scope scope;
 
   @override
   ConsumerState<_CategoryForm> createState() => _CategoryFormState();
@@ -132,7 +171,7 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
   late final _name = TextEditingController(text: widget.category?.name ?? '');
   late String _icon = widget.category?.icon ?? 'dots';
   late int _color = widget.category?.colorIndex ?? 0;
-  late Scope _scope = widget.category?.defaultScope ?? Scope.personal;
+  late Scope _scope = widget.scope;
   late bool _archived = widget.category?.archived ?? false;
 
   @override
@@ -204,10 +243,19 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
         ),
         if (widget.kind == CategoryKind.expense)
           JField(
-            label: 'Default scope',
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ScopeToggle(value: _scope, onChanged: (s) => setState(() => _scope = s)),
+            label: 'Belongs to',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ScopeToggle(value: _scope, onChanged: (s) => setState(() => _scope = s)),
+                if (widget.category != null && _scope != widget.category!.scope) ...[
+                  const SizedBox(height: JSpace.sm),
+                  Text(
+                    'Everything filed in ${widget.category!.name} moves to ${_scope.label} with it.',
+                    style: JType.body.copyWith(color: c.warn),
+                  ),
+                ],
+              ],
             ),
           ),
         if (widget.category != null)
@@ -237,7 +285,7 @@ class _CategoryFormState extends ConsumerState<_CategoryForm> {
                             icon: Value(_icon),
                             colorIndex: Value(_color),
                             kind: Value(widget.kind),
-                            defaultScope: Value(_scope),
+                            scope: Value(_scope),
                             archived: Value(_archived),
                             sort: Value(widget.category?.sort ?? existing.length),
                           ),
@@ -325,12 +373,13 @@ class _DeleteCategorySheetState extends ConsumerState<DeleteCategorySheet> {
     final k = widget.category;
     final targets = [
       for (final t in ref.watch(allCategoriesProvider).value ?? const <Category>[])
-        if (t.id != k.id && t.kind == k.kind) t,
+        // Spending moves within its scope, so no total changes.
+        if (t.id != k.id && t.kind == k.kind && (k.kind == CategoryKind.income || t.scope == k.scope)) t,
     ]..sort((a, b) => a.archived == b.archived ? 0 : (a.archived ? 1 : -1));
     final n = _entries;
     if (targets.isEmpty) {
       return Text(
-        'This is your only ${k.kind == CategoryKind.income ? 'income' : 'spending'} category. '
+        'This is your only ${k.kind == CategoryKind.income ? 'income' : '${k.scope.label.toLowerCase()} spending'} category. '
         'Add another one first, so its history has somewhere to go.',
         style: JType.body.copyWith(color: c.inkMuted),
       );

@@ -65,7 +65,7 @@ void main() {
 
   setUp(() {
     sent = [];
-    respond = (_) => answer({'category': 'Dining', 'sure': true});
+    respond = (_) => answer({'category': 'Food & Outings', 'sure': true});
   });
 
   Future<AppDatabase> fresh() async {
@@ -76,15 +76,16 @@ void main() {
 
   Future<List<Category>> cats(AppDatabase db) => db.select(db.categories).get();
 
-  TransactionsCompanion entry(String note, String category) => TransactionsCompanion.insert(
-    type: TxType.expense,
-    scope: Scope.personal,
-    amountCents: 500,
-    accountId: seedId('acct:cash'),
-    categoryId: Value(seedId('cat:$category')),
-    occurredOn: Day.today(),
-    note: Value(note),
-  );
+  TransactionsCompanion entry(String note, String category, {Scope scope = Scope.personal}) =>
+      TransactionsCompanion.insert(
+        type: TxType.expense,
+        scope: scope,
+        amountCents: 500,
+        accountId: seedId('acct:cash'),
+        categoryId: Value(seedId('cat:$category')),
+        occurredOn: Day.today(),
+        note: Value(note),
+      );
 
   Future<CategoryGuess?> guess(AppDatabase db, String note, {AiAssist? with_, Scope scope = Scope.personal}) async =>
       guessCategory(
@@ -103,20 +104,23 @@ void main() {
       final db = await fresh();
       addTearDown(db.close);
       final l = Ledger(db);
-      await l.addTransaction(entry('Abu Elie', 'Groceries'));
+      await l.addTransaction(entry('Abu Elie', 'Food & Outings'));
       // A later correction wins.
-      await l.addTransaction(entry('abu elie', 'Shopping'));
+      await l.addTransaction(entry('abu elie', 'Clothes & Accessories'));
       final g = await guess(db, 'Abu Elie ', with_: await ai());
-      expect(g!.category.name, 'Shopping');
+      expect(g!.category.name, 'Clothes & Accessories');
       expect(g.source, GuessSource.history);
       expect(sent, isEmpty);
+      // The same note for the household never lands in a personal category.
+      final home = await guess(db, 'Abu Elie', scope: Scope.household);
+      expect(home?.category.scope, anyOf(isNull, Scope.household));
     });
 
     test('a plain keyword is matched on the device, without the AI', () async {
       final db = await fresh();
       addTearDown(db.close);
       final g = await guess(db, 'coffee', with_: await ai());
-      expect(g!.category.name, 'Coffee');
+      expect(g!.category.name, 'Food & Outings');
       expect(g.source, GuessSource.keywords);
       expect(sent, isEmpty);
     });
@@ -125,25 +129,27 @@ void main() {
       final db = await fresh();
       addTearDown(db.close);
       final l = Ledger(db);
-      await l.addTransaction(entry('tawlet lunch', 'Dining'));
-      await l.addTransaction(entry('generator bill', 'Utilities'));
-      final g = await guess(db, 'tawlet with friends', with_: await ai(), scope: Scope.household);
-      expect(g!.category.name, 'Dining');
+      await l.addTransaction(entry('tawlet lunch', 'Food & Outings'));
+      await l.addTransaction(entry('uber ride', 'Transportation'));
+      await l.addTransaction(entry('generator bill', 'Electricity', scope: Scope.household));
+      final g = await guess(db, 'tawlet with friends', with_: await ai());
+      expect(g!.category.name, 'Food & Outings');
       expect(g.source, GuessSource.ai);
       expect(sent, hasLength(1));
       final body = sent.single;
       final format = body['response_format'] as Map<String, dynamic>;
       expect(format['type'], 'json_schema');
       final allowed = allowedCategories(body);
-      expect(allowed, contains('Dining'));
+      expect(allowed, contains('Food & Outings'));
       expect(allowed, isNot(contains('Salary')), reason: 'expense categories only');
+      expect(allowed, isNot(contains('Rent')), reason: 'the scope’s own categories only');
       final user = message(body);
       expect(user, contains('"tawlet with friends"'));
-      expect(user, contains('for Household'));
-      expect(user, contains('Usual for Household: Groceries'));
+      expect(user, contains('for Personal'));
+      expect(user, isNot(contains('generator bill')), reason: 'another scope’s entries name categories it can’t pick');
       expect(
-        user.indexOf('"tawlet lunch" → Dining'),
-        lessThan(user.indexOf('"generator bill" → Utilities')),
+        user.indexOf('"tawlet lunch" → Food & Outings'),
+        lessThan(user.indexOf('"uber ride" → Transportation')),
         reason: 'past entries sharing a word come first',
       );
       expect(message(body, system: true), contains('Arabizi'));
@@ -157,9 +163,9 @@ void main() {
       expect(await guess(db, 'mystery thing', with_: assist), isNull);
       respond = (_) => answer('no idea');
       expect(await guess(db, 'mystery thing', with_: assist), isNull);
-      respond = (_) => answer({'category': 'dining ', 'sure': false});
+      respond = (_) => answer({'category': 'food & outings ', 'sure': false});
       final g = await guess(db, 'mystery thing', with_: assist);
-      expect(g!.category.name, 'Dining', reason: 'case and spaces forgiven, names kept exact');
+      expect(g!.category.name, 'Food & Outings', reason: 'case and spaces forgiven, names kept exact');
       expect(g.sure, isFalse);
     });
 
@@ -191,11 +197,11 @@ void main() {
       final assist = await ai();
       respond = (body) {
         final user = message(body);
-        return user.contains('note: "tawlet"') ? answer({'category': 'Dining', 'sure': true}) : answer('nothing');
+        return user.contains('note: "tawlet"') ? answer({'category': 'Other', 'sure': true}) : answer('nothing');
       };
       expect(await fileUncategorisedQuickEntries(db, ledger: l, ai: assist), 1);
       final filed = await (db.select(db.transactions)..where((t) => t.id.equals(a))).getSingle();
-      expect(filed.categoryId, seedId('cat:Dining'));
+      expect(filed.categoryId, seedId('cat:Other'));
       expect(filed.scope, Scope.other, reason: 'filing never changes who it was for');
       await fileUncategorisedQuickEntries(db, ledger: l, ai: assist);
       final calls = sent.length;
@@ -217,7 +223,7 @@ void main() {
       tester,
       demo: false,
       prefs: {'ai.key': 'sk-test'},
-      ai: (sp) => AiAssist(sp, client: MockClient((req) async => answer({'category': 'Gifts', 'sure': true}))),
+      ai: (sp) => AiAssist(sp, client: MockClient((req) async => answer({'category': 'Other', 'sure': true}))),
     );
     await h.go('/settings/back-tap');
     final field = find.byType(TextField).last;
@@ -226,11 +232,11 @@ void main() {
     await tester.tap(find.text('Run link'));
     await h.settle(8);
     final t = (await tester.runAsync(() => h.db.select(h.db.transactions).get()))!.single;
-    expect(t.categoryId, seedId('cat:Gifts'));
+    expect(t.categoryId, seedId('cat:Other'));
     expect(t.scope, Scope.other);
     expect(t.note, 'flowers for rania');
     expect(t.tagList, contains('quick'));
-    expect(find.textContaining('Gifts · Other'), findsOneWidget);
+    expect(find.textContaining('Other · Other'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await h.dispose();
   });
@@ -242,7 +248,7 @@ void main() {
       tester,
       demo: false,
       prefs: {'ai.key': 'sk-test'},
-      ai: (sp) => AiAssist(sp, client: MockClient((req) async => answer({'category': 'Gifts', 'sure': true}))),
+      ai: (sp) => AiAssist(sp, client: MockClient((req) async => answer({'category': 'Other', 'sure': true}))),
     );
     await h.go('/settings/back-tap');
     final field = find.byType(TextField).last;
@@ -252,7 +258,7 @@ void main() {
     await h.settle(8);
     final t = (await tester.runAsync(() => h.db.select(h.db.transactions).get()))!.single;
     expect(t.amountCents, 2500);
-    expect(t.categoryId, seedId('cat:Gifts'));
+    expect(t.categoryId, seedId('cat:Other'));
     expect(t.scope, Scope.other);
     expect(t.note.toLowerCase(), contains('flowers'));
     expect(tester.takeException(), isNull);

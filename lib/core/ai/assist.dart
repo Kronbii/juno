@@ -405,13 +405,12 @@ class AiAssist {
       'category for what the note describes, from the allowed list only. Notes can be English, Arabic, '
       'Lebanese Arabizi (e.g. "ahwe" coffee, "benzine" fuel, "ma2koul" food), shop, brand or restaurant names, '
       'or short abbreviations. How this user filed past entries matters most: when a past note matches, follow '
-      'it. The scope (personal, household, other) tells you who it was for and which categories are usual for '
-      'it, but the note decides. Reply with only JSON {"category": "<exact name from the list>", "sure": '
+      'it. The scope (personal, household, other) says who it was for; the allowed list is that scope’s '
+      'categories. Reply with only JSON {"category": "<exact name from the list>", "sure": '
       'true|false}; sure is false when the note is ambiguous or you are guessing.';
 
   /// Picks one category for a single entry from its [note]. [categories] are
-  /// the allowed names (one kind); [usual] the ones this [scope] normally
-  /// uses; [examples] past (note, category) pairs of this user, most
+  /// the allowed names (one kind, and for spending, [scope]'s); [examples] past (note, category) pairs of this user, most
   /// relevant first. Sends only those, the amount and the scope. Returns the
   /// exact allowed name, or null when off, capped, failed or off-list.
   Future<({String category, bool sure})?> pickCategory({
@@ -419,13 +418,10 @@ class AiAssist {
     required String amount,
     required String scope,
     required List<String> categories,
-    List<String> usual = const [],
     List<(String note, String category)> examples = const [],
   }) async {
     if (categories.isEmpty || note.trim().isEmpty) return null;
-    final user = StringBuffer()
-      ..writeln('Allowed categories: ${categories.join(', ')}')
-      ..writeln(usual.isEmpty ? 'No categories are set as usual for $scope.' : 'Usual for $scope: ${usual.join(', ')}');
+    final user = StringBuffer()..writeln('Allowed categories: ${categories.join(', ')}');
     if (examples.isNotEmpty) {
       user.writeln('This user filed past entries like this:');
       for (final (n, c) in examples) {

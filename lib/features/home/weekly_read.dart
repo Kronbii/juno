@@ -65,6 +65,7 @@ class WeekFacts {
 }
 
 WeekFacts weekFacts(Iterable<Transaction> txs, Map<String, Category> categories, DateTime now) {
+  final labels = categoryLabels(categories.values);
   final today = DateTime(now.year, now.month, now.day);
   final monday = Day.shift(today, -(today.weekday - 1));
   final daysIn = today.weekday;
@@ -93,7 +94,7 @@ WeekFacts weekFacts(Iterable<Transaction> txs, Map<String, Category> categories,
     daysIn: daysIn,
     spent: spent,
     lastWeek: last,
-    top: [for (final e in top.take(3)) (categories[e.key]?.name ?? WeekFacts.uncategorised, e.value)],
+    top: [for (final e in top.take(3)) (labels[e.key] ?? WeekFacts.uncategorised, e.value)],
     entries: entries,
   );
 }

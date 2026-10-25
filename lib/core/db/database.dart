@@ -1,6 +1,7 @@
 import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:juno/core/db/category_restructure.dart';
 import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/db/tables.dart';
 
@@ -35,13 +36,15 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await seedDefaults(this);
+      // Born scoped: nothing to restructure.
+      await setMeta(restructuredKey, '1');
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
@@ -65,6 +68,15 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('CREATE INDEX IF NOT EXISTS tx_account_day ON transactions (account_id, occurred_on)');
         await customStatement('CREATE INDEX IF NOT EXISTS tx_to_account ON transactions (to_account_id)');
         await customStatement('CREATE INDEX IF NOT EXISTS tx_split ON transactions (split_group)');
+      }
+      // Each category belongs to one scope now; same columns, new shape.
+      if (from < 7) {
+        try {
+          await restructureCategories(this);
+        } on Object {
+          // Rolled back whole; tried again at launch. Opening the app
+          // matters more.
+        }
       }
     },
     beforeOpen: (details) async {

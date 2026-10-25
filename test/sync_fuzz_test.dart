@@ -97,9 +97,9 @@ void main() {
           await devices[dev].customStatement('SELECT 1');
           await l.upsertCategory(
             CategoriesCompanion(
-              id: Value(seedId('cat:Coffee')),
-              name: Value('Coffee ${rnd.nextInt(1000)}'),
-              icon: const Value('coffee'),
+              id: Value(seedId('cat:Dates')),
+              name: Value('Dates ${rnd.nextInt(1000)}'),
+              icon: const Value('heart'),
               colorIndex: const Value(4),
               kind: const Value(CategoryKind.expense),
             ),

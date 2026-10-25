@@ -401,10 +401,13 @@ List<BudgetSuggestion> suggestBudgets({
 // ------------------------------------------------------------ widget presets
 
 class QuickPreset {
-  const QuickPreset(this.categoryName, this.amountCents);
+  const QuickPreset(this.categoryName, this.amountCents, {this.scope = Scope.personal});
 
   final String categoryName;
   final int amountCents;
+
+  /// The category's scope: two scopes can each have one of this name.
+  final Scope scope;
 
   /// "Coffee $4" — what the widget button shows.
   String get label => '$categoryName ${Money.whole(amountCents)}';
@@ -428,7 +431,8 @@ List<QuickPreset> quickPresets(List<Transaction> recent, Map<String, Category> c
         final sorted = [...e.value]..sort();
         final median = sorted[sorted.length ~/ 2];
         final whole = ((median + 50) ~/ 100).clamp(1, 1 << 30) * 100;
-        return QuickPreset(categories[e.key]!.name, whole);
+        final cat = categories[e.key]!;
+        return QuickPreset(cat.name, whole, scope: cat.scope);
       }(),
   ];
 }

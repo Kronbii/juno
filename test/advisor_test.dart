@@ -239,7 +239,7 @@ void main() {
       icon: 'dots',
       colorIndex: 0,
       kind: CategoryKind.expense,
-      defaultScope: Scope.personal,
+      scope: Scope.personal,
       sort: 0,
       archived: false,
     );

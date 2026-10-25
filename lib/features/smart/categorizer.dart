@@ -23,7 +23,7 @@ class CategoryGuess {
 /// Picks a category for an entry from its note, spending as little as
 /// possible: the same note filed before (free, and it follows your
 /// corrections), then the on-device keyword parser (free), and only then
-/// the AI, given your categories, the ones usual for [scope] and your own
+/// the AI, given [scope]'s categories and your own
 /// past entries that share words with the note. Null when nothing fits or
 /// the AI is off or unreachable; [timeout] bounds the wait.
 Future<CategoryGuess?> guessCategory(
@@ -40,9 +40,11 @@ Future<CategoryGuess?> guessCategory(
   final text = note.trim();
   if (text.isEmpty) return null;
   final kind = type == TxType.income ? CategoryKind.income : CategoryKind.expense;
+  // Spending is filed within its scope: a household entry never lands in
+  // a personal category, and two scopes' "Subscriptions" never collide.
   final pool = [
     for (final c in categories)
-      if (c.kind == kind && !c.archived && c.deletedAt == null) c,
+      if (c.kind == kind && !c.archived && c.deletedAt == null && (kind == CategoryKind.income || c.scope == scope)) c,
   ];
   if (pool.isEmpty) return null;
   final byId = {for (final c in pool) c.id: c};
@@ -64,10 +66,6 @@ Future<CategoryGuess?> guessCategory(
         amount: Fx.format(amountCents, currency),
         scope: scope.label,
         categories: byName.keys.toList(),
-        usual: [
-          for (final c in pool)
-            if (c.defaultScope == scope) c.name,
-        ],
         examples: examples,
       )
       .timeout(timeout, onTimeout: () => null);

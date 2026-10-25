@@ -119,7 +119,7 @@ Date,Description,Amount,Balance
 
     test('suggests categories from history, then keywords', () {
       final cats = [
-        _cat('Coffee', CategoryKind.expense),
+        _cat('Food & Outings', CategoryKind.expense),
         _cat('Subscriptions', CategoryKind.expense),
         _cat('Groceries', CategoryKind.expense),
         _cat('Salary', CategoryKind.income),
@@ -269,7 +269,7 @@ Category _cat(String name, CategoryKind kind) => Category(
   icon: 'dots',
   colorIndex: 0,
   kind: kind,
-  defaultScope: Scope.personal,
+  scope: Scope.personal,
   sort: 0,
   archived: false,
 );

@@ -66,7 +66,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     final previous = ref.watch(txQueryProvider(TxQuery(from: prevFrom, to: prevTo, scope: lens))).value;
     final budgets = ref.watch(budgetsProvider).value ?? const <Budget>[];
     final contribs = ref.watch(_contribProvider((from, to))).value ?? const <GoalContribution>[];
-    final names = {for (final k in ref.watch(categoryMapProvider).values) k.id: k.name};
+    final names = ref.watch(categoryLabelsProvider);
 
     final label = yearly ? '${m.year}' : Day.monthYear(m);
     final prevName = yearly ? '${m.year - 1}' : Day.month(DateTime(m.year, m.month - 1));

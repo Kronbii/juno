@@ -144,6 +144,25 @@ final categoryMapProvider = Provider<Map<String, Category>>((ref) {
   return {for (final c in list) c.id: c};
 });
 
+/// id → the name to show where several scopes appear together: a name two
+/// scopes share gets its scope ("Subscriptions · Household").
+final categoryLabelsProvider = Provider<Map<String, String>>(
+  (ref) => categoryLabels(ref.watch(categoryMapProvider).values),
+);
+
+Map<String, String> categoryLabels(Iterable<Category> categories) {
+  final scopesByName = <String, Set<Scope>>{};
+  for (final c in categories.where((c) => c.kind == CategoryKind.expense)) {
+    (scopesByName[c.name.trim().toLowerCase()] ??= {}).add(c.scope);
+  }
+  return {
+    for (final c in categories)
+      c.id: c.kind == CategoryKind.expense && scopesByName[c.name.trim().toLowerCase()]!.length > 1
+          ? '${c.name} · ${c.scope.label}'
+          : c.name,
+  };
+}
+
 final accountMapProvider = Provider<Map<String, Account>>((ref) {
   final list = ref.watch(allAccountsProvider).value ?? const [];
   return {for (final a in list) a.id: a};

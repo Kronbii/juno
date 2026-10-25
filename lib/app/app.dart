@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:juno/app/router.dart';
 import 'package:juno/core/db/backups.dart';
+import 'package:juno/core/db/category_restructure.dart';
 import 'package:juno/core/db/housekeeping.dart';
 import 'package:juno/core/deeplink/deep_link_handler.dart';
 import 'package:juno/core/ios/intent_inbox.dart';
@@ -106,6 +107,12 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
   /// bills deleted or changed elsewhere — then share them.
   Future<void> _foregroundOnce() async {
     final db = ref.read(databaseProvider);
+    try {
+      // Once; normally done by the upgrade itself.
+      await restructureCategories(db);
+    } on Object {
+      // Next launch.
+    }
     // Entries logged from Siri/Shortcuts/widgets while Juno was closed.
     final imported = await IntentInbox.drain(db);
     if (imported > 0) showToast('Added $imported entr${imported == 1 ? 'y' : 'ies'} logged from Shortcuts');

@@ -168,7 +168,7 @@ void main() {
       final before = await sql('SELECT COUNT(*) n FROM transactions');
       final dirty = await sql('SELECT COUNT(*) n FROM transactions WHERE dirty = 1');
       for (final d in AssistantTools.definitions) {
-        await tools.run((d['function'] as Map)['name'] as String, {'category': 'dining'});
+        await tools.run((d['function'] as Map)['name'] as String, {'category': 'food'});
       }
       expect(await sql('SELECT COUNT(*) n FROM transactions'), before);
       expect(await sql('SELECT COUNT(*) n FROM transactions WHERE dirty = 1'), dirty);
@@ -219,6 +219,9 @@ void main() {
       final system = (sent[0]['messages'] as List).first as Map;
       expect(system['content'], contains('2026-09-18'));
       expect(system['content'], contains('Groceries'));
+      // Categories by scope, so the model files Rent as household.
+      expect(system['content'], contains('Household categories: Rent, Electricity, Utilities, Groceries'));
+      expect(system['content'], contains('Other categories: Other.'));
     });
 
     test('a finished turn is folded: the next request carries no old lookups', () async {
@@ -307,7 +310,7 @@ void main() {
       expect(d.currency, 'USD');
       expect(d.accountId, seedId('acct:checking'), reason: 'first USD account');
       expect(d.categoryId, seedId('cat:Groceries'));
-      expect(d.scope, Scope.household, reason: "the category's default scope");
+      expect(d.scope, Scope.household, reason: "the category's scope");
       expect(d.day, '2026-09-18');
       expect(await sql('SELECT COUNT(*) n FROM transactions'), before);
       expect(tools.takeDrafts(), isEmpty, reason: 'taken once');
@@ -317,7 +320,7 @@ void main() {
       await tools.run('draft_entry', {
         'amount': 450000,
         'currency': 'lbp',
-        'category': 'transport',
+        'category': 'transportation',
         'scope': 'personal',
         'date': '2026-09-17',
       });
@@ -346,6 +349,17 @@ void main() {
       expect(tools.takeDrafts(), isEmpty);
     });
 
+    test("spending is in its category's scope; a scope picks between same-named categories", () async {
+      await tools.run('draft_entry', {'amount': 600, 'category': 'rent', 'scope': 'personal'});
+      final rent = tools.takeDrafts().single;
+      expect(rent.categoryId, seedId('cat:Rent'));
+      expect(rent.scope, Scope.household, reason: 'Rent is household, whatever the model says');
+      await tools.run('draft_entry', {'amount': 10, 'category': 'subscriptions', 'scope': 'household'});
+      expect(tools.takeDrafts().single.categoryId, seedId('cat:household:Subscriptions'));
+      await tools.run('draft_entry', {'amount': 10, 'category': 'subscriptions', 'scope': 'personal'});
+      expect(tools.takeDrafts().single.categoryId, seedId('cat:Subscriptions'));
+    });
+
     test('an income category is not used for an expense', () async {
       await tools.run('draft_entry', {'amount': 10, 'category': 'salary'});
       expect(tools.takeDrafts().single.categoryId, isNull);
@@ -372,8 +386,8 @@ void main() {
       final (a, _) = await chat([
         msg(
           calls: [
-            ('c1', 'draft_entry', {'amount': 12, 'category': 'dining', 'note': 'Assistant test cafe'}),
-            ('c2', 'draft_entry', {'amount': 900000, 'currency': 'LBP', 'category': 'transport'}),
+            ('c1', 'draft_entry', {'amount': 12, 'category': 'food & outings', 'note': 'Assistant test cafe'}),
+            ('c2', 'draft_entry', {'amount': 900000, 'currency': 'LBP', 'category': 'transportation'}),
           ],
         ),
         msg(text: 'Prepared two entries — tap Log on each.'),

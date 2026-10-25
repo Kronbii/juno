@@ -43,7 +43,8 @@ abstract final class HomeWidgetSync {
       HomeWidget.saveWidgetData<String>(
         'presets',
         jsonEncode([
-          for (final p in presets) {'category': p.categoryName, 'amount': p.amountCents / 100, 'label': p.label},
+          for (final p in presets)
+            {'category': p.categoryName, 'scope': p.scope.name, 'amount': p.amountCents / 100, 'label': p.label},
         ]),
       ),
       HomeWidget.saveWidgetData<String>('month', Day.month(month).toUpperCase()),

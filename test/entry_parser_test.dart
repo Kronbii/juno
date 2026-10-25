@@ -3,53 +3,40 @@ import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/seed.dart';
 import 'package:juno/features/smart/entry_parser.dart';
 
-Category cat(String name, {CategoryKind kind = CategoryKind.expense}) => Category(
-  id: seedId('cat:$name'),
-  createdAt: DateTime.utc(2026),
-  updatedAt: DateTime.utc(2026),
-  dirty: false,
-  name: name,
-  icon: 'dots',
-  colorIndex: 0,
-  kind: kind,
-  defaultScope: Scope.personal,
-  sort: 0,
-  archived: false,
-);
-
+/// Juno's starter categories, each in its scope.
 final cats = [
-  for (final n in [
-    'Groceries',
-    'Dining',
-    'Coffee',
-    'Transport',
-    'Fuel',
-    'Rent',
-    'Utilities',
-    'Subscriptions',
-    'Shopping',
-    'Household supplies',
-  ])
-    cat(n),
-  cat('Salary', kind: CategoryKind.income),
-  cat('Freelance', kind: CategoryKind.income),
+  for (final c in starterCategories)
+    Category(
+      id: c.id,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+      dirty: false,
+      name: c.name,
+      icon: c.icon,
+      colorIndex: c.color,
+      kind: c.kind,
+      scope: c.scope,
+      sort: 0,
+      archived: false,
+    ),
 ];
 
-String id(String name) => seedId('cat:$name');
+/// By starter key: "household:Subscriptions" is the household one.
+String id(String key) => seedId('cat:$key');
 
 // Thursday 1 Oct 2026.
 final now = DateTime(2026, 10, 1, 14);
 
-ParsedEntry p(String s, {Map<String, String> memory = const {}}) =>
-    parseEntry(s, categories: cats, memory: memory, now: now);
+ParsedEntry p(String s, {Map<String, String> memory = const {}, Scope? prefer}) =>
+    parseEntry(s, categories: cats, memory: memory, now: now, prefer: prefer);
 
 void main() {
   test('amount, category and note', () {
-    final e = p('12 coffee kalei');
+    final e = p('12 groceries spinneys');
     expect(e.amountCents, 1200);
     expect(e.currency, isNull);
-    expect(e.categoryId, id('Coffee'));
-    expect(e.note, 'Kalei');
+    expect(e.categoryId, id('Groceries'));
+    expect(e.note, 'Spinneys');
     expect(e.day, isNull);
   });
 
@@ -58,17 +45,18 @@ void main() {
     expect(e.amountCents, 4000000);
     expect(e.currency, 'LBP');
     expect(e.currencyGuessed, isTrue);
-    expect(e.categoryId, id('Transport'));
+    expect(e.categoryId, id('Transportation'));
     expect(e.day, '2026-09-30');
   });
 
   test('explicit currency, scope word', () {
-    final e = p('LBP 150000 generator household');
+    final e = p('LBP 150000 cash household');
     expect(e.amountCents, 15000000);
     expect(e.currency, 'LBP');
     expect(e.currencyGuessed, isFalse);
     expect(e.scope, Scope.household);
-    expect(e.note, 'Generator');
+    expect(e.categoryId, isNull);
+    expect(e.note, 'Cash');
   });
 
   test('dollar sign and filler words', () {
@@ -105,7 +93,14 @@ void main() {
 
   test('keyword hints when nothing else matches', () {
     expect(p('15.99 netflix').categoryId, id('Subscriptions'));
-    expect(p('30 uber eats').categoryId, id('Dining'));
+    expect(p('30 uber eats').categoryId, id('Food & Outings'));
+    expect(p('LBP 150000 generator').categoryId, id('Electricity'));
+  });
+
+  test('a typo keeps its first letter: "grocries" is Groceries, "eats" is not Dates', () {
+    expect(p('18 grocries').categoryId, id('Groceries'));
+    expect(p('18 tranportation').categoryId, id('Transportation'));
+    expect(p('12 eats').categoryId, isNull);
   });
 
   test('short words never grab a category ("me" is not Home/Rent)', () {
@@ -121,9 +116,36 @@ void main() {
   });
 
   test('no amount still parses the rest', () {
-    final e = p('coffee yesterday');
+    final e = p('dates yesterday');
     expect(e.amountCents, isNull);
-    expect(e.categoryId, id('Coffee'));
+    expect(e.categoryId, id('Dates'));
     expect(e.day, '2026-09-30');
+  });
+
+  test('spending takes its category\'s scope: "rent" is household', () {
+    final e = p('600 rent');
+    expect(e.categoryId, id('Rent'));
+    expect(e.scope, Scope.household);
+    // Even when the text says otherwise: the category decides.
+    expect(p('600 rent personal').scope, Scope.household);
+    expect(p('20 dates').scope, Scope.personal);
+    expect(p('5 other').scope, Scope.other);
+  });
+
+  test('two scopes\' "Subscriptions": the scope said, else the one preferred, picks', () {
+    expect(p('10 subscriptions household').categoryId, id('household:Subscriptions'));
+    expect(p('10 subscriptions household').scope, Scope.household);
+    expect(p('10 subscriptions personal').categoryId, id('Subscriptions'));
+    expect(p('10 subscriptions', prefer: Scope.household).categoryId, id('household:Subscriptions'));
+    expect(p('10 subscriptions', prefer: Scope.personal).categoryId, id('Subscriptions'));
+    expect(p('15.99 netflix household').categoryId, id('household:Subscriptions'));
+    // Your history names the exact one.
+    expect(p('9 shahid', memory: {'shahid': id('household:Subscriptions')}).scope, Scope.household);
+  });
+
+  test('income has no scope to follow', () {
+    final e = p('salary 5200 household');
+    expect(e.type, TxType.income);
+    expect(e.scope, Scope.household);
   });
 }

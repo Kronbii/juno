@@ -10,6 +10,9 @@ struct Preset: Decodable, Hashable {
     let category: String
     let amount: Double
     let label: String
+    // Two scopes can each have a category of this name; absent from older
+    // app versions' presets.
+    let scope: String?
 }
 
 struct JunoEntry: TimelineEntry {
@@ -27,8 +30,8 @@ struct JunoEntry: TimelineEntry {
     static let placeholder = JunoEntry(
         date: .now, month: "OCTOBER", spent: "$2,418", personal: "$1,120", household: "$1,298",
         pace: "$81/day", safe: "$64", budgetRatio: 0.62, budgetText: "62% of a budget used",
-        presets: [Preset(category: "Coffee", amount: 4, label: "Coffee $4"),
-                  Preset(category: "Groceries", amount: 40, label: "Groceries $40")])
+        presets: [Preset(category: "Food & Outings", amount: 4, label: "Food & Outings $4", scope: "personal"),
+                  Preset(category: "Groceries", amount: 40, label: "Groceries $40", scope: "household")])
 }
 
 struct Provider: TimelineProvider {
@@ -158,7 +161,7 @@ struct SmallView: View {
 struct PresetButton: View {
     let preset: Preset
     var body: some View {
-        Button(intent: LogExpenseIntent(amount: preset.amount, category: preset.category)) {
+        Button(intent: LogExpenseIntent(amount: preset.amount, category: preset.category, scope: preset.scope)) {
             Text(preset.label)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1).minimumScaleFactor(0.7)

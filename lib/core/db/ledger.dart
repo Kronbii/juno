@@ -337,9 +337,31 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     return out;
   }
 
+  /// An expense always has its category's scope. A category chosen with the
+  /// write decides the scope; a scope changed on its own leaves a category
+  /// of another scope behind (the entry becomes uncategorised). [cur] is the
+  /// row being edited.
+  static Future<TransactionsCompanion> fileScope(
+    AppDatabase db,
+    TransactionsCompanion tx, {
+    Transaction? cur,
+  }) async {
+    final type = tx.type.present ? tx.type.value : cur?.type;
+    final categoryId = tx.categoryId.present ? tx.categoryId.value : cur?.categoryId;
+    if (type != TxType.expense || categoryId == null) return tx;
+    final cat = await (db.select(db.categories)..where((c) => c.id.equals(categoryId))).getSingleOrNull();
+    if (cat == null || cat.kind != CategoryKind.expense) return tx;
+    final scope = tx.scope.present ? tx.scope.value : cur?.scope;
+    if (scope == cat.scope) return tx;
+    final picked = tx.categoryId.present && (cur == null || cur.categoryId != categoryId);
+    return picked || !tx.scope.present
+        ? tx.copyWith(scope: Value(cat.scope))
+        : tx.copyWith(categoryId: const Value(null));
+  }
+
   Future<String> addTransaction(TransactionsCompanion tx) async {
     final id = tx.id.present ? tx.id.value : newId();
-    await db.into(db.transactions).insert((await price(db, tx)).copyWith(id: Value(id)));
+    await db.into(db.transactions).insert((await price(db, await fileScope(db, tx))).copyWith(id: Value(id)));
     _wrote();
     return id;
   }
@@ -374,13 +396,14 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     );
   }
 
-  Future<void> updateTransaction(String id, TransactionsCompanion patch) async {
-    var p = patch;
+  Future<void> updateTransaction(String id, TransactionsCompanion edit) async {
     // Re-price only when the money or the accounts actually changed — the
     // entry sheet sends every field back, and re-pricing an untouched LBP
     // entry at today's rate would silently rewrite past USD totals.
     final cur = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingle();
-    await _remember(cur, patch.deletedAt.present && patch.deletedAt.value != null ? 'delete' : 'edit');
+    await _remember(cur, edit.deletedAt.present && edit.deletedAt.value != null ? 'delete' : 'edit');
+    final patch = await fileScope(db, edit, cur: cur);
+    TransactionsCompanion p;
     bool changed<T>(Value<T> v, T now) => v.present && v.value != now;
     if (changed(patch.amountCents, cur.amountCents) ||
         changed(patch.accountId, cur.accountId) ||
@@ -433,13 +456,17 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
         final last = i == parts.length - 1;
         final partBase = base == null ? null : (last ? baseLeft : (base * cents / t.amountCents).round());
         if (partBase != null) baseLeft -= partBase;
-        final fields = TransactionsCompanion(
-          categoryId: Value(cat),
-          scope: Value(scope),
-          amountCents: Value(cents),
-          currency: Value(t.currency),
-          baseCents: Value(partBase),
-          splitGroup: Value(group),
+        final fields = await fileScope(
+          db,
+          TransactionsCompanion(
+            type: Value(t.type),
+            categoryId: Value(cat),
+            scope: Value(scope),
+            amountCents: Value(cents),
+            currency: Value(t.currency),
+            baseCents: Value(partBase),
+            splitGroup: Value(group),
+          ),
         );
         if (i == 0) {
           await _remember(t, 'edit');
@@ -521,13 +548,57 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     _wrote();
   }
 
+  /// Saves a category. Moving a spending category to another scope moves
+  /// everything filed in it there too: its entries, bills and budget.
   Future<String> upsertCategory(CategoriesCompanion c) async {
     final id = c.id.present ? c.id.value : newId();
-    await db
-        .into(db.categories)
-        .insertOnConflictUpdate(
-          c.copyWith(id: Value(id), updatedAt: Value(await _stamp('categories', id)), dirty: const Value(true)),
+    await db.transaction(() async {
+      final before = await (db.select(db.categories)..where((x) => x.id.equals(id))).getSingleOrNull();
+      await db
+          .into(db.categories)
+          .insertOnConflictUpdate(
+            c.copyWith(id: Value(id), updatedAt: Value(await _stamp('categories', id)), dirty: const Value(true)),
+          );
+      if (before == null || before.kind != CategoryKind.expense || !c.scope.present || c.scope.value == before.scope) {
+        return;
+      }
+      final scope = c.scope.value;
+      for (final t in await (db.select(
+        db.transactions,
+      )..where((t) => t.categoryId.equals(id) & t.scope.equalsValue(scope).not())).get()) {
+        await _remember(t, 'edit');
+        await (db.update(db.transactions)..where((x) => x.id.equals(t.id))).write(
+          TransactionsCompanion(
+            scope: Value(scope),
+            updatedAt: Value(await _stamp('transactions', t.id)),
+            dirty: const Value(true),
+          ),
         );
+      }
+      for (final r in await (db.select(
+        db.recurringRules,
+      )..where((r) => r.categoryId.equals(id) & r.scope.equalsValue(scope).not())).get()) {
+        await (db.update(db.recurringRules)..where((x) => x.id.equals(r.id))).write(
+          RecurringRulesCompanion(
+            scope: Value(scope),
+            updatedAt: Value(await _stamp('recurring_rules', r.id)),
+            dirty: const Value(true),
+          ),
+        );
+      }
+      for (final b in await (db.select(
+        db.budgets,
+      )..where((b) => b.categoryId.equals(id) & b.deletedAt.isNull())).get()) {
+        if (b.scope == scope) continue;
+        await (db.update(db.budgets)..where((x) => x.id.equals(b.id))).write(
+          BudgetsCompanion(
+            scope: Value(scope),
+            updatedAt: Value(await _stamp('budgets', b.id)),
+            dirty: const Value(true),
+          ),
+        );
+      }
+    });
     _wrote();
     return id;
   }
@@ -557,6 +628,10 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
   /// it hears of the deletion are moved too (see [remapMergedCategories]).
   Future<void> deleteCategory(String id, {required String intoId}) async {
     if (id == intoId) throw ArgumentError('A category cannot be merged into itself');
+    final pair = await (db.select(db.categories)..where((c) => c.id.isIn([id, intoId]))).get();
+    if (pair.length == 2 && pair[0].kind == CategoryKind.expense && pair[0].scope != pair[1].scope) {
+      throw ArgumentError('Spending can only move to a category of the same scope');
+    }
     await db.transaction(() async {
       await _moveCategoryRows(id, intoId);
       final budgets = await (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).get();
@@ -660,8 +735,14 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
 
   Stream<List<Budget>> watchBudgets() => (db.select(db.budgets)..where((b) => b.deletedAt.isNull())).watch();
 
-  Future<String> upsertBudget(BudgetsCompanion b) async {
-    final id = b.id.present ? b.id.value : newId();
+  Future<String> upsertBudget(BudgetsCompanion budget) async {
+    final id = budget.id.present ? budget.id.value : newId();
+    var b = budget;
+    // A category budget is for that category's scope.
+    if (b.categoryId.present && b.categoryId.value != null) {
+      final cat = await (db.select(db.categories)..where((c) => c.id.equals(b.categoryId.value!))).getSingleOrNull();
+      if (cat != null && cat.kind == CategoryKind.expense) b = b.copyWith(scope: Value(cat.scope));
+    }
     await db
         .into(db.budgets)
         .insertOnConflictUpdate(
@@ -753,8 +834,14 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
             ..orderBy([(r) => OrderingTerm(expression: r.nextDue)]))
           .watch();
 
-  Future<String> upsertRecurring(RecurringRulesCompanion r) async {
-    final id = r.id.present ? r.id.value : newId();
+  Future<String> upsertRecurring(RecurringRulesCompanion rule) async {
+    final id = rule.id.present ? rule.id.value : newId();
+    var r = rule;
+    // A bill posts expenses: like them, it has its category's scope.
+    if (r.type.present && r.type.value == TxType.expense && r.categoryId.present && r.categoryId.value != null) {
+      final cat = await (db.select(db.categories)..where((c) => c.id.equals(r.categoryId.value!))).getSingleOrNull();
+      if (cat != null && cat.kind == CategoryKind.expense) r = r.copyWith(scope: Value(cat.scope));
+    }
     await db
         .into(db.recurringRules)
         .insertOnConflictUpdate(
@@ -914,7 +1001,7 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
           );
       final priced = [
         for (final r in rows)
-          await price(db, r.copyWith(importBatchId: Value(batchId))).then(
+          await price(db, await fileScope(db, r.copyWith(importBatchId: Value(batchId)))).then(
             (p) => perUsd == null || perUsd <= 0 || !p.currency.present || p.currency.value == baseCurrency
                 ? p
                 : p.copyWith(baseCents: Value((p.amountCents.value / perUsd).round())),

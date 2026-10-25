@@ -94,7 +94,7 @@ Future<Life> live(AppDatabase db, DateTime until) async {
     scope: Scope.household,
     cat: 'Rent',
   );
-  life.gym = await ruleOf('Gym', TxType.expense, 1500, '2026-01-05', Frequency.weekly, cat: 'Fitness');
+  life.gym = await ruleOf('Gym', TxType.expense, 1500, '2026-01-05', Frequency.weekly, cat: 'Personal Care');
   life.generator = await ruleOf(
     'Generator',
     TxType.expense,
@@ -132,7 +132,7 @@ Future<Life> live(AppDatabase db, DateTime until) async {
       );
     }
     if (day == '2026-07-01') {
-      await (db.update(db.categories)..where((c) => c.id.equals(seedId('cat:Fitness')))).write(
+      await (db.update(db.categories)..where((c) => c.id.equals(seedId('cat:Personal Care')))).write(
         const CategoriesCompanion(archived: Value(true)),
       );
     }
@@ -151,11 +151,11 @@ Future<Life> live(AppDatabase db, DateTime until) async {
             tags: Value(tags),
           ),
         );
-    if (rnd.nextDouble() < 0.6) await spend(350 + rnd.nextInt(300), 'Coffee');
+    if (rnd.nextDouble() < 0.6) await spend(350 + rnd.nextInt(300), 'Food & Outings');
     if (d.day % 4 == 0) await spend(4000 + rnd.nextInt(6000), 'Groceries', account: chk, scope: Scope.household);
-    if (rnd.nextDouble() < 0.2) await spend((rnd.nextInt(6) + 2) * 5000000, 'Transport', account: life.lbp);
-    if (d.day == 9) await spend(22000, 'Education', account: chk, scope: Scope.household, tags: ',@karim,');
-    if (day == '2026-03-18') await spend(189900, 'Shopping', account: life.card);
+    if (rnd.nextDouble() < 0.2) await spend((rnd.nextInt(6) + 2) * 5000000, 'Transportation', account: life.lbp);
+    if (d.day == 9) await spend(22000, 'Groceries', account: chk, scope: Scope.household, tags: ',@karim,');
+    if (day == '2026-03-18') await spend(189900, 'Learning & Tech', account: life.card);
     // Dollars changed into pounds at the start of each month.
     if (d.day == 3) {
       await ledger.addTransaction(

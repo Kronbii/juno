@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -104,6 +105,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       memory: await ledger.merchantCategoryMemory(),
       categories: ref.read(categoriesProvider).value ?? const [],
       accountId: _accountId ?? ref.read(accountsProvider).value?.firstOrNull?.id ?? '',
+      scope: _scope,
     );
     if (mounted) setState(() => _rows = rows);
   }
@@ -164,10 +166,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
         for (final r in chosen)
           TransactionsCompanion.insert(
             type: r.type,
-            // A category with a household default pulls its rows into the
-            // household scope; everything else takes the chosen default.
-            scope: switch (cats[r.categoryId]?.defaultScope) {
-              final Scope s when s != Scope.personal => s,
+            // Spending takes its category's scope; the rest, the one chosen.
+            scope: switch (cats[r.categoryId]) {
+              final Category c when c.kind == CategoryKind.expense => c.scope,
               _ => _scope,
             },
             amountCents: r.cents!.abs(),
@@ -308,10 +309,16 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                           ),
                         ),
                       JField(
-                        label: 'Default scope',
+                        label: 'Scope',
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: ScopeToggle(value: _scope, onChanged: (s) => setState(() => _scope = s)),
+                          child: ScopeToggle(
+                            value: _scope,
+                            onChanged: (s) {
+                              setState(() => _scope = s);
+                              unawaited(_rebuild());
+                            },
+                          ),
                         ),
                       ),
                     ],

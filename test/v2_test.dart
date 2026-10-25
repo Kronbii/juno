@@ -132,7 +132,7 @@ void main() {
       icon: 'dots',
       colorIndex: 0,
       kind: CategoryKind.expense,
-      defaultScope: Scope.personal,
+      scope: Scope.personal,
       sort: 0,
       archived: false,
     );
@@ -141,9 +141,9 @@ void main() {
       mapping: m.copyWith(mode: AmountMode.signedPositiveOut),
       existingHashes: {},
       memory: {},
-      categories: [cat('Groceries'), cat('Transport')],
+      categories: [cat('Groceries'), cat('Transportation')],
     );
-    expect(rows.map((r) => r.categoryId), [seedId('cat:Groceries'), seedId('cat:Transport')]);
+    expect(rows.map((r) => r.categoryId), [seedId('cat:Groceries'), seedId('cat:Transportation')]);
     expect(rows.first.day, '2026-10-01');
     expect(rows.first.cents, -5420);
   });

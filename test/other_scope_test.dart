@@ -15,7 +15,14 @@ void main() {
     scope: scope,
     amountCents: cents,
     accountId: seedId('acct:cash'),
-    categoryId: Value(seedId('cat:Gifts')),
+    // Each scope's own category: spending is in its category's scope.
+    categoryId: Value(
+      seedId(switch (scope) {
+        Scope.personal => 'cat:Food & Outings',
+        Scope.household => 'cat:Groceries',
+        Scope.other => 'cat:Other',
+      }),
+    ),
     occurredOn: Day.today(),
   );
 

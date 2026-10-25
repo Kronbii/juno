@@ -108,8 +108,8 @@ void main() {
     });
 
     test('category deleted after drafting: logged without it', () async {
-      final d = await draft({'amount': 5, 'category': 'coffee'});
-      expect(d.categoryId, seedId('cat:Coffee'));
+      final d = await draft({'amount': 5, 'category': 'dates'});
+      expect(d.categoryId, seedId('cat:Dates'));
       await (db.update(db.categories)..where((c) => c.id.equals(d.categoryId!))).write(
         CategoriesCompanion(deletedAt: Value(DateTime.now().toUtc())),
       );

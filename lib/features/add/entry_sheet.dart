@@ -96,9 +96,6 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
   /// A new entry's id is fixed up front so receipts can point at it.
   late final String _id = widget.edit?.id ?? newId();
 
-  /// Once the user picks a scope themselves, choosing a category stops
-  /// overriding it with the category's default.
-  bool _scopeTouched = false;
   bool _showAllCategories = false;
   List<String> _recent = const [];
   final _focus = FocusNode();
@@ -112,11 +109,13 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     final p = widget.prefill;
     _type = e?.type ?? p?.type ?? TxType.expense;
     _scope = e?.scope ?? p?.scope ?? ref.read(scopeFilterProvider) ?? Scope.personal;
-    _scopeTouched = e != null || p?.scope != null;
     final cents = e?.amountCents ?? p?.amountCents;
     _amount = cents == null ? '' : _centsToBuffer(cents);
     _day = e?.occurredOn ?? p?.day ?? Day.today();
     _categoryId = e?.categoryId ?? p?.categoryId;
+    // Spending is in its category's scope.
+    final cat = ref.read(categoryMapProvider)[_categoryId];
+    if (_type == TxType.expense && cat?.kind == CategoryKind.expense) _scope = cat!.scope;
     _accountId = e?.accountId ?? p?.accountId;
     _toAccountId = e?.toAccountId;
     _note = TextEditingController(text: e?.note ?? p?.note ?? '');
@@ -150,16 +149,27 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
     }
     final cat = cats[hit];
     if (cat == null || cat.kind != wantKind || cat.id == _categoryId) return;
+    // A suggestion never moves the entry to another scope behind your back.
+    if (cat.kind == CategoryKind.expense && cat.scope != _scope) return;
     setState(() {
       _categoryId = cat.id;
       _categoryAuto = true;
-      if (!_scopeTouched) _scope = cat.defaultScope;
     });
   }
 
   // ---- quick text ----------------------------------------------------------
   final _quick = TextEditingController();
   Map<String, String> _memory = const {};
+
+  /// Switching scope drops a spending category that belongs to another one.
+  void _setScope(Scope s) {
+    _scope = s;
+    final cat = ref.read(categoryMapProvider)[_categoryId];
+    if (cat?.kind == CategoryKind.expense && cat!.scope != s) {
+      _categoryId = null;
+      _categoryAuto = false;
+    }
+  }
 
   /// Applies what the quick line understood. Fields it didn't mention keep
   /// whatever the user already set.
@@ -170,19 +180,14 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
       categories: ref.read(categoriesProvider).value ?? const [],
       memory: _memory,
       hasLbpAccount: accounts.any((a) => a.currency == 'LBP'),
+      prefer: _scope,
     );
     setState(() {
       if (e.type != null) _type = e.type!;
       if (e.amountCents != null) _amount = _centsToBuffer(e.amountCents!);
-      if (e.categoryId != null) {
-        _categoryId = e.categoryId;
-        final cat = ref.read(categoryMapProvider)[e.categoryId];
-        if (cat != null && !_scopeTouched && e.scope == null) _scope = cat.defaultScope;
-      }
-      if (e.scope != null) {
-        _scope = e.scope!;
-        _scopeTouched = true;
-      }
+      // The parser gives a category's own scope with it ("rent" → household).
+      if (e.scope != null) _setScope(e.scope!);
+      if (e.categoryId != null) _categoryId = e.categoryId;
       if (e.day != null) _day = e.day!;
       if (e.note.isNotEmpty) _note.text = e.note;
       // A currency in the text picks an account holding it.
@@ -551,10 +556,7 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         Center(
                           child: ScopeToggle(
                             value: _scope,
-                            onChanged: (s) => setState(() {
-                              _scope = s;
-                              _scopeTouched = true;
-                            }),
+                            onChanged: (s) => setState(() => _setScope(s)),
                           ),
                         ),
                       const SizedBox(height: JSpace.xl),
@@ -570,7 +572,9 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                         _CategoryGrid(
                           categories: categories
                               .where(
-                                (k) => k.kind == (_type == TxType.income ? CategoryKind.income : CategoryKind.expense),
+                                (k) => _type == TxType.income
+                                    ? k.kind == CategoryKind.income
+                                    : k.kind == CategoryKind.expense && k.scope == _scope,
                               )
                               .toList(),
                           recent: _recent,
@@ -580,7 +584,6 @@ class _EntrySheetState extends ConsumerState<EntrySheet> {
                           onSelected: (k) => setState(() {
                             _categoryId = k.id;
                             _categoryAuto = false;
-                            if (!_scopeTouched) _scope = k.defaultScope;
                           }),
                         ),
                       const SizedBox(height: JSpace.lg),
