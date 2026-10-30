@@ -20,6 +20,7 @@ import 'package:juno/core/db/demo.dart';
 import 'package:juno/core/db/ledger.dart';
 import 'package:juno/features/assistant/assistant.dart';
 import 'package:juno/features/assistant/assistant_tools.dart';
+import 'package:juno/features/smart/categorizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The relay with a session from a password sign-in.
@@ -36,6 +37,33 @@ class _EnvCloud implements AiCloud {
   @override
   Future<(Uri, Map<String, String>)?> endpoint() async =>
       (Uri.parse('$url/functions/v1/ai'), {'Authorization': 'Bearer $token', 'apikey': anon});
+}
+
+/// Passes requests through and keeps each reply's token usage.
+class _Recording extends http.BaseClient {
+  _Recording(this.usage);
+
+  final List<Map<String, dynamic>> usage;
+  final _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final res = await _inner.send(request);
+    final bytes = await res.stream.toBytes();
+    try {
+      final u = (jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>)['usage'];
+      if (u is Map<String, dynamic>) usage.add(u);
+    } on Object {
+      // Not JSON: nothing to record.
+    }
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      res.statusCode,
+      headers: res.headers,
+      request: request,
+      reasonPhrase: res.reasonPhrase,
+    );
+  }
 }
 
 void main() {
@@ -138,6 +166,48 @@ void main() {
     expect(out['NETFLIX.COM'], 'Subscriptions');
     expect(out['PAYROLL ACME SAL'], 'Salary');
     expect(out['PHARMACIE MAZLOUM'], 'Health');
+  });
+
+  test(r'Back Tap notes keywords can’t place are filed like a person would, at about $0.0003 each', () async {
+    final db = AppDatabase.memory(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.customSelect('SELECT 1').get();
+    final usage = <Map<String, dynamic>>[];
+    final filer = AiAssist(await SharedPreferences.getInstance(), client: _Recording(usage), clock: () => now);
+    final categories = await db.select(db.categories).get();
+    // Each note with the categories a person could fairly pick.
+    const cases = {
+      'benzine total': ({'Fuel'}, Scope.personal),
+      'spinneys': ({'Groceries'}, Scope.household),
+      'netflix': ({'Subscriptions', 'Entertainment'}, Scope.personal),
+      'ahwe w ka3ke': ({'Coffee', 'Dining'}, Scope.personal),
+      'pharmacie mazloum': ({'Health'}, Scope.personal),
+      'ishtirak moteur': ({'Utilities'}, Scope.household),
+      'cinemacity': ({'Entertainment'}, Scope.personal),
+      'abonnement gym': ({'Fitness', 'Subscriptions'}, Scope.personal),
+    };
+    final got = <String, String?>{};
+    for (final MapEntry(key: note, value: (_, scope)) in cases.entries) {
+      final g = await guessCategory(
+        db,
+        note: note,
+        scope: scope,
+        type: TxType.expense,
+        amountCents: 1200,
+        currency: 'USD',
+        categories: categories,
+        ai: filer,
+      );
+      got[note] = g?.category.name;
+    }
+    final cost = filer.spentMicros / 1e6;
+    // ignore: avoid_print, the output is the point of a live run
+    print('filed: $got\nusage: $usage\nspent \$${cost.toStringAsFixed(5)} for ${usage.length} calls');
+    expect(usage, hasLength(cases.length), reason: 'one AI call per note: nothing here is history');
+    for (final MapEntry(key: note, value: (ok, _)) in cases.entries) {
+      expect(ok, contains(got[note]), reason: note);
+    }
+    expect(cost / cases.length, lessThan(0.001), reason: r'about $0.0003 a note on gpt-5-mini');
   });
 
   test('relay: signed in, no key on the device, answers and reports spend', () async {

@@ -254,6 +254,11 @@ final attachmentCountsProvider = StreamProvider<Map<String, int>>(
   (ref) => ref.watch(ledgerProvider).watchAttachmentCounts(),
 );
 
+/// Entries the AI filed while unsure: entry id → the category it picked.
+final unsureFilingsProvider = StreamProvider<Map<String, String>>(
+  (ref) => ref.watch(ledgerProvider).watchUnsureFilings(),
+);
+
 final attachmentsProvider = StreamProvider.family<List<Attachment>, String>(
   (ref, txId) => ref.watch(ledgerProvider).watchAttachments(txId),
 );

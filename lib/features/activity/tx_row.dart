@@ -28,17 +28,20 @@ class TxRow extends ConsumerWidget {
     final ledger = ref.read(ledgerProvider);
 
     final isTransfer = tx.type == TxType.transfer;
+    // Filed by an AI that was guessing: a "?" until you edit the entry.
+    final unsure = cat != null && ref.watch(unsureFilingsProvider).value?[tx.id] == cat.id;
+    final catName = cat == null ? 'Uncategorised' : '${cat.name}${unsure ? '?' : ''}';
     final title = tx.note.isNotEmpty
         ? tx.note
         : tx.merchant.isNotEmpty
         ? tx.merchant
         : isTransfer
         ? 'Transfer'
-        : cat?.name ?? 'Uncategorised';
+        : catName;
     final subtitle = [
       if (showDate) Day.relative(tx.occurredOn),
       if (isTransfer) '${account?.name ?? '?'} → ${accounts[tx.toAccountId]?.name ?? '?'}',
-      if (!isTransfer && (tx.note.isNotEmpty || tx.merchant.isNotEmpty)) cat?.name ?? 'Uncategorised',
+      if (!isTransfer && (tx.note.isNotEmpty || tx.merchant.isNotEmpty)) catName,
       if (!isTransfer) account?.name,
       for (final t in tx.tagList) EntryTags.label(t),
       if (tx.splitGroup != null) 'split',

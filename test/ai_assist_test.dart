@@ -340,6 +340,23 @@ void main() {
       expect(calls, 0);
     });
 
+    test('a category pick through the relay: an answer files; a refusal or an outage is no answer', () async {
+      Future<({String? category, bool sure})?> pick(AiAssist ai) =>
+          ai.pickCategory(note: 'benzine', amount: r'$20.00', scope: 'Personal', categories: const ['Fuel', 'Other']);
+      final ok = await cloudAi({}, (_) async => relay(jsonEncode({'category': 'Fuel', 'sure': true})));
+      expect(await pick(ok), (category: 'Fuel', sure: true));
+      final offList = await cloudAi({}, (_) async => relay(jsonEncode({'category': 'Lottery', 'sure': true})));
+      expect(await pick(offList), (category: null, sure: false), reason: 'answered, but nothing fit');
+      for (final down in [
+        await cloudAi({}, (_) async => relay('', status: 429)),
+        await cloudAi({}, (_) async => http.Response('<html>bad gateway</html>', 502)),
+        await cloudAi({}, (_) async => throw http.ClientException('offline')),
+        await cloudAi({}, (_) async => relay('x'), cloud: FakeCloud(reachable: false)),
+      ]) {
+        expect(await pick(down), isNull, reason: 'no answer: tried again on the next open');
+      }
+    });
+
     test('relay errors never throw', () async {
       final ai = await cloudAi({}, (_) async => http.Response('<html>bad gateway</html>', 502));
       expect(await ai.summarize('x'), isNull);

@@ -403,7 +403,8 @@ class AiAssist {
   static const _pickSystem =
       'You file one expense or income entry for a personal-finance app used in Lebanon. Pick the single best '
       'category for what the note describes, from the allowed list only. Notes can be English, Arabic, '
-      'Lebanese Arabizi (e.g. "ahwe" coffee, "benzine" fuel, "ma2koul" food), shop, brand or restaurant names, '
+      'Lebanese Arabizi (e.g. "ahwe" coffee, "benzine" fuel, "ma2koul" food; "moteur" or "ishtirak" is the '
+      'neighbourhood generator subscription, i.e. electricity), shop, brand or restaurant names, '
       'or short abbreviations. How this user filed past entries matters most: when a past note matches, follow '
       'it. The scope (personal, household, other) tells you who it was for and which categories are usual for '
       'it, but the note decides. Reply with only JSON {"category": "<exact name from the list>", "sure": '
@@ -412,9 +413,10 @@ class AiAssist {
   /// Picks one category for a single entry from its [note]. [categories] are
   /// the allowed names (one kind); [usual] the ones this [scope] normally
   /// uses; [examples] past (note, category) pairs of this user, most
-  /// relevant first. Sends only those, the amount and the scope. Returns the
-  /// exact allowed name, or null when off, capped, failed or off-list.
-  Future<({String category, bool sure})?> pickCategory({
+  /// relevant first. Sends only those, the amount and the scope. Null when
+  /// no answer came back (off, capped, offline, failed); otherwise the exact
+  /// allowed name, or a null category when the answer was off-list or broken.
+  Future<({String? category, bool sure})?> pickCategory({
     required String note,
     required String amount,
     required String scope,
@@ -433,35 +435,37 @@ class AiAssist {
       }
     }
     user.write('Entry: $amount, for $scope, note: "${note.trim()}"');
-    final j = _json(
-      await _ask(
-        _pickSystem,
-        user.toString(),
-        maxOutput: 40,
-        format: {
-          'type': 'json_schema',
-          'json_schema': {
-            'name': 'category_pick',
-            'strict': true,
-            'schema': {
-              'type': 'object',
-              'properties': {
-                'category': {'type': 'string', 'enum': categories},
-                'sure': {'type': 'boolean'},
-              },
-              'required': ['category', 'sure'],
-              'additionalProperties': false,
+    final reply = await chat(
+      [
+        {'role': 'system', 'content': _pickSystem},
+        {'role': 'user', 'content': user.toString()},
+      ],
+      maxOutput: 40,
+      responseFormat: {
+        'type': 'json_schema',
+        'json_schema': {
+          'name': 'category_pick',
+          'strict': true,
+          'schema': {
+            'type': 'object',
+            'properties': {
+              'category': {'type': 'string', 'enum': categories},
+              'sure': {'type': 'boolean'},
             },
+            'required': ['category', 'sure'],
+            'additionalProperties': false,
           },
         },
-      ),
+      },
     );
+    if (reply == null) return null;
+    final j = _json(reply.text);
     final raw = j?['category'];
-    if (raw is! String) return null;
     // Exact names only, forgiving case and stray spaces.
-    final name = categories.where((c) => c.toLowerCase() == raw.trim().toLowerCase()).firstOrNull;
-    if (name == null) return null;
-    return (category: name, sure: j!['sure'] != false);
+    final name = raw is String
+        ? categories.where((c) => c.toLowerCase() == raw.trim().toLowerCase()).firstOrNull
+        : null;
+    return (category: name, sure: name != null && j!['sure'] != false);
   }
 
   /// Reads a receipt's total/date/merchant from its OCR text, for when the

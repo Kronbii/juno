@@ -107,9 +107,9 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
   }
 
   // No category named (the Back Tap Shortcut sends only the amount, a note
-  // and who it was for): let the note decide — your history, then
-  // keywords, then the AI. Saved uncategorised if none can say, and filed
-  // later when the AI is reachable again.
+  // and who it was for): let the note decide — your history, then the AI,
+  // then keywords while it can't be reached (checked by the AI later).
+  // Saved uncategorised if none can say, and filed once the AI answers.
   CategoryGuess? guess;
   if (cat == null && q.category == null && (q.note?.trim().isNotEmpty ?? false)) {
     guess = await guessCategory(
@@ -138,6 +138,7 @@ Future<void> handleQuickAdd(WidgetRef ref, Uri uri) async {
       tags: Value(EntryTags.store([...q.tags, 'quick'])),
     ),
   );
+  await markGuess(ledger, id, guess);
   unawaited(HapticFeedback.mediumImpact());
   final parts = [
     Fx.format(q.amountCents!, account.currency),

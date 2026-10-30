@@ -8,6 +8,34 @@ import 'package:juno/core/db/seed.dart';
 import 'package:juno/core/fx.dart';
 import 'package:juno/core/money.dart';
 
+/// A quick entry's category awaiting a second look (see Ledger.filingKey).
+class Filing {
+  const Filing({required this.byAi, required this.categoryId, required this.at});
+
+  static Filing? tryParse(String raw) {
+    try {
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final at = DateTime.tryParse(j['at'] as String? ?? '');
+      final cat = j['cat'];
+      if (at == null || cat is! String) return null;
+      return Filing(byAi: j['by'] == 'ai', categoryId: cat, at: at);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Picked by an AI that said it was guessing; otherwise by keywords.
+  final bool byAi;
+  final String categoryId;
+
+  /// The entry's `updatedAt` when it was filed.
+  final DateTime at;
+
+  /// Still as filed: not deleted, recategorised or edited since — here or,
+  /// arriving by sync, on another device.
+  bool holds(Transaction t) => t.deletedAt == null && t.categoryId == categoryId && !t.updatedAt.isAfter(at);
+}
+
 class TxTotals {
   const TxTotals({required this.count, required this.income, required this.expense, required this.expenseByDay});
 
@@ -285,9 +313,9 @@ SELECT category_id, COUNT(*) AS n FROM transactions
 SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
                 category_id
          FROM transactions
-         WHERE deleted_at IS NULL AND category_id IS NOT NULL
+         WHERE deleted_at IS NULL AND category_id IS NOT NULL AND $notAwaitingFiling
          ORDER BY occurred_on ASC''',
-          readsFrom: {db.transactions},
+          readsFrom: {db.transactions, db.localMeta},
         )
         .get();
     return {
@@ -295,6 +323,54 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
         if (r.read<String>('k').isNotEmpty) r.read<String>('k'): r.read<String>('category_id'),
     };
   }
+
+  // ------------------------------------------------ quick-entry filings
+
+  /// A quick entry's category that still wants a second look, kept on this
+  /// device only: picked by keywords (the AI checks it once it can be
+  /// reached) or by an AI that said it was guessing (shown with a "?").
+  /// Neither counts as your history until it's confirmed, and any edit to
+  /// the entry clears it.
+  static String filingKey(String id) => 'filing.$id';
+
+  /// SQL: the `transactions` row has no filing waiting on it.
+  static const notAwaitingFiling = "NOT EXISTS (SELECT 1 FROM local_meta m WHERE m.key = 'filing.' || transactions.id)";
+
+  /// Marks [id]'s current category for a second look.
+  Future<void> markFiling(String id, {required bool byAi}) async {
+    final t = await (db.select(db.transactions)..where((x) => x.id.equals(id))).getSingleOrNull();
+    if (t == null || t.categoryId == null) return;
+    await db.setMeta(
+      filingKey(id),
+      jsonEncode({'by': byAi ? 'ai' : 'keywords', 'cat': t.categoryId, 'at': t.updatedAt.toUtc().toIso8601String()}),
+    );
+  }
+
+  Future<void> clearFiling(String id) => db.clearMeta(filingKey(id));
+
+  /// Every filing waiting for a second look, by entry id. An unreadable one
+  /// is dropped, so it can't keep an entry out of your history forever.
+  Future<Map<String, Filing>> filings() async {
+    final out = <String, Filing>{};
+    for (final r in await (db.select(db.localMeta)..where((m) => m.key.like('filing.%'))).get()) {
+      final f = Filing.tryParse(r.value);
+      if (f == null) {
+        await db.clearMeta(r.key);
+      } else {
+        out[r.key.substring('filing.'.length)] = f;
+      }
+    }
+    return out;
+  }
+
+  /// Entries the AI filed while unsure: entry id → the category it picked.
+  Stream<Map<String, String>> watchUnsureFilings() =>
+      (db.select(db.localMeta)..where((m) => m.key.like('filing.%'))).watch().map(
+        (rows) => {
+          for (final r in rows)
+            if (Filing.tryParse(r.value) case final f? when f.byAi) r.key.substring('filing.'.length): f.categoryId,
+        },
+      );
 
   Future<Set<String>> existingDedupeHashes() async {
     final rows =
@@ -404,6 +480,8 @@ SELECT LOWER(TRIM(CASE WHEN merchant <> '' THEN merchant ELSE note END)) AS k,
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
       p.copyWith(updatedAt: Value(await _stamp('transactions', id)), dirty: const Value(true)),
     );
+    // Edited by hand, so whatever it says now is yours.
+    await clearFiling(id);
     _wrote();
   }
 
