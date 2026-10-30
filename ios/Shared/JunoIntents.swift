@@ -120,8 +120,8 @@ enum CurrencyOption: String, AppEnum {
 
 /// The Back Tap action: always asks how much, what it was and who it was
 /// for, in that order (all three required, so iPhone asks every time). Juno
-/// picks the category from what it was — your history, keywords, then the
-/// AI — when it imports the entry.
+/// picks the category from what it was when it imports the entry: your
+/// history, else keywords at once, which the AI then checks once reachable.
 struct LogPurchaseIntent: AppIntent {
     static var title: LocalizedStringResource = "Log purchase"
     static var description = IntentDescription(

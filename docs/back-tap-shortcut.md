@@ -31,13 +31,13 @@ In the **Shortcuts** app, tap **+** and name the shortcut **Log expense**. Then 
 
 ### How Juno picks the category
 
-From the note, cheapest first:
+From the note:
 
-1. **Your history:** a note you have filed before goes where it went last time. If you correct an entry's category, the next one follows the correction.
-2. **Keywords, on the phone:** common words ("coffee", "fuel", "rent").
-3. **The AI, only for new notes:** it gets your categories (those usual for the scope you picked first) and your own past entries that share words with the note, and must answer with one of your category names. A guess it isn't sure of shows as "Coffee?" in the toast.
+1. **Your history:** a note you have filed before goes where it went last time, with no AI call. If you correct an entry's category, the next one follows the correction.
+2. **The AI, for every new note:** it gets your categories (those usual for the scope you picked first) and your own past entries that share words with the note, and must answer with one of your category names. It costs about $0.00013 a note on gpt-5-mini.
+3. **Keywords, on the phone, while the AI can't be reached:** common words ("coffee", "fuel", "rent") file the entry at once, offline too. Juno then has the AI take a second look the next time it opens and the AI answers, and the AI's pick replaces the keyword's. Being offline never uses up an entry's tries.
 
-If the AI can't be reached (offline, or you left Juno before it answered), the entry is saved uncategorised and filed the next time Juno opens online. Once filed, that note is history, so it never costs another AI call.
+A guess the AI isn't sure of shows as "Coffee?" in the toast and in Activity until you open the entry and save it. An entry you've changed by hand is never re-filed. Guesses still waiting for a second look, or that the AI wasn't sure of, don't count as your history until confirmed. Without AI (not signed in and no key of your own), the keyword guess is final.
 
 ## 2. Attach it to Back Tap
 

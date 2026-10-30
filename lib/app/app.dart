@@ -126,7 +126,7 @@ class _JunoAppState extends ConsumerState<JunoApp> with WidgetsBindingObserver {
     await sync.syncNow();
     if (await materializeRecurring(db) > 0) await sync.syncNow();
     try {
-      await fileUncategorisedQuickEntries(db, ledger: ref.read(ledgerProvider), ai: ref.read(aiAssistProvider));
+      await fileQuickEntries(db, ledger: ref.read(ledgerProvider), ai: ref.read(aiAssistProvider));
     } on Object {
       // Filing can wait for the next launch.
     }

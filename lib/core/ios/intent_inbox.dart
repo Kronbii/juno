@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:home_widget/home_widget.dart';
 import 'package:juno/core/db/database.dart';
 import 'package:juno/core/db/ledger.dart';
@@ -162,28 +162,8 @@ abstract final class IntentInbox {
     await HomeWidget.setAppGroupId(appGroup);
     final items = parseInbox(await HomeWidget.getWidgetData<String>(inboxKey));
     if (items.isEmpty) return 0;
-    final ledger = Ledger(db);
-    final categories = await (db.select(db.categories)..where((c) => c.deletedAt.isNull())).get();
-    final accounts = await (db.select(
-      db.accounts,
-    )..where((a) => a.deletedAt.isNull() & a.archived.equals(false))).get();
-    final rates = {'USD': 1.0, ...await ledger.rates()};
-    final memory = await ledger.merchantCategoryMemory();
-    var added = 0;
-    final handled = <String>{};
-    for (final item in items) {
-      final exists = await (db.select(
-        db.transactions,
-      )..where((t) => t.id.equals(item.id.toLowerCase()))).getSingleOrNull();
-      if (exists == null) {
-        final row = await inboxToEntry(item, categories: categories, accounts: accounts, rates: rates, memory: memory);
-        if (row != null) {
-          await ledger.addTransaction(row);
-          added++;
-        }
-      }
-      handled.add(item.id);
-    }
+    final added = await importItems(db, items);
+    final handled = {for (final i in items) i.id};
     // Re-read before writing back: the intent may have appended meanwhile.
     final now = parseInbox(await HomeWidget.getWidgetData<String>(inboxKey));
     final remaining = [
@@ -194,6 +174,32 @@ abstract final class IntentInbox {
       inboxKey,
       remaining.isEmpty ? null : jsonEncode([for (final i in remaining) _toJson(i)]),
     );
+    return added;
+  }
+
+  /// Adds [items] not already in the ledger. Returns how many were added.
+  @visibleForTesting
+  static Future<int> importItems(AppDatabase db, List<InboxItem> items) async {
+    final ledger = Ledger(db);
+    final categories = await (db.select(db.categories)..where((c) => c.deletedAt.isNull())).get();
+    final accounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.deletedAt.isNull() & a.archived.equals(false))).get();
+    final rates = {'USD': 1.0, ...await ledger.rates()};
+    final memory = await ledger.merchantCategoryMemory();
+    var added = 0;
+    for (final item in items) {
+      final exists = await (db.select(
+        db.transactions,
+      )..where((t) => t.id.equals(item.id.toLowerCase()))).getSingleOrNull();
+      if (exists != null) continue;
+      final row = await inboxToEntry(item, categories: categories, accounts: accounts, rates: rates, memory: memory);
+      if (row == null) continue;
+      final id = await ledger.addTransaction(row);
+      // Read from the sentence rather than chosen: the AI takes a second look.
+      if (item.category == null && row.categoryId.value != null) await ledger.markFiling(id, byAi: false);
+      added++;
+    }
     return added;
   }
 

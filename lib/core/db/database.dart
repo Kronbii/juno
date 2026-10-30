@@ -78,4 +78,6 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> setMeta(String key, String value) =>
       into(localMeta).insertOnConflictUpdate(LocalMetaData(key: key, value: value));
+
+  Future<void> clearMeta(String key) => (delete(localMeta)..where((t) => t.key.equals(key))).go();
 }
